@@ -180,9 +180,9 @@ func (e *SlackExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 	var err error
 
 	if config.WebhookURL != "" {
-		slackResp, err = e.sendWebhook(ctx, config, &logs)
+		slackResp, err = e.sendWebhook(ctx, &config, &logs)
 	} else {
-		slackResp, err = e.sendAPI(ctx, config, &logs)
+		slackResp, err = e.sendAPI(ctx, &config, &logs)
 	}
 
 	if err != nil {
@@ -246,7 +246,7 @@ func (e *SlackExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 	}, nil
 }
 
-func (e *SlackExecutor) sendWebhook(ctx context.Context, config SlackConfig, logs *[]LogEntry) (SlackResponse, error) {
+func (e *SlackExecutor) sendWebhook(ctx context.Context, config *SlackConfig, logs *[]LogEntry) (SlackResponse, error) {
 	payload := map[string]interface{}{
 		"text": config.Text,
 	}
@@ -270,7 +270,10 @@ func (e *SlackExecutor) sendWebhook(ctx context.Context, config SlackConfig, log
 		payload["channel"] = config.Channel
 	}
 
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return SlackResponse{}, fmt.Errorf("failed to marshal payload: %w", err)
+	}
 
 	*logs = append(*logs, LogEntry{
 		Timestamp: time.Now(),
@@ -290,7 +293,10 @@ func (e *SlackExecutor) sendWebhook(ctx context.Context, config SlackConfig, log
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return SlackResponse{}, fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	// Webhook returns "ok" as text, not JSON
 	if string(respBody) == "ok" {
@@ -306,7 +312,7 @@ func (e *SlackExecutor) sendWebhook(ctx context.Context, config SlackConfig, log
 	return slackResp, nil
 }
 
-func (e *SlackExecutor) sendAPI(ctx context.Context, config SlackConfig, logs *[]LogEntry) (SlackResponse, error) {
+func (e *SlackExecutor) sendAPI(ctx context.Context, config *SlackConfig, logs *[]LogEntry) (SlackResponse, error) {
 	payload := map[string]interface{}{
 		"channel": config.Channel,
 		"text":    config.Text,
@@ -336,7 +342,10 @@ func (e *SlackExecutor) sendAPI(ctx context.Context, config SlackConfig, logs *[
 	payload["unfurl_links"] = config.UnfurlLinks
 	payload["unfurl_media"] = config.UnfurlMedia
 
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return SlackResponse{}, fmt.Errorf("failed to marshal payload: %w", err)
+	}
 
 	*logs = append(*logs, LogEntry{
 		Timestamp: time.Now(),

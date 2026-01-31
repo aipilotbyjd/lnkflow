@@ -10,10 +10,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/linkflow/engine/internal/frontend"
@@ -35,9 +37,6 @@ func main() {
 
 	printBanner("Frontend", logger)
 
-	_ = *historyAddr
-	_ = *matchingAddr
-
 	// Initialize Redis
 	redisURL := os.Getenv("REDIS_URL")
 	var redisOpt *redis.Options
@@ -56,14 +55,14 @@ func main() {
 	rdb := redis.NewClient(redisOpt)
 
 	// Initialize gRPC Connections
-	historyConn, err := grpc.Dial(*historyAddr, grpc.WithInsecure())
+	historyConn, err := grpc.NewClient(*historyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Error("failed to connect to history service", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	defer historyConn.Close()
 
-	matchingConn, err := grpc.Dial(*matchingAddr, grpc.WithInsecure())
+	matchingConn, err := grpc.NewClient(*matchingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Error("failed to connect to matching service", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -132,14 +131,18 @@ func main() {
 	// Start HTTP Server for Health Checks
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		})
 
 		httpServer := &http.Server{
-			Addr:    fmt.Sprintf(":%d", *httpPort),
-			Handler: mux,
+			Addr:              fmt.Sprintf(":%d", *httpPort),
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		logger.Info("starting HTTP server", slog.Int("port", *httpPort))

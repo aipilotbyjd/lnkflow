@@ -17,8 +17,14 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	var (
-		port         = flag.Int("port", 7236, "Worker service port")
 		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
 		taskQueue    = flag.String("task-queue", "default", "Task queue name")
 		matchingAddr = flag.String("matching-addr", "localhost:7235", "Matching service address")
@@ -29,9 +35,6 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	printBanner("Worker", logger)
-
-	_ = *port
-	_ = *numWorkers
 
 	svc := worker.NewService(worker.Config{
 		TaskQueue:    *taskQueue,
@@ -48,8 +51,7 @@ func main() {
 	defer cancel()
 
 	if err := svc.Start(ctx); err != nil {
-		logger.Error("failed to start worker service", slog.String("error", err.Error()))
-		os.Exit(1)
+		return fmt.Errorf("failed to start worker service: %w", err)
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -59,20 +61,26 @@ func main() {
 		sig := <-sigCh
 		logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
 		cancel()
-		_ = svc.Stop()
+		if err := svc.Stop(); err != nil {
+			logger.Error("failed to stop worker service", slog.String("error", err.Error()))
+		}
 	}()
 
 	// Start HTTP Server for Health Checks
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		})
 
 		httpServer := &http.Server{
-			Addr:    fmt.Sprintf(":%d", *httpPort),
-			Handler: mux,
+			Addr:              fmt.Sprintf(":%d", *httpPort),
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
@@ -90,6 +98,7 @@ func main() {
 
 	<-ctx.Done()
 	logger.Info("worker service stopped")
+	return nil
 }
 
 func printBanner(service string, logger *slog.Logger) {

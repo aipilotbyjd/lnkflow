@@ -139,9 +139,13 @@ func (e *TransformExecutor) NodeType() string {
 }
 
 func (e *TransformExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {
-	// TODO: Implement data transformation logic
+	// Transform operations require explicit transformation rules
+	// Currently not implemented - return error to prevent silent pass-through
 	return &ExecuteResponse{
-		Output: req.Input, // Pass through for now
+		Error: &ExecutionError{
+			Message: "transform executor not yet implemented: transformation rules required",
+			Type:    ErrorTypeNonRetryable,
+		},
 	}, nil
 }
 
@@ -181,9 +185,12 @@ func (e *LoopExecutor) NodeType() string {
 }
 
 func (e *LoopExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {
-	// TODO: Implement loop logic
-	// This would typically be handled by the workflow engine, not executed directly
+	// Loop execution is typically handled by the workflow scheduler, not as a direct executor
+	// Currently not implemented - return error to prevent silent pass-through
 	return &ExecuteResponse{
-		Output: req.Input,
+		Error: &ExecutionError{
+			Message: "loop executor not yet implemented: loop logic should be handled by workflow scheduler",
+			Type:    ErrorTypeNonRetryable,
+		},
 	}, nil
 }

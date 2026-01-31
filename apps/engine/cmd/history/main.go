@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -21,19 +22,24 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	var (
 		port       = flag.Int("port", 7234, "gRPC server port")
 		httpPort   = flag.Int("http-port", 8080, "HTTP server port")
 		shardCount = flag.Int("shard-count", 16, "Number of shards")
-		dbURL      = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
+		_          = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
 	)
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	printBanner("History", logger)
-
-	_ = *dbURL
 
 	shardController := shard.NewController(*shardCount)
 
@@ -50,16 +56,14 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		logger.Error("failed to listen", slog.String("error", err.Error()))
-		os.Exit(1)
+		return fmt.Errorf("failed to listen: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if err := svc.Start(ctx); err != nil {
-		logger.Error("failed to start service", slog.String("error", err.Error()))
-		os.Exit(1)
+		return fmt.Errorf("failed to start service: %w", err)
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -69,7 +73,9 @@ func main() {
 		sig := <-sigCh
 		logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
 		cancel()
-		_ = svc.Stop(ctx)
+		if err := svc.Stop(ctx); err != nil {
+			logger.Error("failed to stop service", slog.String("error", err.Error()))
+		}
 		server.GracefulStop()
 	}()
 
@@ -82,17 +88,20 @@ func main() {
 		}
 	}()
 
-	// Start HTTP Server for Health Checks
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		})
 
 		httpServer := &http.Server{
-			Addr:    fmt.Sprintf(":%d", *httpPort),
-			Handler: mux,
+			Addr:              fmt.Sprintf(":%d", *httpPort),
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
@@ -104,6 +113,7 @@ func main() {
 
 	<-ctx.Done()
 	logger.Info("history service stopped")
+	return nil
 }
 
 func printBanner(service string, logger *slog.Logger) {

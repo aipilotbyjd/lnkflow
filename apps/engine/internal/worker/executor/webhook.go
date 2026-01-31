@@ -79,7 +79,7 @@ func NewWebhookExecutor() *WebhookExecutor {
 		client: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return fmt.Errorf("stopped after 10 redirects")
 				}
@@ -199,7 +199,7 @@ func (e *WebhookExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 	}
 
 	// Apply authentication
-	e.applyAuth(httpReq, config, &logs)
+	e.applyAuth(httpReq, &config, &logs)
 
 	logs = append(logs, LogEntry{
 		Timestamp: time.Now(),
@@ -327,7 +327,7 @@ func (e *WebhookExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 	}, nil
 }
 
-func (e *WebhookExecutor) applyAuth(req *http.Request, config WebhookConfig, logs *[]LogEntry) {
+func (e *WebhookExecutor) applyAuth(req *http.Request, config *WebhookConfig, logs *[]LogEntry) {
 	switch config.AuthType {
 	case "basic":
 		req.SetBasicAuth(config.Username, config.Password)
@@ -361,7 +361,15 @@ func (e *WebhookExecutor) applyAuth(req *http.Request, config WebhookConfig, log
 		// Read body for signing
 		var bodyBytes []byte
 		if req.Body != nil {
-			bodyBytes, _ = io.ReadAll(req.Body)
+			var err error
+			bodyBytes, err = io.ReadAll(req.Body)
+			if err != nil {
+				*logs = append(*logs, LogEntry{
+					Timestamp: time.Now(),
+					Level:     "WARN",
+					Message:   fmt.Sprintf("failed to read request body for HMAC: %v", err),
+				})
+			}
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
 

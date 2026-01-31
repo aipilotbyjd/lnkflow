@@ -26,9 +26,6 @@ func main() {
 
 	printBanner("Timer", logger)
 
-	_ = *port
-	_ = *historyAddr
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -58,14 +55,18 @@ func main() {
 	// Start HTTP Server for Health Checks
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		})
 
 		httpServer := &http.Server{
-			Addr:    fmt.Sprintf(":%d", *httpPort),
-			Handler: mux,
+			Addr:              fmt.Sprintf(":%d", *httpPort),
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		logger.Info("starting HTTP server", slog.Int("port", *httpPort))

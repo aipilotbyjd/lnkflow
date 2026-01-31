@@ -151,7 +151,17 @@ func (e *DiscordExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 		payload["embeds"] = config.Embeds
 	}
 
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: fmt.Sprintf("failed to marshal payload: %v", err),
+				Type:    ErrorTypeNonRetryable,
+			},
+			Logs:     logs,
+			Duration: time.Since(start),
+		}, nil
+	}
 
 	logs = append(logs, LogEntry{
 		Timestamp: time.Now(),
@@ -185,7 +195,14 @@ func (e *DiscordExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logs = append(logs, LogEntry{
+			Timestamp: time.Now(),
+			Level:     "WARN",
+			Message:   fmt.Sprintf("failed to read response body: %v", err),
+		})
+	}
 
 	if resp.StatusCode == 429 {
 		return &ExecuteResponse{
@@ -370,7 +387,14 @@ func (e *TwilioExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logs = append(logs, LogEntry{
+			Timestamp: time.Now(),
+			Level:     "WARN",
+			Message:   fmt.Sprintf("failed to read response body: %v", err),
+		})
+	}
 
 	if resp.StatusCode >= 400 {
 		errorType := ErrorTypeRetryable
@@ -441,10 +465,20 @@ func (e *StorageExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 	// TODO: Implement actual cloud storage operations
 	// This would require SDK integration for S3, GCS, Azure Blob
 
-	output, _ := json.Marshal(map[string]interface{}{
+	output, err := json.Marshal(map[string]interface{}{
 		"status":  "not_implemented",
 		"message": "Storage executor requires cloud SDK integration",
 	})
+	if err != nil {
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: fmt.Sprintf("failed to marshal output: %v", err),
+				Type:    ErrorTypeNonRetryable,
+			},
+			Logs:     logs,
+			Duration: time.Since(start),
+		}, nil
+	}
 
 	return &ExecuteResponse{
 		Output:   output,

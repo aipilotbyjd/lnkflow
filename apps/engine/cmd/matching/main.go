@@ -5,11 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -31,12 +33,16 @@ func main() {
 
 	printBanner("Matching", logger)
 
+	if *partitionCount < 1 || *partitionCount > math.MaxInt32 {
+		logger.Error("invalid partition count", slog.Int("partition_count", *partitionCount))
+		os.Exit(1)
+	}
+
 	svc := matching.NewService(matching.Config{
 		NumPartitions: int32(*partitionCount),
 		Replicas:      100,
 		Logger:        logger,
 	})
-	_ = svc
 
 	server := grpc.NewServer()
 	matchingv1.RegisterMatchingServiceServer(server, matching.NewGRPCServer(svc))
@@ -73,14 +79,18 @@ func main() {
 	// Start HTTP Server for Health Checks
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		})
 
 		httpServer := &http.Server{
-			Addr:    fmt.Sprintf(":%d", *httpPort),
-			Handler: mux,
+			Addr:              fmt.Sprintf(":%d", *httpPort),
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
