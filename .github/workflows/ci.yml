@@ -42,7 +42,7 @@ jobs:
       - name: Copy environment file
         run: cd apps/api && cp .env.example .env
       - name: Install dependencies
-        run: cd apps/api && composer install --no-dev --optimize-autoloader
+        run: cd apps/api && composer install --optimize-autoloader
       - name: Generate key
         run: cd apps/api && php artisan key:generate
       - name: Setup database
@@ -55,7 +55,7 @@ jobs:
           DB_USERNAME: linkflow
           DB_PASSWORD: postgres
       - name: Run tests
-        run: cd apps/api && php artisan test
+        run: cd apps/api && ./vendor/bin/pest
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
