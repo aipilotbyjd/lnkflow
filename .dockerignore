@@ -1,0 +1,17 @@
+# Dockerfile security best practices
+# Use specific versions, not latest
+FROM php:8.4-fpm-alpine
+
+# Create non-root user
+RUN addgroup -g 1001 -S appuser && \
+    adduser -S appuser -G appuser -u 1001
+
+# Install security updates
+RUN apk update && apk upgrade
+
+# Use non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1

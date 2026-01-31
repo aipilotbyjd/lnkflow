@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs ps test clean
+.PHONY: setup start stop restart logs ps test clean lint security format check-deps install-tools
 
 setup:
 	@echo "Setting up Monorepo..."
@@ -36,3 +36,43 @@ test:
 clean:
 	docker-compose down -v
 	@echo "Data volumes removed."
+
+# Quality Assurance Tools
+lint:
+	@echo "Running linters..."
+	cd apps/engine && golangci-lint run
+	cd apps/api && ./vendor/bin/pint --test
+
+format:
+	@echo "Formatting code..."
+	cd apps/engine && gofmt -w .
+	cd apps/api && ./vendor/bin/pint
+
+security:
+	@echo "Running security scans..."
+	./scripts/security-scan.sh
+
+check-deps:
+	@echo "Checking for outdated dependencies..."
+	cd apps/api && composer outdated
+	cd apps/engine && go list -u -m all
+
+install-tools:
+	@echo "Installing development tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/sonatype-nexus-community/nancy@latest
+	pip install pre-commit
+	pre-commit install
+
+# Development helpers
+dev-api:
+	cd apps/api && composer dev
+
+dev-engine:
+	cd apps/engine && air
+
+build:
+	docker-compose build
+
+ci: lint test security
+	@echo "CI pipeline completed successfully!"

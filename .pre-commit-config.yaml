@@ -1,0 +1,46 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+
+  - repo: local
+    hooks:
+      - id: php-lint
+        name: PHP Lint
+        entry: bash -c 'cd apps/api && ./vendor/bin/pint --test'
+        language: system
+        files: \.php$
+        pass_filenames: false
+
+      - id: php-tests
+        name: PHP Tests
+        entry: bash -c 'cd apps/api && php artisan test'
+        language: system
+        files: \.php$
+        pass_filenames: false
+
+      - id: go-lint
+        name: Go Lint
+        entry: bash -c 'cd apps/engine && golangci-lint run'
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+      - id: go-tests
+        name: Go Tests
+        entry: bash -c 'cd apps/engine && go test ./...'
+        language: system
+        files: \.go$
+        pass_filenames: false
