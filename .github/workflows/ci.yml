@@ -114,6 +114,9 @@ jobs:
               sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
+            # Set required environment variables
+            export LINKFLOW_SECRET="test-secret-for-ci-build-only"
+            export JWT_SECRET="test-jwt-secret-for-ci-build-only"
             make build
           else
             echo "No build target found, skipping docker build"
