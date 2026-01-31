@@ -97,4 +97,6 @@ services:
 
 networks:
   linkflow:
-    external: true
+    name: linkflow
+    driver: bridge
+    # external: true # Commented out for Monorepo Root compatibility

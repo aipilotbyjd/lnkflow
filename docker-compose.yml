@@ -1,55 +1,16 @@
-version: '3.8'
+# LinkFlow - Root Orchestration
+# unified "Real World" setup using Docker Compose 'include'
+# This brings up the entire stack: Infrastructure + Go Microservices + Laravel API
+#
+# Usage:
+#   docker-compose up -d
 
-services:
-  api:
-    build: 
-      context: ./apps/api
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - DB_HOST=postgres
-      - REDIS_HOST=redis
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - linkflow-net
+include:
+  # 1. Base Infrastructure (Postgres, Redis)
+  - infra/docker-compose.yml
 
-  engine:
-    build: 
-      context: ./apps/engine
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      - POSTGRES_HOST=postgres
-      - API_ENDPOINT=http://api:8000
-    depends_on:
-      - postgres
-    networks:
-      - linkflow-net
+  # 2. Go Execution Engine (8 Microservices)
+  - apps/engine/docker-compose.yml
 
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: linkflow
-      POSTGRES_PASSWORD: secret_password
-      POSTGRES_DB: linkflow_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infra/init:/docker-entrypoint-initdb.d
-    networks:
-      - linkflow-net
-
-  redis:
-    image: redis:7-alpine
-    networks:
-      - linkflow-net
-
-networks:
-  linkflow-net:
-    driver: bridge
-
-volumes:
-  postgres_data:
+  # 3. Laravel API (Web, Queue, Scheduler)
+  - apps/api/docker-compose.yml
