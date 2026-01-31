@@ -104,9 +104,16 @@ jobs:
     if: success()
     steps:
       - uses: actions/checkout@v4
-      - name: Check if Makefile has build target
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker images
         run: |
           if grep -q "^build:" Makefile; then
+            # Install docker-compose if needed
+            if ! command -v docker-compose &> /dev/null; then
+              sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
             make build
           else
             echo "No build target found, skipping docker build"
