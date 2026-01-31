@@ -45,6 +45,8 @@ jobs:
         run: cd apps/api && composer install --optimize-autoloader
       - name: Generate key
         run: cd apps/api && php artisan key:generate
+      - name: Generate Passport keys
+        run: cd apps/api && php artisan passport:keys --force
       - name: Setup database
         run: cd apps/api && php artisan migrate --force
         env:
