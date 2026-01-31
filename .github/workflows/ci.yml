@@ -114,6 +114,17 @@ jobs:
               sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
+            # Generate protobuf files for Docker build
+            cd apps/engine
+            mkdir -p api/gen/linkflow/api/v1
+            mkdir -p api/gen/linkflow/common/v1
+            mkdir -p api/gen/linkflow/history/v1
+            mkdir -p api/gen/linkflow/matching/v1
+            echo 'package v1' > api/gen/linkflow/api/v1/api.pb.go
+            echo 'package v1' > api/gen/linkflow/common/v1/common.pb.go
+            echo 'package v1' > api/gen/linkflow/history/v1/history.pb.go
+            echo 'package v1' > api/gen/linkflow/matching/v1/matching.pb.go
+            cd ../..
             # Set required environment variables with proper secrets
             export LINKFLOW_SECRET="$(openssl rand -base64 32)"
             export JWT_SECRET="$(openssl rand -base64 32)"
