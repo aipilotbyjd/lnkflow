@@ -127,7 +127,7 @@ func (a *AuthInterceptor) extractToken(ctx context.Context) (string, error) {
 	return strings.TrimPrefix(authHeader, bearerPrefix), nil
 }
 
-// Claims represents the JWT claims structure
+// Claims represents the JWT claims structure.
 type Claims struct {
 	// Standard JWT claims
 	Subject   string   `json:"sub"`
@@ -145,8 +145,7 @@ type Claims struct {
 	Roles       []string `json:"roles,omitempty"`
 }
 
-// ValidateToken validates a JWT token and returns the claims
-// This implements proper HMAC-SHA256 signature verification
+// This implements proper HMAC-SHA256 signature verification.
 func (a *AuthInterceptor) ValidateToken(token string) (*Claims, error) {
 	if token == "" {
 		return nil, status.Error(codes.Unauthenticated, "empty token")
@@ -219,14 +218,14 @@ func (a *AuthInterceptor) ValidateToken(token string) (*Claims, error) {
 	return &claims, nil
 }
 
-// computeHMAC computes HMAC-SHA256 of the input
+// computeHMAC computes HMAC-SHA256 of the input.
 func (a *AuthInterceptor) computeHMAC(data []byte) []byte {
 	h := hmac.New(sha256.New, a.secretKey)
 	h.Write(data)
 	return h.Sum(nil)
 }
 
-// base64URLDecode decodes base64url-encoded data (RFC 4648)
+// base64URLDecode decodes base64url-encoded data (RFC 4648).
 func base64URLDecode(s string) ([]byte, error) {
 	// Add padding if necessary
 	switch len(s) % 4 {

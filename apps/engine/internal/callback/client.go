@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Client sends callbacks to Laravel when workflow events occur
+// Client sends callbacks to Laravel when workflow events occur.
 type Client struct {
 	httpClient *http.Client
 	secretKey  string // Shared secret for signing callbacks
@@ -24,14 +24,14 @@ type Client struct {
 	retryDelay time.Duration
 }
 
-// asyncCallback holds data for async callback sending
+// asyncCallback holds data for async callback sending.
 type asyncCallback struct {
 	url     string
 	payload *CallbackPayload
 	attempt int
 }
 
-// Config holds callback client configuration
+// Config holds callback client configuration.
 type Config struct {
 	Timeout        time.Duration
 	SecretKey      string // Shared secret for HMAC signing
@@ -40,7 +40,7 @@ type Config struct {
 	RetryDelay     time.Duration
 }
 
-// DefaultConfig returns default callback config
+// DefaultConfig returns default callback config.
 func DefaultConfig() Config {
 	return Config{
 		Timeout:        10 * time.Second,
@@ -51,7 +51,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewClient creates a new callback client with connection pooling
+// NewClient creates a new callback client with connection pooling.
 func NewClient(cfg Config, logger *slog.Logger) *Client {
 	if logger == nil {
 		logger = slog.Default()
@@ -87,7 +87,7 @@ func NewClient(cfg Config, logger *slog.Logger) *Client {
 	return c
 }
 
-// Event types for callbacks
+// Event types for callbacks.
 type EventType string
 
 const (
@@ -100,7 +100,7 @@ const (
 	EventTypeNodeFailed         EventType = "node.failed"
 )
 
-// CallbackPayload is the payload sent to Laravel
+// CallbackPayload is the payload sent to Laravel.
 type CallbackPayload struct {
 	Event       EventType              `json:"event"`
 	Timestamp   time.Time              `json:"timestamp"`
@@ -111,19 +111,19 @@ type CallbackPayload struct {
 	Data        map[string]interface{} `json:"data,omitempty"`
 }
 
-// ExecutionStartedData is the data for execution.started event
+// ExecutionStartedData is the data for execution.started event.
 type ExecutionStartedData struct {
 	TriggerType string                 `json:"trigger_type"`
 	Input       map[string]interface{} `json:"input"`
 }
 
-// ExecutionCompletedData is the data for execution.completed event
+// ExecutionCompletedData is the data for execution.completed event.
 type ExecutionCompletedData struct {
 	Duration time.Duration          `json:"duration_ms"`
 	Output   map[string]interface{} `json:"output"`
 }
 
-// ExecutionFailedData is the data for execution.failed event
+// ExecutionFailedData is the data for execution.failed event.
 type ExecutionFailedData struct {
 	Duration   time.Duration `json:"duration_ms"`
 	ErrorCode  string        `json:"error_code"`
@@ -133,7 +133,7 @@ type ExecutionFailedData struct {
 	Retryable  bool          `json:"retryable"`
 }
 
-// NodeCompletedData is the data for node.completed event
+// NodeCompletedData is the data for node.completed event.
 type NodeCompletedData struct {
 	NodeID   string                 `json:"node_id"`
 	NodeType string                 `json:"node_type"`
@@ -142,7 +142,7 @@ type NodeCompletedData struct {
 	Output   map[string]interface{} `json:"output"`
 }
 
-// NodeFailedData is the data for node.failed event
+// NodeFailedData is the data for node.failed event.
 type NodeFailedData struct {
 	NodeID     string        `json:"node_id"`
 	NodeType   string        `json:"node_type"`
@@ -155,7 +155,7 @@ type NodeFailedData struct {
 	WillRetry  bool          `json:"will_retry"`
 }
 
-// Send sends a callback to the specified URL
+// Send sends a callback to the specified URL.
 func (c *Client) Send(ctx context.Context, callbackURL string, payload *CallbackPayload) error {
 	if callbackURL == "" {
 		return nil // No callback URL configured
@@ -216,14 +216,14 @@ func (c *Client) Send(ctx context.Context, callbackURL string, payload *Callback
 	return nil
 }
 
-// sign generates HMAC-SHA256 signature for the payload
+// sign generates HMAC-SHA256 signature for the payload.
 func (c *Client) sign(payload []byte) string {
 	h := hmac.New(sha256.New, []byte(c.secretKey))
 	h.Write(payload)
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// NotifyExecutionStarted notifies Laravel that an execution started
+// NotifyExecutionStarted notifies Laravel that an execution started.
 func (c *Client) NotifyExecutionStarted(ctx context.Context, callbackURL string, workspaceID, workflowID, executionID, runID string, input map[string]interface{}) error {
 	return c.Send(ctx, callbackURL, &CallbackPayload{
 		Event:       EventTypeExecutionStarted,
@@ -238,7 +238,7 @@ func (c *Client) NotifyExecutionStarted(ctx context.Context, callbackURL string,
 	})
 }
 
-// NotifyExecutionCompleted notifies Laravel that an execution completed
+// NotifyExecutionCompleted notifies Laravel that an execution completed.
 func (c *Client) NotifyExecutionCompleted(ctx context.Context, callbackURL string, workspaceID, workflowID, executionID, runID string, output map[string]interface{}, duration time.Duration) error {
 	return c.Send(ctx, callbackURL, &CallbackPayload{
 		Event:       EventTypeExecutionCompleted,
@@ -254,7 +254,7 @@ func (c *Client) NotifyExecutionCompleted(ctx context.Context, callbackURL strin
 	})
 }
 
-// NotifyExecutionFailed notifies Laravel that an execution failed
+// NotifyExecutionFailed notifies Laravel that an execution failed.
 func (c *Client) NotifyExecutionFailed(ctx context.Context, callbackURL string, workspaceID, workflowID, executionID, runID string, errorCode, errorMsg, failedNode string) error {
 	return c.Send(ctx, callbackURL, &CallbackPayload{
 		Event:       EventTypeExecutionFailed,
@@ -271,7 +271,7 @@ func (c *Client) NotifyExecutionFailed(ctx context.Context, callbackURL string, 
 	})
 }
 
-// NotifyNodeCompleted notifies Laravel that a node completed
+// NotifyNodeCompleted notifies Laravel that a node completed.
 func (c *Client) NotifyNodeCompleted(ctx context.Context, callbackURL string, workspaceID, workflowID, executionID, runID, nodeID, nodeType, nodeName string, output map[string]interface{}, duration time.Duration) error {
 	return c.Send(ctx, callbackURL, &CallbackPayload{
 		Event:       EventTypeNodeCompleted,
@@ -290,8 +290,7 @@ func (c *Client) NotifyNodeCompleted(ctx context.Context, callbackURL string, wo
 	})
 }
 
-// SendAsync queues a callback for async sending (non-blocking)
-// Returns immediately, callback will be sent in the background
+// Returns immediately, callback will be sent in the background.
 func (c *Client) SendAsync(callbackURL string, payload *CallbackPayload) error {
 	if c.asyncQueue == nil {
 		// Fall back to sync if async not configured
@@ -315,7 +314,7 @@ func (c *Client) SendAsync(callbackURL string, payload *CallbackPayload) error {
 	}
 }
 
-// asyncWorker processes async callbacks from the queue
+// asyncWorker processes async callbacks from the queue.
 func (c *Client) asyncWorker() {
 	for cb := range c.asyncQueue {
 		ctx, cancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
@@ -350,7 +349,7 @@ func (c *Client) asyncWorker() {
 	}
 }
 
-// Close gracefully shuts down the async worker
+// Close gracefully shuts down the async worker.
 func (c *Client) Close() {
 	if c.asyncQueue != nil {
 		close(c.asyncQueue)

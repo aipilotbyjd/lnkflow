@@ -92,8 +92,8 @@ func (l *LoggingInterceptor) logRequest(
 }
 
 type DetailedLoggingInterceptor struct {
-	logger      *slog.Logger
-	logPayload  bool
+	logger        *slog.Logger
+	logPayload    bool
 	slowThreshold time.Duration
 }
 

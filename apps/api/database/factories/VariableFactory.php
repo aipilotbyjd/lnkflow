@@ -21,7 +21,7 @@ class VariableFactory extends Factory
         $words = ['API', 'BASE', 'SECRET', 'AUTH', 'DATABASE', 'CACHE', 'REDIS', 'APP', 'CONFIG', 'SERVICE'];
         $suffixes = ['KEY', 'URL', 'TOKEN', 'HOST', 'PORT', 'NAME', 'VALUE', 'PATH', 'ID', 'SECRET'];
 
-        $key = $this->faker->randomElement($words) . '_' . $this->faker->randomElement($suffixes) . '_' . $this->faker->unique()->randomNumber(4);
+        $key = $this->faker->randomElement($words).'_'.$this->faker->randomElement($suffixes).'_'.$this->faker->unique()->randomNumber(4);
 
         return [
             'workspace_id' => Workspace::factory(),
@@ -51,4 +51,3 @@ class VariableFactory extends Factory
         ]);
     }
 }
-

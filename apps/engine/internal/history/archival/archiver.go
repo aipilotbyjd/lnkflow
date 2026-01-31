@@ -17,14 +17,14 @@ var (
 	ErrArchiveFailed   = errors.New("archival failed")
 )
 
-// Archiver handles workflow history archival
+// Archiver handles workflow history archival.
 type Archiver struct {
 	storage BlobStorage
 	policy  *Policy
 	logger  *slog.Logger
 }
 
-// BlobStorage is the interface for blob storage backends
+// BlobStorage is the interface for blob storage backends.
 type BlobStorage interface {
 	Put(ctx context.Context, key string, data io.Reader) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
@@ -32,7 +32,7 @@ type BlobStorage interface {
 	List(ctx context.Context, prefix string) ([]string, error)
 }
 
-// Policy defines archival policy
+// Policy defines archival policy.
 type Policy struct {
 	Enabled           bool
 	RetentionPeriod   time.Duration
@@ -41,7 +41,7 @@ type Policy struct {
 	EncryptionEnabled bool
 }
 
-// DefaultPolicy returns the default archival policy
+// DefaultPolicy returns the default archival policy.
 func DefaultPolicy() *Policy {
 	return &Policy{
 		Enabled:           true,
@@ -52,7 +52,7 @@ func DefaultPolicy() *Policy {
 	}
 }
 
-// NewArchiver creates a new archiver
+// NewArchiver creates a new archiver.
 func NewArchiver(storage BlobStorage, policy *Policy, logger *slog.Logger) *Archiver {
 	if policy == nil {
 		policy = DefaultPolicy()
@@ -68,7 +68,7 @@ func NewArchiver(storage BlobStorage, policy *Policy, logger *slog.Logger) *Arch
 	}
 }
 
-// ArchiveRequest represents a request to archive an execution
+// ArchiveRequest represents a request to archive an execution.
 type ArchiveRequest struct {
 	NamespaceID string
 	ExecutionID string
@@ -77,7 +77,7 @@ type ArchiveRequest struct {
 	ClosedAt    time.Time
 }
 
-// Archive archives a workflow execution
+// Archive archives a workflow execution.
 func (a *Archiver) Archive(ctx context.Context, req *ArchiveRequest) error {
 	if !a.policy.Enabled {
 		return nil
@@ -118,7 +118,7 @@ func (a *Archiver) Archive(ctx context.Context, req *ArchiveRequest) error {
 	return nil
 }
 
-// Archive represents an archived execution
+// Archive represents an archived execution.
 type Archive struct {
 	ExecutionID string                  `json:"execution_id"`
 	WorkflowID  string                  `json:"workflow_id"`
@@ -129,7 +129,7 @@ type Archive struct {
 	Version     int                     `json:"version"`
 }
 
-// Retrieve retrieves an archived execution
+// Retrieve retrieves an archived execution.
 func (a *Archiver) Retrieve(ctx context.Context, namespaceID, executionID string) (*Archive, error) {
 	// List possible keys for this execution
 	prefix := fmt.Sprintf("%s/%s/", namespaceID, executionID)
@@ -164,7 +164,7 @@ func (a *Archiver) Retrieve(ctx context.Context, namespaceID, executionID string
 	return &archive, nil
 }
 
-// Delete deletes an archived execution
+// Delete deletes an archived execution.
 func (a *Archiver) Delete(ctx context.Context, namespaceID, executionID string) error {
 	prefix := fmt.Sprintf("%s/%s/", namespaceID, executionID)
 	keys, err := a.storage.List(ctx, prefix)
@@ -181,7 +181,7 @@ func (a *Archiver) Delete(ctx context.Context, namespaceID, executionID string) 
 	return nil
 }
 
-// CleanupExpired removes archives past retention period
+// CleanupExpired removes archives past retention period.
 func (a *Archiver) CleanupExpired(ctx context.Context, namespaceID string) (int, error) {
 	if a.policy.RetentionPeriod == 0 {
 		return 0, nil // Infinite retention
@@ -242,7 +242,7 @@ func (a *Archiver) generateKey(namespaceID, executionID string, archivedAt time.
 	)
 }
 
-// bytesReader is a simple io.Reader wrapper for []byte
+// bytesReader is a simple io.Reader wrapper for []byte.
 type bytesReader struct {
 	data []byte
 	pos  int
@@ -257,12 +257,12 @@ func (r *bytesReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// InMemoryStorage is an in-memory blob storage for testing
+// InMemoryStorage is an in-memory blob storage for testing.
 type InMemoryStorage struct {
 	data map[string][]byte
 }
 
-// NewInMemoryStorage creates a new in-memory storage
+// NewInMemoryStorage creates a new in-memory storage.
 func NewInMemoryStorage() *InMemoryStorage {
 	return &InMemoryStorage{
 		data: make(map[string][]byte),

@@ -10,20 +10,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Variable represents a workspace variable
+// Variable represents a workspace variable.
 type Variable struct {
 	Name     string
 	Value    string
 	IsSecret bool
 }
 
-// VariableResolver resolves workspace variables
+// VariableResolver resolves workspace variables.
 type VariableResolver struct {
 	pool  *pgxpool.Pool
 	cache *variableCache
 }
 
-// NewVariableResolver creates a new variable resolver
+// NewVariableResolver creates a new variable resolver.
 func NewVariableResolver(pool *pgxpool.Pool) *VariableResolver {
 	return &VariableResolver{
 		pool:  pool,
@@ -31,7 +31,7 @@ func NewVariableResolver(pool *pgxpool.Pool) *VariableResolver {
 	}
 }
 
-// Resolve resolves a single variable
+// Resolve resolves a single variable.
 func (r *VariableResolver) Resolve(ctx context.Context, namespaceID, name string) (string, error) {
 	// Check cache
 	if value, found := r.cache.get(namespaceID, name); found {
@@ -53,7 +53,7 @@ func (r *VariableResolver) Resolve(ctx context.Context, namespaceID, name string
 	return value, nil
 }
 
-// ResolveAll resolves all variables for a namespace
+// ResolveAll resolves all variables for a namespace.
 func (r *VariableResolver) ResolveAll(ctx context.Context, namespaceID string) (map[string]string, error) {
 	// Check cache for full namespace
 	if vars := r.cache.getAll(namespaceID); vars != nil {
@@ -84,7 +84,7 @@ func (r *VariableResolver) ResolveAll(ctx context.Context, namespaceID string) (
 	return result, nil
 }
 
-// Interpolate replaces {{variable}} placeholders with actual values
+// Interpolate replaces {{variable}} placeholders with actual values.
 func (r *VariableResolver) Interpolate(ctx context.Context, namespaceID, template string) (string, error) {
 	if !strings.Contains(template, "{{") {
 		return template, nil
@@ -104,7 +104,7 @@ func (r *VariableResolver) Interpolate(ctx context.Context, namespaceID, templat
 	return result, nil
 }
 
-// InterpolateJSON interpolates variables in a JSON structure
+// InterpolateJSON interpolates variables in a JSON structure.
 func (r *VariableResolver) InterpolateJSON(ctx context.Context, namespaceID string, data json.RawMessage) (json.RawMessage, error) {
 	str, err := r.Interpolate(ctx, namespaceID, string(data))
 	if err != nil {
@@ -113,12 +113,12 @@ func (r *VariableResolver) InterpolateJSON(ctx context.Context, namespaceID stri
 	return json.RawMessage(str), nil
 }
 
-// InvalidateCache invalidates the variable cache for a namespace
+// InvalidateCache invalidates the variable cache for a namespace.
 func (r *VariableResolver) InvalidateCache(namespaceID string) {
 	r.cache.clear(namespaceID)
 }
 
-// variableCache caches variables
+// variableCache caches variables.
 type variableCache struct {
 	items map[string]map[string]string // namespace -> name -> value
 	mu    sync.RWMutex

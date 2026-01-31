@@ -11,18 +11,17 @@ import (
 )
 
 const (
-	// MaxRequestBodySize limits request body to 1MB to prevent memory exhaustion
+	// MaxRequestBodySize limits request body to 1MB to prevent memory exhaustion.
 	MaxRequestBodySize = 1 << 20 // 1 MB
 )
 
-// HTTPHandler provides HTTP endpoints for the Frontend service
-// Laravel will call these endpoints to interact with the engine
+// Laravel will call these endpoints to interact with the engine.
 type HTTPHandler struct {
 	service *frontend.Service
 	logger  *slog.Logger
 }
 
-// NewHTTPHandler creates a new HTTP handler
+// NewHTTPHandler creates a new HTTP handler.
 func NewHTTPHandler(service *frontend.Service, logger *slog.Logger) *HTTPHandler {
 	return &HTTPHandler{
 		service: service,
@@ -30,7 +29,7 @@ func NewHTTPHandler(service *frontend.Service, logger *slog.Logger) *HTTPHandler
 	}
 }
 
-// RegisterRoutes registers all HTTP routes
+// RegisterRoutes registers all HTTP routes.
 func (h *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Workflow execution endpoints - all wrapped with security middleware
 	mux.HandleFunc("POST /api/v1/workflows/execute", h.securityMiddleware(h.StartWorkflow))
@@ -47,7 +46,7 @@ func (h *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ready", h.Ready)
 }
 
-// securityMiddleware adds security headers and request limits to handlers
+// securityMiddleware adds security headers and request limits to handlers.
 func (h *HTTPHandler) securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Set security headers
@@ -68,7 +67,7 @@ func (h *HTTPHandler) securityMiddleware(next http.HandlerFunc) http.HandlerFunc
 	}
 }
 
-// StartWorkflowRequest is the request to start a workflow
+// StartWorkflowRequest is the request to start a workflow.
 type StartWorkflowRequest struct {
 	WorkspaceID    string                 `json:"workspace_id"`
 	WorkflowID     string                 `json:"workflow_id"`
@@ -80,15 +79,14 @@ type StartWorkflowRequest struct {
 	CallbackURL    string                 `json:"callback_url,omitempty"`
 }
 
-// StartWorkflowResponse is the response from starting a workflow
+// StartWorkflowResponse is the response from starting a workflow.
 type StartWorkflowResponse struct {
 	ExecutionID string `json:"execution_id"`
 	RunID       string `json:"run_id"`
 	Started     bool   `json:"started"`
 }
 
-// StartWorkflow starts a new workflow execution
-// POST /api/v1/workflows/execute
+// POST /api/v1/workflows/execute.
 func (h *HTTPHandler) StartWorkflow(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -153,7 +151,7 @@ func (h *HTTPHandler) StartWorkflow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExecutionInfo holds execution information
+// ExecutionInfo holds execution information.
 type ExecutionInfo struct {
 	ExecutionID string                 `json:"execution_id"`
 	WorkflowID  string                 `json:"workflow_id"`
@@ -166,8 +164,7 @@ type ExecutionInfo struct {
 	Error       string                 `json:"error,omitempty"`
 }
 
-// GetExecution gets the status of an execution
-// GET /api/v1/workspaces/{workspace_id}/executions/{execution_id}
+// GET /api/v1/workspaces/{workspace_id}/executions/{execution_id}.
 func (h *HTTPHandler) GetExecution(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workspaceID := r.PathValue("workspace_id")
@@ -196,8 +193,7 @@ func (h *HTTPHandler) GetExecution(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, info)
 }
 
-// ListExecutions lists executions for a workspace
-// GET /api/v1/workspaces/{workspace_id}/executions
+// GET /api/v1/workspaces/{workspace_id}/executions.
 func (h *HTTPHandler) ListExecutions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workspaceID := r.PathValue("workspace_id")
@@ -219,8 +215,7 @@ func (h *HTTPHandler) ListExecutions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CancelExecution cancels a running execution
-// POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/cancel
+// POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/cancel.
 func (h *HTTPHandler) CancelExecution(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workspaceID := r.PathValue("workspace_id")
@@ -245,13 +240,13 @@ func (h *HTTPHandler) CancelExecution(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "canceled"})
 }
 
-// RetryExecutionRequest contains optional retry configuration
+// RetryExecutionRequest contains optional retry configuration.
 type RetryExecutionRequest struct {
 	MaxAttempts int    `json:"max_attempts,omitempty"`
 	TaskQueue   string `json:"task_queue,omitempty"`
 }
 
-// RetryExecutionResponse is the response from retrying an execution
+// RetryExecutionResponse is the response from retrying an execution.
 type RetryExecutionResponse struct {
 	ExecutionID         string `json:"execution_id"`
 	RunID               string `json:"run_id"`
@@ -259,8 +254,7 @@ type RetryExecutionResponse struct {
 	Status              string `json:"status"`
 }
 
-// RetryExecution retries a failed or canceled execution
-// POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/retry
+// POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/retry.
 func (h *HTTPHandler) RetryExecution(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workspaceID := r.PathValue("workspace_id")
@@ -408,8 +402,7 @@ func (h *HTTPHandler) RetryExecution(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SendSignal sends a signal to a running execution
-// POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/signal
+// POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/signal.
 func (h *HTTPHandler) SendSignal(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workspaceID := r.PathValue("workspace_id")
@@ -441,12 +434,12 @@ func (h *HTTPHandler) SendSignal(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "signal_sent"})
 }
 
-// Health check endpoint
+// Health check endpoint.
 func (h *HTTPHandler) Health(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
 }
 
-// Ready check endpoint
+// Ready check endpoint.
 func (h *HTTPHandler) Ready(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
@@ -467,8 +460,7 @@ func generateExecutionID() string {
 	return "exec-" + randomString(16)
 }
 
-// randomString generates a cryptographically secure random string
-// of the specified length using crypto/rand
+// of the specified length using crypto/rand.
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	bytes := make([]byte, n)

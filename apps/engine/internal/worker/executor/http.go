@@ -28,7 +28,7 @@ type HTTPResponse struct {
 	Body       json.RawMessage   `json:"body"`
 }
 
-// NewHTTPExecutor creates a new HTTP executor with connection pooling
+// NewHTTPExecutor creates a new HTTP executor with connection pooling.
 func NewHTTPExecutor() *HTTPExecutor {
 	// Configure transport with connection pooling for better performance
 	transport := &http.Transport{

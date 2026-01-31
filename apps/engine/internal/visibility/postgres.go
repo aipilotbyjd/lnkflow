@@ -12,27 +12,27 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PostgresStore is a PostgreSQL implementation of the visibility store
+// PostgresStore is a PostgreSQL implementation of the visibility store.
 type PostgresStore struct {
 	pool *pgxpool.Pool
 }
 
-// NewPostgresStore creates a new PostgreSQL visibility store
+// NewPostgresStore creates a new PostgreSQL visibility store.
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{pool: pool}
 }
 
-// RecordExecutionStarted records a started execution
+// RecordExecutionStarted records a started execution.
 func (s *PostgresStore) RecordExecutionStarted(ctx context.Context, info *ExecutionInfo) error {
 	return s.UpsertExecution(ctx, info)
 }
 
-// RecordExecutionClosed records a closed execution
+// RecordExecutionClosed records a closed execution.
 func (s *PostgresStore) RecordExecutionClosed(ctx context.Context, info *ExecutionInfo) error {
 	return s.UpsertExecution(ctx, info)
 }
 
-// UpsertExecution upserts an execution record
+// UpsertExecution upserts an execution record.
 func (s *PostgresStore) UpsertExecution(ctx context.Context, info *ExecutionInfo) error {
 	searchAttrsJSON, _ := json.Marshal(info.SearchAttributes)
 
@@ -43,7 +43,7 @@ func (s *PostgresStore) UpsertExecution(ctx context.Context, info *ExecutionInfo
 			memo, search_attributes, task_queue,
 			parent_workflow_id, parent_run_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		ON CONFLICT (namespace_id, workflow_id, run_id) 
+		ON CONFLICT (namespace_id, workflow_id, run_id)
 		DO UPDATE SET
 			status = EXCLUDED.status,
 			close_time = EXCLUDED.close_time,
@@ -70,7 +70,7 @@ func (s *PostgresStore) UpsertExecution(ctx context.Context, info *ExecutionInfo
 	return nil
 }
 
-// GetExecution retrieves an execution
+// GetExecution retrieves an execution.
 func (s *PostgresStore) GetExecution(ctx context.Context, namespaceID, workflowID, runID string) (*ExecutionInfo, error) {
 	var info ExecutionInfo
 	var status int16
@@ -125,7 +125,7 @@ func (s *PostgresStore) GetExecution(ctx context.Context, namespaceID, workflowI
 	return &info, nil
 }
 
-// ListExecutions lists executions matching the criteria
+// ListExecutions lists executions matching the criteria.
 func (s *PostgresStore) ListExecutions(ctx context.Context, req *ListRequest) (*ListResponse, error) {
 	query, err := ParseQuery(req.Query)
 	if err != nil {
@@ -253,7 +253,7 @@ func (s *PostgresStore) ListExecutions(ctx context.Context, req *ListRequest) (*
 	}, nil
 }
 
-// CountExecutions counts executions matching the criteria
+// CountExecutions counts executions matching the criteria.
 func (s *PostgresStore) CountExecutions(ctx context.Context, req *CountRequest) (*CountResponse, error) {
 	query, err := ParseQuery(req.Query)
 	if err != nil {
@@ -282,7 +282,7 @@ func (s *PostgresStore) CountExecutions(ctx context.Context, req *CountRequest) 
 	return &CountResponse{Count: count}, nil
 }
 
-// DeleteExecution deletes an execution record
+// DeleteExecution deletes an execution record.
 func (s *PostgresStore) DeleteExecution(ctx context.Context, namespaceID, workflowID, runID string) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM visibility

@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// DelayExecutor handles delay/wait nodes
+// DelayExecutor handles delay/wait nodes.
 type DelayExecutor struct{}
 
-// DelayConfig represents the configuration for a delay node
+// DelayConfig represents the configuration for a delay node.
 type DelayConfig struct {
 	// Duration in various units (only one should be set)
 	Seconds      int `json:"seconds"`
@@ -26,7 +26,7 @@ type DelayConfig struct {
 	Until string `json:"until"` // RFC3339 format
 }
 
-// DelayResponse represents the result of a delay
+// DelayResponse represents the result of a delay.
 type DelayResponse struct {
 	StartedAt  string `json:"started_at"`
 	EndedAt    string `json:"ended_at"`
@@ -34,7 +34,7 @@ type DelayResponse struct {
 	DurationMs int64  `json:"duration_ms"`
 }
 
-// NewDelayExecutor creates a new delay executor
+// NewDelayExecutor creates a new delay executor.
 func NewDelayExecutor() *DelayExecutor {
 	return &DelayExecutor{}
 }

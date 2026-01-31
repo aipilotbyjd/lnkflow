@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Bulkhead provides resource isolation using the bulkhead pattern
+// Bulkhead provides resource isolation using the bulkhead pattern.
 type Bulkhead struct {
 	name           string
 	maxConcurrency int
@@ -19,13 +19,13 @@ type Bulkhead struct {
 	mu sync.Mutex
 }
 
-// BulkheadConfig holds bulkhead configuration
+// BulkheadConfig holds bulkhead configuration.
 type BulkheadConfig struct {
 	MaxConcurrency int
 	MaxWait        time.Duration
 }
 
-// DefaultBulkheadConfig returns default bulkhead config
+// DefaultBulkheadConfig returns default bulkhead config.
 func DefaultBulkheadConfig() BulkheadConfig {
 	return BulkheadConfig{
 		MaxConcurrency: 10,
@@ -33,7 +33,7 @@ func DefaultBulkheadConfig() BulkheadConfig {
 	}
 }
 
-// NewBulkhead creates a new bulkhead
+// NewBulkhead creates a new bulkhead.
 func NewBulkhead(name string, config BulkheadConfig) *Bulkhead {
 	return &Bulkhead{
 		name:           name,
@@ -43,7 +43,7 @@ func NewBulkhead(name string, config BulkheadConfig) *Bulkhead {
 	}
 }
 
-// Acquire acquires a slot in the bulkhead
+// Acquire acquires a slot in the bulkhead.
 func (b *Bulkhead) Acquire(ctx context.Context) error {
 	// Check if we can acquire immediately
 	select {
@@ -84,7 +84,7 @@ func (b *Bulkhead) Acquire(ctx context.Context) error {
 	}
 }
 
-// Release releases a slot in the bulkhead
+// Release releases a slot in the bulkhead.
 func (b *Bulkhead) Release() {
 	select {
 	case <-b.sem:
@@ -96,7 +96,7 @@ func (b *Bulkhead) Release() {
 	}
 }
 
-// Execute executes a function within the bulkhead
+// Execute executes a function within the bulkhead.
 func (b *Bulkhead) Execute(ctx context.Context, fn func() error) error {
 	if err := b.Acquire(ctx); err != nil {
 		return err
@@ -105,7 +105,7 @@ func (b *Bulkhead) Execute(ctx context.Context, fn func() error) error {
 	return fn()
 }
 
-// Metrics returns bulkhead metrics
+// Metrics returns bulkhead metrics.
 func (b *Bulkhead) Metrics() BulkheadMetrics {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -119,7 +119,7 @@ func (b *Bulkhead) Metrics() BulkheadMetrics {
 	}
 }
 
-// BulkheadMetrics holds bulkhead metrics
+// BulkheadMetrics holds bulkhead metrics.
 type BulkheadMetrics struct {
 	Name           string
 	MaxConcurrency int
@@ -128,14 +128,14 @@ type BulkheadMetrics struct {
 	Available      int
 }
 
-// BulkheadRegistry manages multiple bulkheads
+// BulkheadRegistry manages multiple bulkheads.
 type BulkheadRegistry struct {
 	bulkheads map[string]*Bulkhead
 	config    BulkheadConfig
 	mu        sync.RWMutex
 }
 
-// NewBulkheadRegistry creates a new bulkhead registry
+// NewBulkheadRegistry creates a new bulkhead registry.
 func NewBulkheadRegistry(config BulkheadConfig) *BulkheadRegistry {
 	return &BulkheadRegistry{
 		bulkheads: make(map[string]*Bulkhead),
@@ -143,7 +143,7 @@ func NewBulkheadRegistry(config BulkheadConfig) *BulkheadRegistry {
 	}
 }
 
-// Get gets or creates a bulkhead by name
+// Get gets or creates a bulkhead by name.
 func (r *BulkheadRegistry) Get(name string) *Bulkhead {
 	r.mu.RLock()
 	if b, exists := r.bulkheads[name]; exists {

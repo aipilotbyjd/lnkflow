@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Performance optimization: Add additional indexes for common query patterns.
      */
     public function up(): void
@@ -17,10 +17,10 @@ return new class extends Migration
         Schema::table('executions', function (Blueprint $table) {
             // Composite index for workspace + status (stats queries)
             $table->index(['workspace_id', 'status'], 'idx_executions_workspace_status');
-            
+
             // Index for workflow + created_at (workflow execution history)
             $table->index(['workflow_id', 'created_at'], 'idx_executions_workflow_created');
-            
+
             // Index for mode filtering
             $table->index('mode', 'idx_executions_mode');
         });
@@ -29,7 +29,7 @@ return new class extends Migration
         Schema::table('execution_nodes', function (Blueprint $table) {
             // Composite index for execution + status (node status queries)
             $table->index(['execution_id', 'status'], 'idx_execution_nodes_execution_status');
-            
+
             // Index for sequence ordering
             $table->index(['execution_id', 'sequence'], 'idx_execution_nodes_execution_sequence');
         });
@@ -38,7 +38,7 @@ return new class extends Migration
         Schema::table('workflows', function (Blueprint $table) {
             // Composite index for workspace + active status
             $table->index(['workspace_id', 'is_active'], 'idx_workflows_workspace_active');
-            
+
             // Index for trigger type (scheduled workflow queries)
             $table->index('trigger_type', 'idx_workflows_trigger_type');
         });
@@ -47,7 +47,7 @@ return new class extends Migration
         Schema::table('job_statuses', function (Blueprint $table) {
             // Index for job lookup by job_id (already should be unique, but ensure indexed)
             $table->index('status', 'idx_job_statuses_status');
-            
+
             // Composite index for execution lookups
             $table->index(['execution_id', 'status'], 'idx_job_statuses_execution_status');
         });
@@ -56,7 +56,7 @@ return new class extends Migration
         Schema::table('webhooks', function (Blueprint $table) {
             // Index for UUID lookup (critical for webhook receiver performance)
             $table->index('uuid', 'idx_webhooks_uuid');
-            
+
             // Index for active webhooks
             $table->index(['workspace_id', 'is_active'], 'idx_webhooks_workspace_active');
         });

@@ -75,7 +75,7 @@ type ClusterSyncClient interface {
 	SendHeartbeat(ctx context.Context, endpoint string, req *HeartbeatRequest) (*HeartbeatResponse, error)
 }
 
-// ClusterInfo represents a cluster in the federation
+// ClusterInfo represents a cluster in the federation.
 type ClusterInfo struct {
 	ID            string
 	Name          string
@@ -86,7 +86,7 @@ type ClusterInfo struct {
 	Metadata      map[string]string
 }
 
-// ClusterStatus represents cluster health status
+// ClusterStatus represents cluster health status.
 type ClusterStatus int
 
 const (
@@ -97,7 +97,7 @@ const (
 	ClusterStatusOffline
 )
 
-// NamespaceConfig represents namespace configuration
+// NamespaceConfig represents namespace configuration.
 type NamespaceConfig struct {
 	ID                   string
 	Name                 string
@@ -112,7 +112,7 @@ type NamespaceConfig struct {
 	ArchivalConfig       *ArchivalConfig
 }
 
-// SearchAttributeType defines the type of a search attribute
+// SearchAttributeType defines the type of a search attribute.
 type SearchAttributeType int
 
 const (
@@ -124,7 +124,7 @@ const (
 	SearchAttributeDatetime
 )
 
-// ArchivalConfig defines archival settings
+// ArchivalConfig defines archival settings.
 type ArchivalConfig struct {
 	Enabled       bool
 	URI           string
@@ -132,7 +132,7 @@ type ArchivalConfig struct {
 	VisibilityURI string
 }
 
-// ServiceInstance represents a registered service instance
+// ServiceInstance represents a registered service instance.
 type ServiceInstance struct {
 	ID        string
 	Service   string
@@ -144,7 +144,7 @@ type ServiceInstance struct {
 	Version   string
 }
 
-// HealthStatus represents service health
+// HealthStatus represents service health.
 type HealthStatus int
 
 const (
@@ -153,7 +153,7 @@ const (
 	HealthStatusNotServing
 )
 
-// Config holds control plane configuration
+// Config holds control plane configuration.
 type Config struct {
 	ClusterID         string
 	ClusterName       string
@@ -163,7 +163,7 @@ type Config struct {
 	ClusterSyncConfig *ClusterSyncConfig
 }
 
-// Service is the control plane service
+// Service is the control plane service.
 type Service struct {
 	config Config
 	logger *slog.Logger
@@ -181,7 +181,7 @@ type Service struct {
 	running  bool
 }
 
-// NewService creates a new control plane service
+// NewService creates a new control plane service.
 func NewService(config Config) *Service {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -222,14 +222,14 @@ func NewService(config Config) *Service {
 	}
 }
 
-// SetSyncClient sets the cluster sync client for cross-cluster communication
+// SetSyncClient sets the cluster sync client for cross-cluster communication.
 func (s *Service) SetSyncClient(client ClusterSyncClient) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.syncClient = client
 }
 
-// Start starts the control plane service
+// Start starts the control plane service.
 func (s *Service) Start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.running {
@@ -261,7 +261,7 @@ func (s *Service) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the control plane service
+// Stop stops the control plane service.
 func (s *Service) Stop(ctx context.Context) error {
 	s.mu.Lock()
 	if !s.running {
@@ -276,7 +276,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	return nil
 }
 
-// RegisterCluster registers a cluster
+// RegisterCluster registers a cluster.
 func (s *Service) RegisterCluster(ctx context.Context, cluster *ClusterInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -292,7 +292,7 @@ func (s *Service) RegisterCluster(ctx context.Context, cluster *ClusterInfo) err
 	return nil
 }
 
-// GetCluster retrieves a cluster by ID
+// GetCluster retrieves a cluster by ID.
 func (s *Service) GetCluster(ctx context.Context, clusterID string) (*ClusterInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -304,7 +304,7 @@ func (s *Service) GetCluster(ctx context.Context, clusterID string) (*ClusterInf
 	return cluster, nil
 }
 
-// ListClusters returns all clusters
+// ListClusters returns all clusters.
 func (s *Service) ListClusters(ctx context.Context) []*ClusterInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -316,7 +316,7 @@ func (s *Service) ListClusters(ctx context.Context) []*ClusterInfo {
 	return clusters
 }
 
-// CreateNamespace creates a new namespace
+// CreateNamespace creates a new namespace.
 func (s *Service) CreateNamespace(ctx context.Context, ns *NamespaceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -334,7 +334,7 @@ func (s *Service) CreateNamespace(ctx context.Context, ns *NamespaceConfig) erro
 	return nil
 }
 
-// GetNamespace retrieves a namespace by name
+// GetNamespace retrieves a namespace by name.
 func (s *Service) GetNamespace(ctx context.Context, name string) (*NamespaceConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -346,7 +346,7 @@ func (s *Service) GetNamespace(ctx context.Context, name string) (*NamespaceConf
 	return ns, nil
 }
 
-// UpdateNamespace updates a namespace
+// UpdateNamespace updates a namespace.
 func (s *Service) UpdateNamespace(ctx context.Context, ns *NamespaceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -359,7 +359,7 @@ func (s *Service) UpdateNamespace(ctx context.Context, ns *NamespaceConfig) erro
 	return nil
 }
 
-// ListNamespaces returns all namespaces
+// ListNamespaces returns all namespaces.
 func (s *Service) ListNamespaces(ctx context.Context) []*NamespaceConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -371,7 +371,7 @@ func (s *Service) ListNamespaces(ctx context.Context) []*NamespaceConfig {
 	return namespaces
 }
 
-// RegisterService registers a service instance
+// RegisterService registers a service instance.
 func (s *Service) RegisterService(ctx context.Context, instance *ServiceInstance) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -403,7 +403,7 @@ func (s *Service) RegisterService(ctx context.Context, instance *ServiceInstance
 	return nil
 }
 
-// DeregisterService removes a service instance
+// DeregisterService removes a service instance.
 func (s *Service) DeregisterService(ctx context.Context, service, instanceID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -419,7 +419,7 @@ func (s *Service) DeregisterService(ctx context.Context, service, instanceID str
 	return nil
 }
 
-// GetServiceInstances returns all instances of a service
+// GetServiceInstances returns all instances of a service.
 func (s *Service) GetServiceInstances(ctx context.Context, service string) ([]*ServiceInstance, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -440,7 +440,7 @@ func (s *Service) GetServiceInstances(ctx context.Context, service string) ([]*S
 	return healthy, nil
 }
 
-// RouteRequest determines which cluster should handle a request
+// RouteRequest determines which cluster should handle a request.
 func (s *Service) RouteRequest(ctx context.Context, namespaceID, workflowID string) (*ClusterInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -478,7 +478,7 @@ func (s *Service) RouteRequest(ctx context.Context, namespaceID, workflowID stri
 	return nil, errors.New("no healthy cluster available for namespace")
 }
 
-// GetConfig returns configuration for the specified key as JSON
+// GetConfig returns configuration for the specified key as JSON.
 func (s *Service) GetConfig(ctx context.Context, key string) (json.RawMessage, error) {
 	s.configMu.RLock()
 	defer s.configMu.RUnlock()
@@ -512,7 +512,7 @@ func (s *Service) GetConfig(ctx context.Context, key string) (json.RawMessage, e
 	}
 }
 
-// SetConfig sets configuration for the specified key
+// SetConfig sets configuration for the specified key.
 func (s *Service) SetConfig(ctx context.Context, key string, value json.RawMessage) error {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
@@ -551,7 +551,7 @@ func (s *Service) SetConfig(ctx context.Context, key string, value json.RawMessa
 	return nil
 }
 
-// DeleteConfig removes configuration for the specified key
+// DeleteConfig removes configuration for the specified key.
 func (s *Service) DeleteConfig(ctx context.Context, key string) error {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
@@ -573,7 +573,7 @@ func (s *Service) DeleteConfig(ctx context.Context, key string) error {
 	return nil
 }
 
-// GetAllConfig returns the entire dynamic configuration
+// GetAllConfig returns the entire dynamic configuration.
 func (s *Service) GetAllConfig(ctx context.Context) (*DynamicConfig, error) {
 	s.configMu.RLock()
 	defer s.configMu.RUnlock()
@@ -600,7 +600,7 @@ func (s *Service) GetAllConfig(ctx context.Context) (*DynamicConfig, error) {
 	return configCopy, nil
 }
 
-// ListConfigKeys returns all available config keys
+// ListConfigKeys returns all available config keys.
 func (s *Service) ListConfigKeys(ctx context.Context) []string {
 	s.configMu.RLock()
 	defer s.configMu.RUnlock()
@@ -867,7 +867,7 @@ func clusterStatusString(status ClusterStatus) string {
 	}
 }
 
-// AddPeerCluster adds a peer cluster for synchronization
+// AddPeerCluster adds a peer cluster for synchronization.
 func (s *Service) AddPeerCluster(peer PeerCluster) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -885,7 +885,7 @@ func (s *Service) AddPeerCluster(peer PeerCluster) {
 	)
 }
 
-// RemovePeerCluster removes a peer cluster from synchronization
+// RemovePeerCluster removes a peer cluster from synchronization.
 func (s *Service) RemovePeerCluster(peerID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -903,7 +903,7 @@ func (s *Service) RemovePeerCluster(peerID string) {
 	)
 }
 
-// GetPeerClusters returns the list of configured peer clusters
+// GetPeerClusters returns the list of configured peer clusters.
 func (s *Service) GetPeerClusters() []PeerCluster {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -913,7 +913,7 @@ func (s *Service) GetPeerClusters() []PeerCluster {
 	return peers
 }
 
-// TriggerSync manually triggers a cluster sync
+// TriggerSync manually triggers a cluster sync.
 func (s *Service) TriggerSync() {
 	go s.syncClusters()
 }

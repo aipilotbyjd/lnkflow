@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// MetricType represents the type of metric
+// MetricType represents the type of metric.
 type MetricType int
 
 const (
@@ -16,24 +16,24 @@ const (
 	MetricTypeHistogram
 )
 
-// Labels represents metric labels
+// Labels represents metric labels.
 type Labels map[string]string
 
-// Metric is the base interface for all metrics
+// Metric is the base interface for all metrics.
 type Metric interface {
 	Name() string
 	Type() MetricType
 	Labels() Labels
 }
 
-// Counter is a monotonically increasing counter
+// Counter is a monotonically increasing counter.
 type Counter struct {
 	name   string
 	labels Labels
 	value  int64
 }
 
-// NewCounter creates a new counter
+// NewCounter creates a new counter.
 func NewCounter(name string, labels Labels) *Counter {
 	return &Counter{
 		name:   name,
@@ -46,24 +46,24 @@ func (c *Counter) Type() MetricType { return MetricTypeCounter }
 func (c *Counter) Labels() Labels   { return c.labels }
 func (c *Counter) Value() int64     { return atomic.LoadInt64(&c.value) }
 
-// Inc increments the counter by 1
+// Inc increments the counter by 1.
 func (c *Counter) Inc() {
 	atomic.AddInt64(&c.value, 1)
 }
 
-// Add adds the given value to the counter
+// Add adds the given value to the counter.
 func (c *Counter) Add(delta int64) {
 	atomic.AddInt64(&c.value, delta)
 }
 
-// Gauge is a metric that can go up and down
+// Gauge is a metric that can go up and down.
 type Gauge struct {
 	name   string
 	labels Labels
 	value  int64 // Stored as int64, but represents float64 bits
 }
 
-// NewGauge creates a new gauge
+// NewGauge creates a new gauge.
 func NewGauge(name string, labels Labels) *Gauge {
 	return &Gauge{
 		name:   name,
@@ -76,27 +76,27 @@ func (g *Gauge) Type() MetricType { return MetricTypeGauge }
 func (g *Gauge) Labels() Labels   { return g.labels }
 func (g *Gauge) Value() float64   { return float64(atomic.LoadInt64(&g.value)) }
 
-// Set sets the gauge to the given value
+// Set sets the gauge to the given value.
 func (g *Gauge) Set(value float64) {
 	atomic.StoreInt64(&g.value, int64(value))
 }
 
-// Inc increments the gauge by 1
+// Inc increments the gauge by 1.
 func (g *Gauge) Inc() {
 	atomic.AddInt64(&g.value, 1)
 }
 
-// Dec decrements the gauge by 1
+// Dec decrements the gauge by 1.
 func (g *Gauge) Dec() {
 	atomic.AddInt64(&g.value, -1)
 }
 
-// Add adds the given value to the gauge
+// Add adds the given value to the gauge.
 func (g *Gauge) Add(delta float64) {
 	atomic.AddInt64(&g.value, int64(delta))
 }
 
-// Histogram tracks the distribution of values
+// Histogram tracks the distribution of values.
 type Histogram struct {
 	name    string
 	labels  Labels
@@ -107,10 +107,10 @@ type Histogram struct {
 	mu      sync.RWMutex
 }
 
-// DefaultBuckets are the default histogram buckets (in milliseconds)
+// DefaultBuckets are the default histogram buckets (in milliseconds).
 var DefaultBuckets = []float64{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000}
 
-// NewHistogram creates a new histogram
+// NewHistogram creates a new histogram.
 func NewHistogram(name string, labels Labels, buckets []float64) *Histogram {
 	if buckets == nil {
 		buckets = DefaultBuckets
@@ -127,7 +127,7 @@ func (h *Histogram) Name() string     { return h.name }
 func (h *Histogram) Type() MetricType { return MetricTypeHistogram }
 func (h *Histogram) Labels() Labels   { return h.labels }
 
-// Observe records a value in the histogram
+// Observe records a value in the histogram.
 func (h *Histogram) Observe(value float64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -146,26 +146,26 @@ func (h *Histogram) Observe(value float64) {
 	h.count++
 }
 
-// ObserveDuration records a duration in milliseconds
+// ObserveDuration records a duration in milliseconds.
 func (h *Histogram) ObserveDuration(d time.Duration) {
 	h.Observe(float64(d.Milliseconds()))
 }
 
-// Sum returns the sum of all observed values
+// Sum returns the sum of all observed values.
 func (h *Histogram) Sum() float64 {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return float64(h.sum) / 1000
 }
 
-// Count returns the count of observations
+// Count returns the count of observations.
 func (h *Histogram) Count() int64 {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.count
 }
 
-// Buckets returns the bucket counts
+// Buckets returns the bucket counts.
 func (h *Histogram) Buckets() map[float64]int64 {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -177,7 +177,7 @@ func (h *Histogram) Buckets() map[float64]int64 {
 	return result
 }
 
-// Registry stores and manages metrics
+// Registry stores and manages metrics.
 type Registry struct {
 	counters   map[string]*Counter
 	gauges     map[string]*Gauge
@@ -185,7 +185,7 @@ type Registry struct {
 	mu         sync.RWMutex
 }
 
-// NewRegistry creates a new metrics registry
+// NewRegistry creates a new metrics registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		counters:   make(map[string]*Counter),
@@ -194,10 +194,10 @@ func NewRegistry() *Registry {
 	}
 }
 
-// DefaultRegistry is the default global metrics registry
+// DefaultRegistry is the default global metrics registry.
 var DefaultRegistry = NewRegistry()
 
-// Counter gets or creates a counter
+// Counter gets or creates a counter.
 func (r *Registry) Counter(name string, labels Labels) *Counter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -212,7 +212,7 @@ func (r *Registry) Counter(name string, labels Labels) *Counter {
 	return c
 }
 
-// Gauge gets or creates a gauge
+// Gauge gets or creates a gauge.
 func (r *Registry) Gauge(name string, labels Labels) *Gauge {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -227,7 +227,7 @@ func (r *Registry) Gauge(name string, labels Labels) *Gauge {
 	return g
 }
 
-// Histogram gets or creates a histogram
+// Histogram gets or creates a histogram.
 func (r *Registry) Histogram(name string, labels Labels, buckets []float64) *Histogram {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -242,7 +242,7 @@ func (r *Registry) Histogram(name string, labels Labels, buckets []float64) *His
 	return h
 }
 
-// Handler returns an HTTP handler for metrics (Prometheus-compatible)
+// Handler returns an HTTP handler for metrics (Prometheus-compatible).
 func (r *Registry) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r.mu.RLock()

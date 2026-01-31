@@ -85,7 +85,7 @@ class WorkflowDispatchService
      */
     protected function validateWorkflow(Workflow $workflow): void
     {
-        if (!$workflow->is_active) {
+        if (! $workflow->is_active) {
             throw new \RuntimeException('Workflow is not active.');
         }
 

@@ -26,11 +26,11 @@ type Task struct {
 }
 
 type TaskResult struct {
-	TaskID   string `json:"task_id"`
-	Output   []byte `json:"output"`
-	Error    string `json:"error"`
+	TaskID    string `json:"task_id"`
+	Output    []byte `json:"output"`
+	Error     string `json:"error"`
 	ErrorType string `json:"error_type"`
-	Logs     []byte `json:"logs"`
+	Logs      []byte `json:"logs"`
 }
 
 const (

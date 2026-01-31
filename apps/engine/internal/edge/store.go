@@ -6,14 +6,14 @@ import (
 	"sync"
 )
 
-// MemoryStore is an in-memory implementation of LocalStore for edge
+// MemoryStore is an in-memory implementation of LocalStore for edge.
 type MemoryStore struct {
 	executions  map[string]*EdgeExecution
 	definitions map[string]json.RawMessage // key: namespace/workflow
 	mu          sync.RWMutex
 }
 
-// NewMemoryStore creates a new in-memory edge store
+// NewMemoryStore creates a new in-memory edge store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		executions:  make(map[string]*EdgeExecution),
@@ -21,7 +21,7 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-// SaveExecution saves an execution
+// SaveExecution saves an execution.
 func (s *MemoryStore) SaveExecution(ctx context.Context, exec *EdgeExecution) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -38,7 +38,7 @@ func (s *MemoryStore) SaveExecution(ctx context.Context, exec *EdgeExecution) er
 	return nil
 }
 
-// GetExecution retrieves an execution
+// GetExecution retrieves an execution.
 func (s *MemoryStore) GetExecution(ctx context.Context, id string) (*EdgeExecution, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -52,7 +52,7 @@ func (s *MemoryStore) GetExecution(ctx context.Context, id string) (*EdgeExecuti
 	return &clone, nil
 }
 
-// ListPendingSyncs returns all executions pending sync
+// ListPendingSyncs returns all executions pending sync.
 func (s *MemoryStore) ListPendingSyncs(ctx context.Context) ([]*EdgeExecution, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -68,7 +68,7 @@ func (s *MemoryStore) ListPendingSyncs(ctx context.Context) ([]*EdgeExecution, e
 	return pending, nil
 }
 
-// GetWorkflowDefinition retrieves a cached workflow definition
+// GetWorkflowDefinition retrieves a cached workflow definition.
 func (s *MemoryStore) GetWorkflowDefinition(ctx context.Context, namespaceID, workflowID string) (json.RawMessage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -82,7 +82,7 @@ func (s *MemoryStore) GetWorkflowDefinition(ctx context.Context, namespaceID, wo
 	return def, nil
 }
 
-// CacheWorkflowDefinition caches a workflow definition
+// CacheWorkflowDefinition caches a workflow definition.
 func (s *MemoryStore) CacheWorkflowDefinition(ctx context.Context, namespaceID, workflowID string, def json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -93,7 +93,7 @@ func (s *MemoryStore) CacheWorkflowDefinition(ctx context.Context, namespaceID, 
 	return nil
 }
 
-// Clear removes all data (for testing)
+// Clear removes all data (for testing).
 func (s *MemoryStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

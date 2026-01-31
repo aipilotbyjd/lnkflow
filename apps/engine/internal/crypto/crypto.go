@@ -19,20 +19,20 @@ var (
 	ErrDecryptionFailed  = errors.New("decryption failed")
 )
 
-// Config holds encryption configuration
+// Config holds encryption configuration.
 type Config struct {
 	MasterKey          []byte
 	KeyDerivationSalt  []byte
 	KeyRotationEnabled bool
 }
 
-// Encryptor handles encryption and decryption of sensitive data
+// Encryptor handles encryption and decryption of sensitive data.
 type Encryptor struct {
 	masterKey []byte
 	gcm       cipher.AEAD
 }
 
-// NewEncryptor creates a new encryptor with the given master key
+// NewEncryptor creates a new encryptor with the given master key.
 func NewEncryptor(masterKey []byte) (*Encryptor, error) {
 	if len(masterKey) < 16 {
 		return nil, ErrInvalidKey
@@ -57,7 +57,7 @@ func NewEncryptor(masterKey []byte) (*Encryptor, error) {
 	}, nil
 }
 
-// NewEncryptorFromString creates an encryptor from a base64-encoded key
+// NewEncryptorFromString creates an encryptor from a base64-encoded key.
 func NewEncryptorFromString(keyStr string) (*Encryptor, error) {
 	key, err := base64.StdEncoding.DecodeString(keyStr)
 	if err != nil {
@@ -70,7 +70,7 @@ func NewEncryptorFromString(keyStr string) (*Encryptor, error) {
 	return NewEncryptor(key)
 }
 
-// Encrypt encrypts plaintext and returns base64-encoded ciphertext
+// Encrypt encrypts plaintext and returns base64-encoded ciphertext.
 func (e *Encryptor) Encrypt(plaintext []byte) (string, error) {
 	nonce := make([]byte, e.gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
@@ -81,12 +81,12 @@ func (e *Encryptor) Encrypt(plaintext []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// EncryptString encrypts a string
+// EncryptString encrypts a string.
 func (e *Encryptor) EncryptString(plaintext string) (string, error) {
 	return e.Encrypt([]byte(plaintext))
 }
 
-// Decrypt decrypts base64-encoded ciphertext
+// Decrypt decrypts base64-encoded ciphertext.
 func (e *Encryptor) Decrypt(ciphertext string) ([]byte, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
@@ -107,7 +107,7 @@ func (e *Encryptor) Decrypt(ciphertext string) ([]byte, error) {
 	return plaintext, nil
 }
 
-// DecryptString decrypts to a string
+// DecryptString decrypts to a string.
 func (e *Encryptor) DecryptString(ciphertext string) (string, error) {
 	plaintext, err := e.Decrypt(ciphertext)
 	if err != nil {
@@ -116,13 +116,13 @@ func (e *Encryptor) DecryptString(ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
-// CredentialStore stores encrypted credentials
+// CredentialStore stores encrypted credentials.
 type CredentialStore struct {
 	encryptor   *Encryptor
 	credentials map[string]string // encrypted values
 }
 
-// NewCredentialStore creates a new credential store
+// NewCredentialStore creates a new credential store.
 func NewCredentialStore(encryptor *Encryptor) *CredentialStore {
 	return &CredentialStore{
 		encryptor:   encryptor,
@@ -130,7 +130,7 @@ func NewCredentialStore(encryptor *Encryptor) *CredentialStore {
 	}
 }
 
-// Set stores an encrypted credential
+// Set stores an encrypted credential.
 func (cs *CredentialStore) Set(key, value string) error {
 	encrypted, err := cs.encryptor.EncryptString(value)
 	if err != nil {
@@ -140,7 +140,7 @@ func (cs *CredentialStore) Set(key, value string) error {
 	return nil
 }
 
-// Get retrieves and decrypts a credential
+// Get retrieves and decrypts a credential.
 func (cs *CredentialStore) Get(key string) (string, error) {
 	encrypted, exists := cs.credentials[key]
 	if !exists {
@@ -149,18 +149,18 @@ func (cs *CredentialStore) Get(key string) (string, error) {
 	return cs.encryptor.DecryptString(encrypted)
 }
 
-// Delete removes a credential
+// Delete removes a credential.
 func (cs *CredentialStore) Delete(key string) {
 	delete(cs.credentials, key)
 }
 
-// Exists checks if a credential exists
+// Exists checks if a credential exists.
 func (cs *CredentialStore) Exists(key string) bool {
 	_, exists := cs.credentials[key]
 	return exists
 }
 
-// List returns all credential keys
+// List returns all credential keys.
 func (cs *CredentialStore) List() []string {
 	keys := make([]string, 0, len(cs.credentials))
 	for k := range cs.credentials {
@@ -169,14 +169,14 @@ func (cs *CredentialStore) List() []string {
 	return keys
 }
 
-// Import imports encrypted credentials
+// Import imports encrypted credentials.
 func (cs *CredentialStore) Import(credentials map[string]string) {
 	for k, v := range credentials {
 		cs.credentials[k] = v
 	}
 }
 
-// Export exports encrypted credentials
+// Export exports encrypted credentials.
 func (cs *CredentialStore) Export() map[string]string {
 	result := make(map[string]string, len(cs.credentials))
 	for k, v := range cs.credentials {
@@ -187,32 +187,32 @@ func (cs *CredentialStore) Export() map[string]string {
 
 // Hash functions
 
-// HashSHA256 hashes data with SHA-256
+// HashSHA256 hashes data with SHA-256.
 func HashSHA256(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }
 
-// HashPassword hashes a password with PBKDF2
+// HashPassword hashes a password with PBKDF2.
 func HashPassword(password, salt string) string {
 	key := pbkdf2.Key([]byte(password), []byte(salt), 100000, 32, sha256.New)
 	return hex.EncodeToString(key)
 }
 
-// VerifyPassword verifies a password against a hash
+// VerifyPassword verifies a password against a hash.
 func VerifyPassword(password, salt, expectedHash string) bool {
 	hash := HashPassword(password, salt)
 	return hash == expectedHash
 }
 
-// GenerateRandomBytes generates random bytes
+// GenerateRandomBytes generates random bytes.
 func GenerateRandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)
 	_, err := rand.Read(b)
 	return b, err
 }
 
-// GenerateRandomString generates a random string
+// GenerateRandomString generates a random string.
 func GenerateRandomString(n int) (string, error) {
 	bytes, err := GenerateRandomBytes(n)
 	if err != nil {
@@ -221,7 +221,7 @@ func GenerateRandomString(n int) (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
-// GenerateMasterKey generates a new master key
+// GenerateMasterKey generates a new master key.
 func GenerateMasterKey() (string, error) {
 	key, err := GenerateRandomBytes(32)
 	if err != nil {
@@ -230,7 +230,7 @@ func GenerateMasterKey() (string, error) {
 	return base64.StdEncoding.EncodeToString(key), nil
 }
 
-// deriveKey derives a key from the master key using PBKDF2
+// deriveKey derives a key from the master key using PBKDF2.
 func deriveKey(masterKey, salt []byte) []byte {
 	if salt == nil {
 		salt = []byte("linkflow-engine-v1")

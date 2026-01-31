@@ -14,7 +14,7 @@ var (
 	ErrPoolExhausted = errors.New("worker pool exhausted")
 )
 
-// Config holds pool configuration
+// Config holds pool configuration.
 type Config struct {
 	MinWorkers    int
 	MaxWorkers    int
@@ -25,7 +25,7 @@ type Config struct {
 	ScaleDownStep int
 }
 
-// DefaultConfig returns default pool config
+// DefaultConfig returns default pool config.
 func DefaultConfig() Config {
 	return Config{
 		MinWorkers:    2,
@@ -38,7 +38,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Task represents a task to be executed
+// Task represents a task to be executed.
 type Task struct {
 	ID       string
 	Execute  func(context.Context) error
@@ -46,7 +46,7 @@ type Task struct {
 	Priority int
 }
 
-// Manager manages a pool of workers
+// Manager manages a pool of workers.
 type Manager struct {
 	name   string
 	config Config
@@ -64,7 +64,7 @@ type Manager struct {
 	wg      sync.WaitGroup
 }
 
-// NewManager creates a new pool manager
+// NewManager creates a new pool manager.
 func NewManager(name string, config Config, logger *slog.Logger) *Manager {
 	if config.MinWorkers <= 0 {
 		config.MinWorkers = 2
@@ -88,7 +88,7 @@ func NewManager(name string, config Config, logger *slog.Logger) *Manager {
 	}
 }
 
-// Start starts the worker pool
+// Start starts the worker pool.
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	if m.running {
@@ -116,7 +116,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the worker pool
+// Stop stops the worker pool.
 func (m *Manager) Stop(ctx context.Context) error {
 	m.mu.Lock()
 	if !m.running {
@@ -144,7 +144,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Submit submits a task to the pool
+// Submit submits a task to the pool.
 func (m *Manager) Submit(task *Task) error {
 	m.mu.RLock()
 	if !m.running {
@@ -161,7 +161,7 @@ func (m *Manager) Submit(task *Task) error {
 	}
 }
 
-// SubmitWait submits a task and waits for completion
+// SubmitWait submits a task and waits for completion.
 func (m *Manager) SubmitWait(ctx context.Context, task *Task) error {
 	done := make(chan error, 1)
 
@@ -184,7 +184,7 @@ func (m *Manager) SubmitWait(ctx context.Context, task *Task) error {
 	}
 }
 
-// Metrics returns pool metrics
+// Metrics returns pool metrics.
 func (m *Manager) Metrics() Metrics {
 	return Metrics{
 		Name:          m.name,
@@ -197,7 +197,7 @@ func (m *Manager) Metrics() Metrics {
 	}
 }
 
-// Metrics holds pool metrics
+// Metrics holds pool metrics.
 type Metrics struct {
 	Name          string
 	Workers       int
@@ -318,7 +318,7 @@ func (m *Manager) autoScale() {
 	}
 }
 
-// DynamicConfig represents dynamic pool configuration
+// DynamicConfig represents dynamic pool configuration.
 type DynamicConfig struct {
 	Category    string
 	MinWorkers  int
@@ -326,14 +326,14 @@ type DynamicConfig struct {
 	TaskTimeout time.Duration
 }
 
-// CategoryManager manages multiple worker pools by category
+// CategoryManager manages multiple worker pools by category.
 type CategoryManager struct {
 	pools  map[string]*Manager
 	logger *slog.Logger
 	mu     sync.RWMutex
 }
 
-// NewCategoryManager creates a new category manager
+// NewCategoryManager creates a new category manager.
 func NewCategoryManager(logger *slog.Logger) *CategoryManager {
 	return &CategoryManager{
 		pools:  make(map[string]*Manager),
@@ -341,7 +341,7 @@ func NewCategoryManager(logger *slog.Logger) *CategoryManager {
 	}
 }
 
-// GetOrCreate gets or creates a pool for a category
+// GetOrCreate gets or creates a pool for a category.
 func (cm *CategoryManager) GetOrCreate(category string, config Config) *Manager {
 	cm.mu.RLock()
 	if pool, exists := cm.pools[category]; exists {
@@ -362,7 +362,7 @@ func (cm *CategoryManager) GetOrCreate(category string, config Config) *Manager 
 	return pool
 }
 
-// StartAll starts all pools
+// StartAll starts all pools.
 func (cm *CategoryManager) StartAll(ctx context.Context) error {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -375,7 +375,7 @@ func (cm *CategoryManager) StartAll(ctx context.Context) error {
 	return nil
 }
 
-// StopAll stops all pools
+// StopAll stops all pools.
 func (cm *CategoryManager) StopAll(ctx context.Context) error {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -388,7 +388,7 @@ func (cm *CategoryManager) StopAll(ctx context.Context) error {
 	return nil
 }
 
-// AllMetrics returns metrics for all pools
+// AllMetrics returns metrics for all pools.
 func (cm *CategoryManager) AllMetrics() map[string]Metrics {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()

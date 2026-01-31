@@ -9,13 +9,13 @@ import (
 )
 
 var (
-	ErrInvalidEvent          = errors.New("invalid event")
-	ErrEventOutOfOrder       = errors.New("event out of order")
-	ErrDuplicateTimer        = errors.New("duplicate timer")
-	ErrTimerNotFound         = errors.New("timer not found")
-	ErrActivityNotFound      = errors.New("activity not found")
-	ErrWorkflowNotRunning    = errors.New("workflow not running")
-	ErrInvalidEventType      = errors.New("invalid event type")
+	ErrInvalidEvent       = errors.New("invalid event")
+	ErrEventOutOfOrder    = errors.New("event out of order")
+	ErrDuplicateTimer     = errors.New("duplicate timer")
+	ErrTimerNotFound      = errors.New("timer not found")
+	ErrActivityNotFound   = errors.New("activity not found")
+	ErrWorkflowNotRunning = errors.New("workflow not running")
+	ErrInvalidEventType   = errors.New("invalid event type")
 )
 
 type Engine struct {

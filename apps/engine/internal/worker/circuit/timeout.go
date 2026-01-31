@@ -10,17 +10,17 @@ var (
 	ErrTimeout = errors.New("execution timed out")
 )
 
-// Timeout provides timeout wrapper for operations
+// Timeout provides timeout wrapper for operations.
 type Timeout struct {
 	defaultTimeout time.Duration
 }
 
-// NewTimeout creates a new timeout wrapper
+// NewTimeout creates a new timeout wrapper.
 func NewTimeout(defaultTimeout time.Duration) *Timeout {
 	return &Timeout{defaultTimeout: defaultTimeout}
 }
 
-// Execute executes a function with timeout
+// Execute executes a function with timeout.
 func (t *Timeout) Execute(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
 	if timeout == 0 {
 		timeout = t.defaultTimeout
@@ -46,7 +46,7 @@ func (t *Timeout) Execute(ctx context.Context, timeout time.Duration, fn func(co
 	}
 }
 
-// ExecuteWithResult executes a function with timeout and returns result
+// ExecuteWithResult executes a function with timeout and returns result.
 func ExecuteWithResult[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 
@@ -76,14 +76,14 @@ func ExecuteWithResult[T any](ctx context.Context, timeout time.Duration, fn fun
 	}
 }
 
-// ResilienceConfig holds all resilience configuration
+// ResilienceConfig holds all resilience configuration.
 type ResilienceConfig struct {
 	CircuitBreaker Config
 	Bulkhead       BulkheadConfig
 	DefaultTimeout time.Duration
 }
 
-// DefaultResilienceConfig returns default resilience config
+// DefaultResilienceConfig returns default resilience config.
 func DefaultResilienceConfig() ResilienceConfig {
 	return ResilienceConfig{
 		CircuitBreaker: DefaultConfig(),
@@ -92,14 +92,14 @@ func DefaultResilienceConfig() ResilienceConfig {
 	}
 }
 
-// Resilience combines circuit breaker, bulkhead, and timeout
+// Resilience combines circuit breaker, bulkhead, and timeout.
 type Resilience struct {
 	breaker  *Breaker
 	bulkhead *Bulkhead
 	timeout  *Timeout
 }
 
-// NewResilience creates a new resilience wrapper
+// NewResilience creates a new resilience wrapper.
 func NewResilience(name string, config ResilienceConfig) *Resilience {
 	return &Resilience{
 		breaker:  NewBreaker(name, config.CircuitBreaker),
@@ -108,7 +108,7 @@ func NewResilience(name string, config ResilienceConfig) *Resilience {
 	}
 }
 
-// Execute executes with all resilience patterns applied
+// Execute executes with all resilience patterns applied.
 func (r *Resilience) Execute(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
 	// Check circuit breaker first
 	if !r.breaker.Allow() {
@@ -130,7 +130,7 @@ func (r *Resilience) Execute(ctx context.Context, timeout time.Duration, fn func
 	return err
 }
 
-// Metrics returns combined resilience metrics
+// Metrics returns combined resilience metrics.
 func (r *Resilience) Metrics() ResilienceMetrics {
 	return ResilienceMetrics{
 		CircuitBreaker: r.breaker.Metrics(),
@@ -138,7 +138,7 @@ func (r *Resilience) Metrics() ResilienceMetrics {
 	}
 }
 
-// ResilienceMetrics holds combined resilience metrics
+// ResilienceMetrics holds combined resilience metrics.
 type ResilienceMetrics struct {
 	CircuitBreaker BreakerMetrics
 	Bulkhead       BulkheadMetrics

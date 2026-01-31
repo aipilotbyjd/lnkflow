@@ -12,7 +12,7 @@ var (
 	ErrInvalidEdge   = errors.New("invalid edge")
 )
 
-// DAG represents a directed acyclic graph of workflow nodes
+// DAG represents a directed acyclic graph of workflow nodes.
 type DAG struct {
 	Nodes        map[string]*Node
 	Edges        map[string][]string // source -> targets
@@ -26,7 +26,7 @@ type DAG struct {
 	Levels map[string]int
 }
 
-// Node represents a node in the DAG
+// Node represents a node in the DAG.
 type Node struct {
 	ID         string          `json:"id"`
 	Type       string          `json:"type"`
@@ -36,20 +36,20 @@ type Node struct {
 	Conditions []Condition     `json:"conditions"`
 }
 
-// Position represents node position in the editor
+// Position represents node position in the editor.
 type Position struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 }
 
-// Condition represents a conditional edge
+// Condition represents a conditional edge.
 type Condition struct {
 	TargetNode string `json:"target_node"`
 	Expression string `json:"expression"` // CEL expression
 	Order      int    `json:"order"`
 }
 
-// WorkflowDefinition represents a workflow from the editor
+// WorkflowDefinition represents a workflow from the editor.
 type WorkflowDefinition struct {
 	ID    string    `json:"id"`
 	Name  string    `json:"name"`
@@ -57,7 +57,7 @@ type WorkflowDefinition struct {
 	Edges []EdgeDef `json:"edges"`
 }
 
-// NodeDef represents a node definition from the editor
+// NodeDef represents a node definition from the editor.
 type NodeDef struct {
 	ID       string   `json:"id"`
 	Type     string   `json:"type"`
@@ -65,13 +65,13 @@ type NodeDef struct {
 	Data     NodeData `json:"data"`
 }
 
-// NodeData represents node data from the editor
+// NodeData represents node data from the editor.
 type NodeData struct {
 	Label  string          `json:"label"`
 	Config json.RawMessage `json:"config"`
 }
 
-// EdgeDef represents an edge definition from the editor
+// EdgeDef represents an edge definition from the editor.
 type EdgeDef struct {
 	ID           string `json:"id"`
 	Source       string `json:"source"`
@@ -82,7 +82,7 @@ type EdgeDef struct {
 	Condition    string `json:"condition,omitempty"`
 }
 
-// BuildDAG builds a DAG from a workflow definition
+// BuildDAG builds a DAG from a workflow definition.
 func BuildDAG(workflow *WorkflowDefinition) (*DAG, error) {
 	dag := &DAG{
 		Nodes:        make(map[string]*Node),
@@ -204,7 +204,7 @@ func (d *DAG) computeTopologicalOrder() error {
 	return nil
 }
 
-// GetParallelNodes returns nodes that can execute in parallel at a given level
+// GetParallelNodes returns nodes that can execute in parallel at a given level.
 func (d *DAG) GetParallelNodes(level int) []string {
 	var nodes []string
 	for id, l := range d.Levels {
@@ -215,7 +215,7 @@ func (d *DAG) GetParallelNodes(level int) []string {
 	return nodes
 }
 
-// GetMaxLevel returns the maximum level in the DAG
+// GetMaxLevel returns the maximum level in the DAG.
 func (d *DAG) GetMaxLevel() int {
 	maxLevel := 0
 	for _, level := range d.Levels {
@@ -226,7 +226,7 @@ func (d *DAG) GetMaxLevel() int {
 	return maxLevel
 }
 
-// GetNextNodes returns nodes ready to execute given completed nodes
+// GetNextNodes returns nodes ready to execute given completed nodes.
 func (d *DAG) GetNextNodes(completed map[string]bool) []string {
 	var ready []string
 
@@ -252,17 +252,17 @@ func (d *DAG) GetNextNodes(completed map[string]bool) []string {
 	return ready
 }
 
-// GetDependencies returns all dependencies for a node
+// GetDependencies returns all dependencies for a node.
 func (d *DAG) GetDependencies(nodeID string) []string {
 	return d.ReverseEdges[nodeID]
 }
 
-// GetDependents returns all nodes that depend on a node
+// GetDependents returns all nodes that depend on a node.
 func (d *DAG) GetDependents(nodeID string) []string {
 	return d.Edges[nodeID]
 }
 
-// GetPath returns the path from entry to a specific node
+// GetPath returns the path from entry to a specific node.
 func (d *DAG) GetPath(nodeID string) []string {
 	path := []string{nodeID}
 
@@ -280,7 +280,7 @@ func (d *DAG) GetPath(nodeID string) []string {
 	return path
 }
 
-// Validate validates the DAG structure
+// Validate validates the DAG structure.
 func (d *DAG) Validate() []ValidationError {
 	var errors []ValidationError
 
@@ -312,7 +312,7 @@ func (d *DAG) Validate() []ValidationError {
 	return errors
 }
 
-// ValidationError represents a DAG validation error
+// ValidationError represents a DAG validation error.
 type ValidationError struct {
 	NodeID  string
 	Message string
@@ -328,7 +328,7 @@ func isTriggerNode(nodeType string) bool {
 	return triggers[nodeType]
 }
 
-// Clone creates a deep copy of the DAG
+// Clone creates a deep copy of the DAG.
 func (d *DAG) Clone() *DAG {
 	clone := &DAG{
 		Nodes:        make(map[string]*Node, len(d.Nodes)),

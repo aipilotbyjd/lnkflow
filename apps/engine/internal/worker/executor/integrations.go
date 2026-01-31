@@ -10,12 +10,12 @@ import (
 	"time"
 )
 
-// DiscordExecutor handles Discord webhook messages
+// DiscordExecutor handles Discord webhook messages.
 type DiscordExecutor struct {
 	client *http.Client
 }
 
-// DiscordConfig represents the configuration for a Discord node
+// DiscordConfig represents the configuration for a Discord node.
 type DiscordConfig struct {
 	WebhookURL string `json:"webhook_url"`
 
@@ -27,7 +27,7 @@ type DiscordConfig struct {
 	Embeds    []DiscordEmbed `json:"embeds"`
 }
 
-// DiscordEmbed represents a Discord embed
+// DiscordEmbed represents a Discord embed.
 type DiscordEmbed struct {
 	Title       string              `json:"title,omitempty"`
 	Description string              `json:"description,omitempty"`
@@ -41,32 +41,32 @@ type DiscordEmbed struct {
 	Image       *DiscordEmbedMedia  `json:"image,omitempty"`
 }
 
-// DiscordEmbedFooter represents a footer in an embed
+// DiscordEmbedFooter represents a footer in an embed.
 type DiscordEmbedFooter struct {
 	Text    string `json:"text"`
 	IconURL string `json:"icon_url,omitempty"`
 }
 
-// DiscordEmbedAuthor represents an author in an embed
+// DiscordEmbedAuthor represents an author in an embed.
 type DiscordEmbedAuthor struct {
 	Name    string `json:"name"`
 	URL     string `json:"url,omitempty"`
 	IconURL string `json:"icon_url,omitempty"`
 }
 
-// DiscordEmbedField represents a field in an embed
+// DiscordEmbedField represents a field in an embed.
 type DiscordEmbedField struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
 	Inline bool   `json:"inline,omitempty"`
 }
 
-// DiscordEmbedMedia represents media in an embed
+// DiscordEmbedMedia represents media in an embed.
 type DiscordEmbedMedia struct {
 	URL string `json:"url"`
 }
 
-// NewDiscordExecutor creates a new Discord executor with connection pooling
+// NewDiscordExecutor creates a new Discord executor with connection pooling.
 func NewDiscordExecutor() *DiscordExecutor {
 	// Configure transport with connection pooling
 	transport := &http.Transport{
@@ -244,14 +244,14 @@ func (e *DiscordExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 	}, nil
 }
 
-// TwilioExecutor handles Twilio SMS messages
+// TwilioExecutor handles Twilio SMS messages.
 type TwilioExecutor struct {
 	client       *http.Client
 	defaultSID   string
 	defaultToken string
 }
 
-// TwilioConfig represents the configuration for a Twilio node
+// TwilioConfig represents the configuration for a Twilio node.
 type TwilioConfig struct {
 	AccountSID string `json:"account_sid"`
 	AuthToken  string `json:"auth_token"`
@@ -261,7 +261,7 @@ type TwilioConfig struct {
 	MediaURL   string `json:"media_url"`
 }
 
-// NewTwilioExecutor creates a new Twilio executor with connection pooling
+// NewTwilioExecutor creates a new Twilio executor with connection pooling.
 func NewTwilioExecutor() *TwilioExecutor {
 	// Configure transport with connection pooling for Twilio API
 	transport := &http.Transport{
@@ -281,7 +281,7 @@ func NewTwilioExecutor() *TwilioExecutor {
 	}
 }
 
-// WithCredentials sets default credentials
+// WithCredentials sets default credentials.
 func (e *TwilioExecutor) WithCredentials(sid, token string) *TwilioExecutor {
 	e.defaultSID = sid
 	e.defaultToken = token
@@ -424,10 +424,10 @@ func (e *TwilioExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
 	}, nil
 }
 
-// StorageExecutor handles cloud storage operations
+// StorageExecutor handles cloud storage operations.
 type StorageExecutor struct{}
 
-// StorageConfig represents the configuration for a storage node
+// StorageConfig represents the configuration for a storage node.
 type StorageConfig struct {
 	Provider   string `json:"provider"`  // s3, gcs, azure
 	Operation  string `json:"operation"` // upload, download, delete, list
@@ -443,7 +443,7 @@ type StorageConfig struct {
 	Endpoint  string `json:"endpoint"`
 }
 
-// NewStorageExecutor creates a new storage executor
+// NewStorageExecutor creates a new storage executor.
 func NewStorageExecutor() *StorageExecutor {
 	return &StorageExecutor{}
 }

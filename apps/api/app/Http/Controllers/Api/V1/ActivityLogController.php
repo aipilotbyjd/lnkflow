@@ -25,7 +25,7 @@ class ActivityLogController extends Controller
 
         // Filter by action
         if ($request->has('action')) {
-            $query->where('action', 'like', $request->input('action') . '%');
+            $query->where('action', 'like', $request->input('action').'%');
         }
 
         // Filter by user

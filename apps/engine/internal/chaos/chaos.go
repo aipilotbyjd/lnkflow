@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// FaultType represents a type of fault injection
+// FaultType represents a type of fault injection.
 type FaultType int
 
 const (
@@ -20,7 +20,7 @@ const (
 	FaultTypeResourceExhaustion
 )
 
-// Fault represents a fault injection configuration
+// Fault represents a fault injection configuration.
 type Fault struct {
 	ID          string
 	Type        FaultType
@@ -32,7 +32,7 @@ type Fault struct {
 	EndTime     time.Time
 }
 
-// FaultTarget specifies what the fault affects
+// FaultTarget specifies what the fault affects.
 type FaultTarget struct {
 	Service     string
 	Method      string
@@ -41,7 +41,7 @@ type FaultTarget struct {
 	NamespaceID string
 }
 
-// Engine handles fault injection for chaos engineering
+// Engine handles fault injection for chaos engineering.
 type Engine struct {
 	faults  map[string]*Fault
 	logger  *slog.Logger
@@ -50,14 +50,14 @@ type Engine struct {
 	rng     *rand.Rand
 }
 
-// Config holds chaos engine configuration
+// Config holds chaos engine configuration.
 type Config struct {
 	Enabled bool
 	Logger  *slog.Logger
 	Seed    int64
 }
 
-// NewEngine creates a new chaos engine
+// NewEngine creates a new chaos engine.
 func NewEngine(config Config) *Engine {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -75,7 +75,7 @@ func NewEngine(config Config) *Engine {
 	}
 }
 
-// Enable enables the chaos engine
+// Enable enables the chaos engine.
 func (e *Engine) Enable() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -83,7 +83,7 @@ func (e *Engine) Enable() {
 	e.logger.Info("chaos engine enabled")
 }
 
-// Disable disables the chaos engine
+// Disable disables the chaos engine.
 func (e *Engine) Disable() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -91,14 +91,14 @@ func (e *Engine) Disable() {
 	e.logger.Info("chaos engine disabled")
 }
 
-// IsEnabled returns whether the chaos engine is enabled
+// IsEnabled returns whether the chaos engine is enabled.
 func (e *Engine) IsEnabled() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.enabled
 }
 
-// RegisterFault registers a fault
+// RegisterFault registers a fault.
 func (e *Engine) RegisterFault(fault *Fault) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -120,14 +120,14 @@ func (e *Engine) RegisterFault(fault *Fault) error {
 	return nil
 }
 
-// UnregisterFault removes a fault
+// UnregisterFault removes a fault.
 func (e *Engine) UnregisterFault(faultID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	delete(e.faults, faultID)
 }
 
-// EnableFault enables a specific fault
+// EnableFault enables a specific fault.
 func (e *Engine) EnableFault(faultID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -136,7 +136,7 @@ func (e *Engine) EnableFault(faultID string) {
 	}
 }
 
-// DisableFault disables a specific fault
+// DisableFault disables a specific fault.
 func (e *Engine) DisableFault(faultID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -145,7 +145,7 @@ func (e *Engine) DisableFault(faultID string) {
 	}
 }
 
-// ListFaults returns all registered faults
+// ListFaults returns all registered faults.
 func (e *Engine) ListFaults() []*Fault {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -157,7 +157,7 @@ func (e *Engine) ListFaults() []*Fault {
 	return faults
 }
 
-// Apply applies applicable faults to a context
+// Apply applies applicable faults to a context.
 func (e *Engine) Apply(ctx context.Context, target FaultTarget) (context.Context, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -253,7 +253,7 @@ func (e *Engine) applyFault(ctx context.Context, fault *Fault) error {
 	return nil
 }
 
-// InjectLatency creates a latency injection fault
+// InjectLatency creates a latency injection fault.
 func InjectLatency(id string, target FaultTarget, duration time.Duration, probability float64) *Fault {
 	return &Fault{
 		ID:          id,
@@ -265,7 +265,7 @@ func InjectLatency(id string, target FaultTarget, duration time.Duration, probab
 	}
 }
 
-// InjectError creates an error injection fault
+// InjectError creates an error injection fault.
 func InjectError(id string, target FaultTarget, probability float64) *Fault {
 	return &Fault{
 		ID:          id,
@@ -276,7 +276,7 @@ func InjectError(id string, target FaultTarget, probability float64) *Fault {
 	}
 }
 
-// InjectTimeout creates a timeout injection fault
+// InjectTimeout creates a timeout injection fault.
 func InjectTimeout(id string, target FaultTarget, duration time.Duration, probability float64) *Fault {
 	return &Fault{
 		ID:          id,
@@ -288,7 +288,7 @@ func InjectTimeout(id string, target FaultTarget, duration time.Duration, probab
 	}
 }
 
-// Middleware returns a middleware that applies chaos faults
+// Middleware returns a middleware that applies chaos faults.
 func (e *Engine) Middleware(next func(ctx context.Context) error) func(ctx context.Context, target FaultTarget) error {
 	return func(ctx context.Context, target FaultTarget) error {
 		ctx, err := e.Apply(ctx, target)

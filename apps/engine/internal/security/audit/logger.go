@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// EventType represents audit event types
+// EventType represents audit event types.
 type EventType string
 
 const (
@@ -22,7 +22,7 @@ const (
 	EventTypeSystem         EventType = "system"
 )
 
-// Action represents audit actions
+// Action represents audit actions.
 type Action string
 
 const (
@@ -38,7 +38,7 @@ const (
 	ActionExport  Action = "export"
 )
 
-// Outcome represents the outcome of an action
+// Outcome represents the outcome of an action.
 type Outcome string
 
 const (
@@ -47,7 +47,7 @@ const (
 	OutcomeDenied  Outcome = "denied"
 )
 
-// Event represents an audit event
+// Event represents an audit event.
 type Event struct {
 	ID        string    `json:"id"`
 	Timestamp time.Time `json:"timestamp"`
@@ -79,7 +79,7 @@ type Event struct {
 	RetentionDays int  `json:"retention_days,omitempty"`
 }
 
-// Logger is the audit logger
+// Logger is the audit logger.
 type Logger struct {
 	sinks   []Sink
 	sinksMu sync.RWMutex
@@ -97,20 +97,20 @@ type Logger struct {
 	baseLogger *slog.Logger
 }
 
-// Sink is the interface for audit log destinations
+// Sink is the interface for audit log destinations.
 type Sink interface {
 	Write(ctx context.Context, event *Event) error
 	Close() error
 }
 
-// Config holds audit logger configuration
+// Config holds audit logger configuration.
 type Config struct {
 	Enabled      bool
 	BufferSize   int
 	RedactFields []string
 }
 
-// DefaultConfig returns default audit config
+// DefaultConfig returns default audit config.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:    true,
@@ -122,7 +122,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewLogger creates a new audit logger
+// NewLogger creates a new audit logger.
 func NewLogger(config Config, baseLogger *slog.Logger) *Logger {
 	if baseLogger == nil {
 		baseLogger = slog.Default()
@@ -143,14 +143,14 @@ func NewLogger(config Config, baseLogger *slog.Logger) *Logger {
 	return logger
 }
 
-// AddSink adds an audit sink
+// AddSink adds an audit sink.
 func (l *Logger) AddSink(sink Sink) {
 	l.sinksMu.Lock()
 	defer l.sinksMu.Unlock()
 	l.sinks = append(l.sinks, sink)
 }
 
-// Log logs an audit event
+// Log logs an audit event.
 func (l *Logger) Log(ctx context.Context, event *Event) {
 	if !l.enabled {
 		return
@@ -179,7 +179,7 @@ func (l *Logger) Log(ctx context.Context, event *Event) {
 	}
 }
 
-// LogSync logs an audit event synchronously
+// LogSync logs an audit event synchronously.
 func (l *Logger) LogSync(ctx context.Context, event *Event) error {
 	if !l.enabled {
 		return nil
@@ -234,7 +234,7 @@ func (l *Logger) redactEvent(event *Event) {
 	}
 }
 
-// Close closes the audit logger
+// Close closes the audit logger.
 func (l *Logger) Close() error {
 	close(l.buffer)
 
@@ -247,12 +247,12 @@ func (l *Logger) Close() error {
 	return nil
 }
 
-// ConsoleSink writes audit events to console
+// ConsoleSink writes audit events to console.
 type ConsoleSink struct {
 	logger *slog.Logger
 }
 
-// NewConsoleSink creates a new console sink
+// NewConsoleSink creates a new console sink.
 func NewConsoleSink(logger *slog.Logger) *ConsoleSink {
 	return &ConsoleSink{logger: logger}
 }
@@ -274,7 +274,7 @@ func (s *ConsoleSink) Close() error {
 	return nil
 }
 
-// JSONFileSink writes audit events to a JSON file
+// JSONFileSink writes audit events to a JSON file.
 type JSONFileSink struct {
 	file   chan []byte
 	closed bool
@@ -315,12 +315,12 @@ func generateEventID() string {
 	return fmt.Sprintf("audit-%d", time.Now().UnixNano())
 }
 
-// EventBuilder helps build audit events
+// EventBuilder helps build audit events.
 type EventBuilder struct {
 	event Event
 }
 
-// NewEventBuilder creates a new event builder
+// NewEventBuilder creates a new event builder.
 func NewEventBuilder() *EventBuilder {
 	return &EventBuilder{
 		event: Event{
@@ -329,25 +329,25 @@ func NewEventBuilder() *EventBuilder {
 	}
 }
 
-// WithType sets the event type
+// WithType sets the event type.
 func (b *EventBuilder) WithType(t EventType) *EventBuilder {
 	b.event.EventType = t
 	return b
 }
 
-// WithAction sets the action
+// WithAction sets the action.
 func (b *EventBuilder) WithAction(a Action) *EventBuilder {
 	b.event.Action = a
 	return b
 }
 
-// WithOutcome sets the outcome
+// WithOutcome sets the outcome.
 func (b *EventBuilder) WithOutcome(o Outcome) *EventBuilder {
 	b.event.Outcome = o
 	return b
 }
 
-// WithActor sets actor information
+// WithActor sets actor information.
 func (b *EventBuilder) WithActor(id, actorType, ip string) *EventBuilder {
 	b.event.ActorID = id
 	b.event.ActorType = actorType
@@ -355,7 +355,7 @@ func (b *EventBuilder) WithActor(id, actorType, ip string) *EventBuilder {
 	return b
 }
 
-// WithResource sets resource information
+// WithResource sets resource information.
 func (b *EventBuilder) WithResource(resourceType, id, name string) *EventBuilder {
 	b.event.ResourceType = resourceType
 	b.event.ResourceID = id
@@ -363,19 +363,19 @@ func (b *EventBuilder) WithResource(resourceType, id, name string) *EventBuilder
 	return b
 }
 
-// WithWorkspace sets workspace ID
+// WithWorkspace sets workspace ID.
 func (b *EventBuilder) WithWorkspace(id string) *EventBuilder {
 	b.event.WorkspaceID = id
 	return b
 }
 
-// WithDetail adds a detail
+// WithDetail adds a detail.
 func (b *EventBuilder) WithDetail(key string, value interface{}) *EventBuilder {
 	b.event.Details[key] = value
 	return b
 }
 
-// WithError sets error message
+// WithError sets error message.
 func (b *EventBuilder) WithError(err error) *EventBuilder {
 	if err != nil {
 		b.event.ErrorMessage = err.Error()
@@ -383,7 +383,7 @@ func (b *EventBuilder) WithError(err error) *EventBuilder {
 	return b
 }
 
-// Build returns the built event
+// Build returns the built event.
 func (b *EventBuilder) Build() *Event {
 	return &b.event
 }

@@ -2,13 +2,13 @@ package metrics
 
 import "time"
 
-// ServiceMetrics provides common metrics for LinkFlow services
+// ServiceMetrics provides common metrics for LinkFlow services.
 type ServiceMetrics struct {
 	registry *Registry
 	service  string
 }
 
-// NewServiceMetrics creates a new service metrics collector
+// NewServiceMetrics creates a new service metrics collector.
 func NewServiceMetrics(registry *Registry, service string) *ServiceMetrics {
 	if registry == nil {
 		registry = DefaultRegistry
@@ -21,7 +21,7 @@ func NewServiceMetrics(registry *Registry, service string) *ServiceMetrics {
 
 // --- Request Metrics ---
 
-// RequestStarted increments the request counter
+// RequestStarted increments the request counter.
 func (m *ServiceMetrics) RequestStarted(method, taskQueue string) {
 	m.registry.Counter("linkflow_requests_total", Labels{
 		"service":    m.service,
@@ -30,7 +30,7 @@ func (m *ServiceMetrics) RequestStarted(method, taskQueue string) {
 	}).Inc()
 }
 
-// RequestCompleted records a completed request
+// RequestCompleted records a completed request.
 func (m *ServiceMetrics) RequestCompleted(method, taskQueue, status string, duration time.Duration) {
 	m.registry.Counter("linkflow_requests_completed_total", Labels{
 		"service":    m.service,
@@ -46,7 +46,7 @@ func (m *ServiceMetrics) RequestCompleted(method, taskQueue, status string, dura
 	}, nil).ObserveDuration(duration)
 }
 
-// RequestFailed records a failed request
+// RequestFailed records a failed request.
 func (m *ServiceMetrics) RequestFailed(method, taskQueue, errorType string) {
 	m.registry.Counter("linkflow_requests_failed_total", Labels{
 		"service":    m.service,
@@ -58,7 +58,7 @@ func (m *ServiceMetrics) RequestFailed(method, taskQueue, errorType string) {
 
 // --- Execution Metrics ---
 
-// ExecutionStarted records a new execution
+// ExecutionStarted records a new execution.
 func (m *ServiceMetrics) ExecutionStarted(namespace, workflowType string) {
 	m.registry.Counter("linkflow_executions_started_total", Labels{
 		"service":       m.service,
@@ -73,7 +73,7 @@ func (m *ServiceMetrics) ExecutionStarted(namespace, workflowType string) {
 	}).Inc()
 }
 
-// ExecutionCompleted records a completed execution
+// ExecutionCompleted records a completed execution.
 func (m *ServiceMetrics) ExecutionCompleted(namespace, workflowType, status string, duration time.Duration) {
 	m.registry.Counter("linkflow_executions_completed_total", Labels{
 		"service":       m.service,
@@ -97,7 +97,7 @@ func (m *ServiceMetrics) ExecutionCompleted(namespace, workflowType, status stri
 
 // --- Task Metrics ---
 
-// TaskScheduled records a scheduled task
+// TaskScheduled records a scheduled task.
 func (m *ServiceMetrics) TaskScheduled(taskQueue, taskType string) {
 	m.registry.Counter("linkflow_tasks_scheduled_total", Labels{
 		"service":    m.service,
@@ -106,7 +106,7 @@ func (m *ServiceMetrics) TaskScheduled(taskQueue, taskType string) {
 	}).Inc()
 }
 
-// TaskStarted records a started task
+// TaskStarted records a started task.
 func (m *ServiceMetrics) TaskStarted(taskQueue, taskType string) {
 	m.registry.Counter("linkflow_tasks_started_total", Labels{
 		"service":    m.service,
@@ -121,7 +121,7 @@ func (m *ServiceMetrics) TaskStarted(taskQueue, taskType string) {
 	}).Inc()
 }
 
-// TaskCompleted records a completed task
+// TaskCompleted records a completed task.
 func (m *ServiceMetrics) TaskCompleted(taskQueue, taskType, status string, duration time.Duration) {
 	m.registry.Counter("linkflow_tasks_completed_total", Labels{
 		"service":    m.service,
@@ -143,7 +143,7 @@ func (m *ServiceMetrics) TaskCompleted(taskQueue, taskType, status string, durat
 	}, nil).ObserveDuration(duration)
 }
 
-// TaskQueueDepth records the depth of a task queue
+// TaskQueueDepth records the depth of a task queue.
 func (m *ServiceMetrics) TaskQueueDepth(taskQueue string, depth int64) {
 	m.registry.Gauge("linkflow_task_queue_depth", Labels{
 		"service":    m.service,
@@ -153,7 +153,7 @@ func (m *ServiceMetrics) TaskQueueDepth(taskQueue string, depth int64) {
 
 // --- Timer Metrics ---
 
-// TimerScheduled records a scheduled timer
+// TimerScheduled records a scheduled timer.
 func (m *ServiceMetrics) TimerScheduled(namespace string) {
 	m.registry.Counter("linkflow_timers_scheduled_total", Labels{
 		"service":   m.service,
@@ -161,7 +161,7 @@ func (m *ServiceMetrics) TimerScheduled(namespace string) {
 	}).Inc()
 }
 
-// TimerFired records a fired timer
+// TimerFired records a fired timer.
 func (m *ServiceMetrics) TimerFired(namespace string, delay time.Duration) {
 	m.registry.Counter("linkflow_timers_fired_total", Labels{
 		"service":   m.service,
@@ -174,7 +174,7 @@ func (m *ServiceMetrics) TimerFired(namespace string, delay time.Duration) {
 	}, nil).ObserveDuration(delay)
 }
 
-// TimerCanceled records a canceled timer
+// TimerCanceled records a canceled timer.
 func (m *ServiceMetrics) TimerCanceled(namespace string) {
 	m.registry.Counter("linkflow_timers_canceled_total", Labels{
 		"service":   m.service,
@@ -184,7 +184,7 @@ func (m *ServiceMetrics) TimerCanceled(namespace string) {
 
 // --- Node Metrics ---
 
-// NodeExecuted records a node execution
+// NodeExecuted records a node execution.
 func (m *ServiceMetrics) NodeExecuted(nodeType, status string, duration time.Duration) {
 	m.registry.Counter("linkflow_nodes_executed_total", Labels{
 		"service":   m.service,
@@ -200,7 +200,7 @@ func (m *ServiceMetrics) NodeExecuted(nodeType, status string, duration time.Dur
 
 // --- History Metrics ---
 
-// HistoryEventRecorded records a history event
+// HistoryEventRecorded records a history event.
 func (m *ServiceMetrics) HistoryEventRecorded(eventType string) {
 	m.registry.Counter("linkflow_history_events_total", Labels{
 		"service":    m.service,
@@ -208,7 +208,7 @@ func (m *ServiceMetrics) HistoryEventRecorded(eventType string) {
 	}).Inc()
 }
 
-// HistorySize records the size of a history
+// HistorySize records the size of a history.
 func (m *ServiceMetrics) HistorySize(eventCount int64) {
 	m.registry.Histogram("linkflow_history_size_events", Labels{
 		"service": m.service,
@@ -217,7 +217,7 @@ func (m *ServiceMetrics) HistorySize(eventCount int64) {
 
 // --- Cache Metrics ---
 
-// CacheHit records a cache hit
+// CacheHit records a cache hit.
 func (m *ServiceMetrics) CacheHit(cacheType string) {
 	m.registry.Counter("linkflow_cache_hits_total", Labels{
 		"service":    m.service,
@@ -225,7 +225,7 @@ func (m *ServiceMetrics) CacheHit(cacheType string) {
 	}).Inc()
 }
 
-// CacheMiss records a cache miss
+// CacheMiss records a cache miss.
 func (m *ServiceMetrics) CacheMiss(cacheType string) {
 	m.registry.Counter("linkflow_cache_misses_total", Labels{
 		"service":    m.service,
@@ -235,7 +235,7 @@ func (m *ServiceMetrics) CacheMiss(cacheType string) {
 
 // --- Shard Metrics ---
 
-// ShardAcquired records that a shard was acquired
+// ShardAcquired records that a shard was acquired.
 func (m *ServiceMetrics) ShardAcquired(shardID int32) {
 	m.registry.Counter("linkflow_shards_acquired_total", Labels{
 		"service":  m.service,
@@ -243,7 +243,7 @@ func (m *ServiceMetrics) ShardAcquired(shardID int32) {
 	}).Inc()
 }
 
-// ShardReleased records that a shard was released
+// ShardReleased records that a shard was released.
 func (m *ServiceMetrics) ShardReleased(shardID int32) {
 	m.registry.Counter("linkflow_shards_released_total", Labels{
 		"service":  m.service,
@@ -251,7 +251,7 @@ func (m *ServiceMetrics) ShardReleased(shardID int32) {
 	}).Inc()
 }
 
-// ShardsOwned sets the number of shards owned
+// ShardsOwned sets the number of shards owned.
 func (m *ServiceMetrics) ShardsOwned(count int) {
 	m.registry.Gauge("linkflow_shards_owned", Labels{
 		"service": m.service,
@@ -260,7 +260,7 @@ func (m *ServiceMetrics) ShardsOwned(count int) {
 
 // --- gRPC Metrics ---
 
-// GRPCRequestReceived records a received gRPC request
+// GRPCRequestReceived records a received gRPC request.
 func (m *ServiceMetrics) GRPCRequestReceived(method string) {
 	m.registry.Counter("linkflow_grpc_requests_received_total", Labels{
 		"service": m.service,
@@ -268,7 +268,7 @@ func (m *ServiceMetrics) GRPCRequestReceived(method string) {
 	}).Inc()
 }
 
-// GRPCRequestHandled records a handled gRPC request
+// GRPCRequestHandled records a handled gRPC request.
 func (m *ServiceMetrics) GRPCRequestHandled(method, code string, duration time.Duration) {
 	m.registry.Counter("linkflow_grpc_requests_handled_total", Labels{
 		"service": m.service,
@@ -284,7 +284,7 @@ func (m *ServiceMetrics) GRPCRequestHandled(method, code string, duration time.D
 
 // --- Database Metrics ---
 
-// DBQueryExecuted records a database query
+// DBQueryExecuted records a database query.
 func (m *ServiceMetrics) DBQueryExecuted(query, status string, duration time.Duration) {
 	m.registry.Counter("linkflow_db_queries_total", Labels{
 		"service": m.service,
@@ -298,7 +298,7 @@ func (m *ServiceMetrics) DBQueryExecuted(query, status string, duration time.Dur
 	}, nil).ObserveDuration(duration)
 }
 
-// DBConnectionPoolSize records the connection pool size
+// DBConnectionPoolSize records the connection pool size.
 func (m *ServiceMetrics) DBConnectionPoolSize(active, idle int) {
 	m.registry.Gauge("linkflow_db_connections_active", Labels{
 		"service": m.service,

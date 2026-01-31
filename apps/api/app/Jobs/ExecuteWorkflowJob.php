@@ -14,11 +14,12 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 
-class ExecuteWorkflowJob implements ShouldQueue, ShouldBeUnique
+class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public string $jobId;
+
     public int $partition;
 
     /**
@@ -111,8 +112,8 @@ class ExecuteWorkflowJob implements ShouldQueue, ShouldBeUnique
             'trigger_data' => $this->triggerData,
             'credentials' => $this->getDecryptedCredentials(),
             'variables' => $this->getVariables(),
-            'callback_url' => config('app.url') . '/api/v1/jobs/callback',
-            'progress_url' => config('app.url') . '/api/v1/jobs/progress',
+            'callback_url' => config('app.url').'/api/v1/jobs/callback',
+            'progress_url' => config('app.url').'/api/v1/jobs/progress',
             'created_at' => now()->toIso8601String(),
         ];
     }

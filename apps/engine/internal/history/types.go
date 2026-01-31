@@ -111,27 +111,27 @@ type ActivityInfo struct {
 }
 
 type TimerInfo struct {
-	TimerID         string
-	StartedEventID  int64
-	FireTime        time.Time
-	ExpiryTime      time.Time
-	TaskStatus      int32
+	TimerID        string
+	StartedEventID int64
+	FireTime       time.Time
+	ExpiryTime     time.Time
+	TaskStatus     int32
 }
 
 type NodeResult struct {
-	NodeID          string
-	CompletedTime   time.Time
-	Output          []byte
-	FailureReason   string
-	FailureDetails  []byte
+	NodeID         string
+	CompletedTime  time.Time
+	Output         []byte
+	FailureReason  string
+	FailureDetails []byte
 }
 
 type HistoryEvent struct {
-	EventID   int64
-	EventType EventType
-	Timestamp time.Time
-	Version   int64
-	TaskID    int64
+	EventID    int64
+	EventType  EventType
+	Timestamp  time.Time
+	Version    int64
+	TaskID     int64
 	Attributes any
 }
 
@@ -161,10 +161,10 @@ type ExecutionTerminatedAttributes struct {
 }
 
 type NodeScheduledAttributes struct {
-	NodeID       string
-	NodeType     string
-	Input        []byte
-	TaskQueue    string
+	NodeID    string
+	NodeType  string
+	Input     []byte
+	TaskQueue string
 }
 
 type NodeStartedAttributes struct {
@@ -190,8 +190,8 @@ type NodeFailedAttributes struct {
 }
 
 type TimerStartedAttributes struct {
-	TimerID      string
-	StartToFire  time.Duration
+	TimerID     string
+	StartToFire time.Duration
 }
 
 type TimerFiredAttributes struct {

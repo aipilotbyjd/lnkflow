@@ -14,14 +14,14 @@ var (
 	ErrNoTask      = errors.New("no task available")
 )
 
-// Priority levels
+// Priority levels.
 const (
 	PriorityLow    = 0
 	PriorityNormal = 5
 	PriorityHigh   = 10
 )
 
-// Task represents a task in the queue
+// Task represents a task in the queue.
 type Task struct {
 	ID          string
 	NamespaceID string
@@ -39,14 +39,14 @@ type Task struct {
 	index       int // for heap
 }
 
-// PriorityQueue implements a priority queue for tasks
+// PriorityQueue implements a priority queue for tasks.
 type PriorityQueue struct {
 	items    []*Task
 	capacity int
 	mu       sync.RWMutex
 }
 
-// NewPriorityQueue creates a new priority queue
+// NewPriorityQueue creates a new priority queue.
 func NewPriorityQueue(capacity int) *PriorityQueue {
 	pq := &PriorityQueue{
 		items:    make([]*Task, 0, capacity),
@@ -56,12 +56,12 @@ func NewPriorityQueue(capacity int) *PriorityQueue {
 	return pq
 }
 
-// Len returns the number of items in the queue
+// Len returns the number of items in the queue.
 func (pq *PriorityQueue) Len() int {
 	return len(pq.items)
 }
 
-// Less compares two items (higher priority first, then earlier scheduled)
+// Less compares two items (higher priority first, then earlier scheduled).
 func (pq *PriorityQueue) Less(i, j int) bool {
 	if pq.items[i].Priority != pq.items[j].Priority {
 		return pq.items[i].Priority > pq.items[j].Priority
@@ -69,14 +69,14 @@ func (pq *PriorityQueue) Less(i, j int) bool {
 	return pq.items[i].ScheduledAt.Before(pq.items[j].ScheduledAt)
 }
 
-// Swap swaps two items
+// Swap swaps two items.
 func (pq *PriorityQueue) Swap(i, j int) {
 	pq.items[i], pq.items[j] = pq.items[j], pq.items[i]
 	pq.items[i].index = i
 	pq.items[j].index = j
 }
 
-// Push adds an item to the queue
+// Push adds an item to the queue.
 func (pq *PriorityQueue) Push(x interface{}) {
 	n := len(pq.items)
 	task := x.(*Task)
@@ -84,7 +84,7 @@ func (pq *PriorityQueue) Push(x interface{}) {
 	pq.items = append(pq.items, task)
 }
 
-// Pop removes and returns the highest priority item
+// Pop removes and returns the highest priority item.
 func (pq *PriorityQueue) Pop() interface{} {
 	old := pq.items
 	n := len(old)
@@ -95,7 +95,7 @@ func (pq *PriorityQueue) Pop() interface{} {
 	return task
 }
 
-// Enqueue adds a task to the queue
+// Enqueue adds a task to the queue.
 func (pq *PriorityQueue) Enqueue(task *Task) error {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
@@ -115,7 +115,7 @@ func (pq *PriorityQueue) Enqueue(task *Task) error {
 	return nil
 }
 
-// Dequeue removes and returns the highest priority visible task
+// Dequeue removes and returns the highest priority visible task.
 func (pq *PriorityQueue) Dequeue() (*Task, error) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
@@ -137,7 +137,7 @@ func (pq *PriorityQueue) Dequeue() (*Task, error) {
 	return nil, ErrNoTask
 }
 
-// Peek returns the highest priority task without removing it
+// Peek returns the highest priority task without removing it.
 func (pq *PriorityQueue) Peek() (*Task, error) {
 	pq.mu.RLock()
 	defer pq.mu.RUnlock()
@@ -149,21 +149,21 @@ func (pq *PriorityQueue) Peek() (*Task, error) {
 	return pq.items[0], nil
 }
 
-// Size returns the queue size
+// Size returns the queue size.
 func (pq *PriorityQueue) Size() int {
 	pq.mu.RLock()
 	defer pq.mu.RUnlock()
 	return len(pq.items)
 }
 
-// Clear removes all items from the queue
+// Clear removes all items from the queue.
 func (pq *PriorityQueue) Clear() {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	pq.items = pq.items[:0]
 }
 
-// TaskQueue provides a managed task queue with workers
+// TaskQueue provides a managed task queue with workers.
 type TaskQueue struct {
 	name       string
 	queue      *PriorityQueue
@@ -176,7 +176,7 @@ type TaskQueue struct {
 	wg         sync.WaitGroup
 }
 
-// TaskQueueConfig holds task queue configuration
+// TaskQueueConfig holds task queue configuration.
 type TaskQueueConfig struct {
 	Name       string
 	Capacity   int
@@ -184,7 +184,7 @@ type TaskQueueConfig struct {
 	WorkerFunc func(context.Context, *Task) error
 }
 
-// NewTaskQueue creates a new task queue
+// NewTaskQueue creates a new task queue.
 func NewTaskQueue(config TaskQueueConfig) *TaskQueue {
 	if config.Workers <= 0 {
 		config.Workers = 1
@@ -203,7 +203,7 @@ func NewTaskQueue(config TaskQueueConfig) *TaskQueue {
 	}
 }
 
-// Start starts the task queue workers
+// Start starts the task queue workers.
 func (tq *TaskQueue) Start(ctx context.Context) error {
 	tq.mu.Lock()
 	if tq.running {
@@ -227,7 +227,7 @@ func (tq *TaskQueue) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the task queue
+// Stop stops the task queue.
 func (tq *TaskQueue) Stop(ctx context.Context) error {
 	tq.mu.Lock()
 	if !tq.running {
@@ -254,7 +254,7 @@ func (tq *TaskQueue) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Enqueue adds a task to the queue
+// Enqueue adds a task to the queue.
 func (tq *TaskQueue) Enqueue(task *Task) error {
 	tq.mu.RLock()
 	running := tq.running
@@ -267,7 +267,7 @@ func (tq *TaskQueue) Enqueue(task *Task) error {
 	return tq.queue.Enqueue(task)
 }
 
-// Size returns the queue size
+// Size returns the queue size.
 func (tq *TaskQueue) Size() int {
 	return tq.queue.Size()
 }

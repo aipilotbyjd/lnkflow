@@ -38,24 +38,24 @@ class JobCallbackController extends Controller
         // Find job status
         $jobStatus = JobStatus::where('job_id', $validated['job_id'])->first();
 
-        if (!$jobStatus) {
+        if (! $jobStatus) {
             return response()->json(['error' => 'Job not found'], 404);
         }
 
         // Validate callback token (timing-safe comparison)
-        if (!hash_equals($jobStatus->callback_token, $validated['callback_token'])) {
+        if (! hash_equals($jobStatus->callback_token, $validated['callback_token'])) {
             return response()->json(['error' => 'Invalid callback token'], 401);
         }
 
         // Find execution
         $execution = Execution::find($validated['execution_id']);
 
-        if (!$execution) {
+        if (! $execution) {
             return response()->json(['error' => 'Execution not found'], 404);
         }
 
         // Update execution nodes
-        if (!empty($validated['nodes'])) {
+        if (! empty($validated['nodes'])) {
             foreach ($validated['nodes'] as $nodeData) {
                 ExecutionNode::updateOrCreate(
                     [
@@ -114,12 +114,12 @@ class JobCallbackController extends Controller
 
         $jobStatus = JobStatus::where('job_id', $validated['job_id'])->first();
 
-        if (!$jobStatus) {
+        if (! $jobStatus) {
             return response()->json(['error' => 'Job not found'], 404);
         }
 
         // Validate callback token
-        if (!hash_equals($jobStatus->callback_token, $validated['callback_token'])) {
+        if (! hash_equals($jobStatus->callback_token, $validated['callback_token'])) {
             return response()->json(['error' => 'Invalid callback token'], 401);
         }
 

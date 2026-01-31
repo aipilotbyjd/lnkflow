@@ -11,10 +11,10 @@ import (
 	"time"
 )
 
-// ConditionExecutor handles conditional logic nodes (if/else, switch)
+// ConditionExecutor handles conditional logic nodes (if/else, switch).
 type ConditionExecutor struct{}
 
-// ConditionConfig represents the configuration for a condition node
+// ConditionConfig represents the configuration for a condition node.
 type ConditionConfig struct {
 	// Mode can be "if", "switch", or "expression"
 	Mode string `json:"mode"`
@@ -31,7 +31,7 @@ type ConditionConfig struct {
 	Expression string `json:"expression"`
 }
 
-// Condition represents a single conditional check
+// Condition represents a single conditional check.
 type Condition struct {
 	Field    string      `json:"field"`    // JSONPath-like field selector
 	Operator string      `json:"operator"` // eq, ne, gt, lt, gte, lte, contains, startsWith, endsWith, matches, in, empty, exists
@@ -39,13 +39,13 @@ type Condition struct {
 	Output   string      `json:"output"`   // Which output port to use
 }
 
-// SwitchCase represents a case in a switch statement
+// SwitchCase represents a case in a switch statement.
 type SwitchCase struct {
 	Value  interface{} `json:"value"`
 	Output string      `json:"output"`
 }
 
-// ConditionResponse represents the result of a condition evaluation
+// ConditionResponse represents the result of a condition evaluation.
 type ConditionResponse struct {
 	Matched     bool         `json:"matched"`
 	Output      string       `json:"output"`       // Which output branch to take
@@ -53,7 +53,7 @@ type ConditionResponse struct {
 	EvalResults []EvalResult `json:"eval_results"`
 }
 
-// EvalResult represents the result of evaluating a single condition
+// EvalResult represents the result of evaluating a single condition.
 type EvalResult struct {
 	Index   int    `json:"index"`
 	Field   string `json:"field"`
@@ -61,7 +61,7 @@ type EvalResult struct {
 	Message string `json:"message"`
 }
 
-// NewConditionExecutor creates a new condition executor
+// NewConditionExecutor creates a new condition executor.
 func NewConditionExecutor() *ConditionExecutor {
 	return &ConditionExecutor{}
 }
@@ -268,7 +268,7 @@ func (e *ConditionExecutor) evaluateExpression(expr string, data map[string]inte
 	return response, nil
 }
 
-// getFieldValue extracts a value from nested data using dot notation
+// getFieldValue extracts a value from nested data using dot notation.
 func getFieldValue(data map[string]interface{}, field string) interface{} {
 	if field == "" {
 		return data
@@ -296,7 +296,7 @@ func getFieldValue(data map[string]interface{}, field string) interface{} {
 	return current
 }
 
-// evaluateCondition evaluates a single condition
+// evaluateCondition evaluates a single condition.
 func evaluateCondition(fieldValue interface{}, operator string, compareValue interface{}) (bool, string) {
 	switch operator {
 	case "eq", "==", "equals":

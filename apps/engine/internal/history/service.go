@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	ErrServiceNotRunning = errors.New("history service is not running")
+	ErrServiceNotRunning     = errors.New("history service is not running")
 	ErrServiceAlreadyRunning = errors.New("history service is already running")
 )
 
@@ -92,7 +92,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	}
 
 	s.logger.Info("stopping history service")
-	
+
 	if s.shardController != nil {
 		s.shardController.Stop()
 	}

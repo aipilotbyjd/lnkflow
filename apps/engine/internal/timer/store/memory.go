@@ -10,13 +10,13 @@ import (
 	"github.com/linkflow/engine/internal/timer"
 )
 
-// MemoryStore is an in-memory implementation of the timer store
+// MemoryStore is an in-memory implementation of the timer store.
 type MemoryStore struct {
 	timers map[string]*timer.Timer
 	mu     sync.RWMutex
 }
 
-// NewMemoryStore creates a new in-memory timer store
+// NewMemoryStore creates a new in-memory timer store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		timers: make(map[string]*timer.Timer),
@@ -27,7 +27,7 @@ func (s *MemoryStore) makeKey(namespaceID, workflowID, runID, timerID string) st
 	return namespaceID + "/" + workflowID + "/" + runID + "/" + timerID
 }
 
-// CreateTimer creates a new timer
+// CreateTimer creates a new timer.
 func (s *MemoryStore) CreateTimer(ctx context.Context, t *timer.Timer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -44,7 +44,7 @@ func (s *MemoryStore) CreateTimer(ctx context.Context, t *timer.Timer) error {
 	return nil
 }
 
-// GetTimer retrieves a timer by ID
+// GetTimer retrieves a timer by ID.
 func (s *MemoryStore) GetTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) (*timer.Timer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -60,7 +60,7 @@ func (s *MemoryStore) GetTimer(ctx context.Context, namespaceID, workflowID, run
 	return &clone, nil
 }
 
-// UpdateTimer updates a timer
+// UpdateTimer updates a timer.
 func (s *MemoryStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -82,7 +82,7 @@ func (s *MemoryStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 	return nil
 }
 
-// DeleteTimer deletes a timer
+// DeleteTimer deletes a timer.
 func (s *MemoryStore) DeleteTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -96,7 +96,7 @@ func (s *MemoryStore) DeleteTimer(ctx context.Context, namespaceID, workflowID, 
 	return nil
 }
 
-// GetDueTimers returns all timers that are due for firing
+// GetDueTimers returns all timers that are due for firing.
 func (s *MemoryStore) GetDueTimers(ctx context.Context, shardID int32, fireTime time.Time, limit int) ([]*timer.Timer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -123,7 +123,7 @@ func (s *MemoryStore) GetDueTimers(ctx context.Context, shardID int32, fireTime 
 	return dueTimers, nil
 }
 
-// GetTimersByExecution returns all timers for an execution
+// GetTimersByExecution returns all timers for an execution.
 func (s *MemoryStore) GetTimersByExecution(ctx context.Context, namespaceID, workflowID, runID string) ([]*timer.Timer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -141,14 +141,14 @@ func (s *MemoryStore) GetTimersByExecution(ctx context.Context, namespaceID, wor
 	return timers, nil
 }
 
-// Clear removes all timers (used for testing)
+// Clear removes all timers (used for testing).
 func (s *MemoryStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.timers = make(map[string]*timer.Timer)
 }
 
-// Count returns the number of timers
+// Count returns the number of timers.
 func (s *MemoryStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -15,7 +15,7 @@ var (
 	ErrInvalidQuery      = errors.New("invalid query")
 )
 
-// ExecutionStatus represents the status of a workflow execution
+// ExecutionStatus represents the status of a workflow execution.
 type ExecutionStatus int32
 
 const (
@@ -44,7 +44,7 @@ func (s ExecutionStatus) String() string {
 	return "Unknown"
 }
 
-// ExecutionInfo contains visibility information about an execution
+// ExecutionInfo contains visibility information about an execution.
 type ExecutionInfo struct {
 	NamespaceID      string
 	WorkflowID       string
@@ -61,7 +61,7 @@ type ExecutionInfo struct {
 	ParentRunID      string
 }
 
-// ListRequest contains parameters for listing executions
+// ListRequest contains parameters for listing executions.
 type ListRequest struct {
 	NamespaceID   string
 	PageSize      int32
@@ -69,24 +69,24 @@ type ListRequest struct {
 	Query         string // SQL-like query for filtering
 }
 
-// ListResponse contains the results of a list operation
+// ListResponse contains the results of a list operation.
 type ListResponse struct {
 	Executions    []*ExecutionInfo
 	NextPageToken []byte
 }
 
-// CountRequest contains parameters for counting executions
+// CountRequest contains parameters for counting executions.
 type CountRequest struct {
 	NamespaceID string
 	Query       string
 }
 
-// CountResponse contains the result of a count operation
+// CountResponse contains the result of a count operation.
 type CountResponse struct {
 	Count int64
 }
 
-// Store defines the interface for visibility persistence
+// Store defines the interface for visibility persistence.
 type Store interface {
 	// RecordExecutionStarted records a started execution
 	RecordExecutionStarted(ctx context.Context, info *ExecutionInfo) error
@@ -104,19 +104,19 @@ type Store interface {
 	DeleteExecution(ctx context.Context, namespaceID, workflowID, runID string) error
 }
 
-// Config holds the configuration for the visibility service
+// Config holds the configuration for the visibility service.
 type Config struct {
 	Logger *slog.Logger
 }
 
-// Service provides workflow execution visibility
+// Service provides workflow execution visibility.
 type Service struct {
 	store  Store
 	logger *slog.Logger
 	mu     sync.RWMutex
 }
 
-// NewService creates a new visibility service
+// NewService creates a new visibility service.
 func NewService(store Store, config Config) *Service {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -127,7 +127,7 @@ func NewService(store Store, config Config) *Service {
 	}
 }
 
-// RecordExecutionStarted records that an execution has started
+// RecordExecutionStarted records that an execution has started.
 func (s *Service) RecordExecutionStarted(ctx context.Context, info *ExecutionInfo) error {
 	info.Status = ExecutionStatusRunning
 	if info.StartTime.IsZero() {
@@ -143,7 +143,7 @@ func (s *Service) RecordExecutionStarted(ctx context.Context, info *ExecutionInf
 	return s.store.RecordExecutionStarted(ctx, info)
 }
 
-// RecordExecutionCompleted records that an execution has completed
+// RecordExecutionCompleted records that an execution has completed.
 func (s *Service) RecordExecutionCompleted(ctx context.Context, namespaceID, workflowID, runID string, result json.RawMessage) error {
 	info, err := s.store.GetExecution(ctx, namespaceID, workflowID, runID)
 	if err != nil {
@@ -161,7 +161,7 @@ func (s *Service) RecordExecutionCompleted(ctx context.Context, namespaceID, wor
 	return s.store.RecordExecutionClosed(ctx, info)
 }
 
-// RecordExecutionFailed records that an execution has failed
+// RecordExecutionFailed records that an execution has failed.
 func (s *Service) RecordExecutionFailed(ctx context.Context, namespaceID, workflowID, runID, reason string) error {
 	info, err := s.store.GetExecution(ctx, namespaceID, workflowID, runID)
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *Service) RecordExecutionFailed(ctx context.Context, namespaceID, workfl
 	return s.store.RecordExecutionClosed(ctx, info)
 }
 
-// RecordExecutionTerminated records that an execution has been terminated
+// RecordExecutionTerminated records that an execution has been terminated.
 func (s *Service) RecordExecutionTerminated(ctx context.Context, namespaceID, workflowID, runID, reason string) error {
 	info, err := s.store.GetExecution(ctx, namespaceID, workflowID, runID)
 	if err != nil {
@@ -198,7 +198,7 @@ func (s *Service) RecordExecutionTerminated(ctx context.Context, namespaceID, wo
 	return s.store.RecordExecutionClosed(ctx, info)
 }
 
-// RecordExecutionTimedOut records that an execution has timed out
+// RecordExecutionTimedOut records that an execution has timed out.
 func (s *Service) RecordExecutionTimedOut(ctx context.Context, namespaceID, workflowID, runID string) error {
 	info, err := s.store.GetExecution(ctx, namespaceID, workflowID, runID)
 	if err != nil {
@@ -216,12 +216,12 @@ func (s *Service) RecordExecutionTimedOut(ctx context.Context, namespaceID, work
 	return s.store.RecordExecutionClosed(ctx, info)
 }
 
-// GetExecution retrieves visibility info for an execution
+// GetExecution retrieves visibility info for an execution.
 func (s *Service) GetExecution(ctx context.Context, namespaceID, workflowID, runID string) (*ExecutionInfo, error) {
 	return s.store.GetExecution(ctx, namespaceID, workflowID, runID)
 }
 
-// ListExecutions lists executions matching the request criteria
+// ListExecutions lists executions matching the request criteria.
 func (s *Service) ListExecutions(ctx context.Context, req *ListRequest) (*ListResponse, error) {
 	if req.PageSize <= 0 {
 		req.PageSize = 100
@@ -233,7 +233,7 @@ func (s *Service) ListExecutions(ctx context.Context, req *ListRequest) (*ListRe
 	return s.store.ListExecutions(ctx, req)
 }
 
-// ListOpenExecutions lists running executions
+// ListOpenExecutions lists running executions.
 func (s *Service) ListOpenExecutions(ctx context.Context, namespaceID string, pageSize int32, nextPageToken []byte) (*ListResponse, error) {
 	return s.ListExecutions(ctx, &ListRequest{
 		NamespaceID:   namespaceID,
@@ -243,7 +243,7 @@ func (s *Service) ListOpenExecutions(ctx context.Context, namespaceID string, pa
 	})
 }
 
-// ListClosedExecutions lists closed executions
+// ListClosedExecutions lists closed executions.
 func (s *Service) ListClosedExecutions(ctx context.Context, namespaceID string, pageSize int32, nextPageToken []byte) (*ListResponse, error) {
 	return s.ListExecutions(ctx, &ListRequest{
 		NamespaceID:   namespaceID,
@@ -253,12 +253,12 @@ func (s *Service) ListClosedExecutions(ctx context.Context, namespaceID string, 
 	})
 }
 
-// CountExecutions counts executions matching the query
+// CountExecutions counts executions matching the query.
 func (s *Service) CountExecutions(ctx context.Context, req *CountRequest) (*CountResponse, error) {
 	return s.store.CountExecutions(ctx, req)
 }
 
-// UpdateSearchAttributes updates the search attributes for an execution
+// UpdateSearchAttributes updates the search attributes for an execution.
 func (s *Service) UpdateSearchAttributes(ctx context.Context, namespaceID, workflowID, runID string, attrs map[string]interface{}) error {
 	info, err := s.store.GetExecution(ctx, namespaceID, workflowID, runID)
 	if err != nil {
@@ -276,7 +276,7 @@ func (s *Service) UpdateSearchAttributes(ctx context.Context, namespaceID, workf
 	return s.store.UpsertExecution(ctx, info)
 }
 
-// Query represents a parsed visibility query
+// Query represents a parsed visibility query.
 type Query struct {
 	Filters   []Filter
 	OrderBy   string
@@ -285,14 +285,14 @@ type Query struct {
 	Offset    int64
 }
 
-// Filter represents a single filter condition
+// Filter represents a single filter condition.
 type Filter struct {
 	Field    string
 	Operator string
 	Value    interface{}
 }
 
-// ParseQuery parses a SQL-like query string into a Query struct
+// ParseQuery parses a SQL-like query string into a Query struct.
 func ParseQuery(query string) (*Query, error) {
 	if query == "" {
 		return &Query{}, nil
@@ -316,7 +316,7 @@ func ParseQuery(query string) (*Query, error) {
 		orderParts := strings.Fields(orderPart)
 		if len(orderParts) > 0 {
 			q.OrderBy = orderParts[0]
-			if len(orderParts) > 1 && strings.ToUpper(orderParts[1]) == "DESC" {
+			if len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC") {
 				q.OrderDesc = true
 			}
 		}

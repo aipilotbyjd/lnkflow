@@ -18,14 +18,14 @@ var (
 	ErrVersionMismatch = errors.New("version mismatch during replay")
 )
 
-// Replayer replays workflow executions from history
+// Replayer replays workflow executions from history.
 type Replayer struct {
 	eventStore store.EventStore
 	stateStore store.MutableStateStore
 	logger     *slog.Logger
 }
 
-// NewReplayer creates a new replayer
+// NewReplayer creates a new replayer.
 func NewReplayer(eventStore store.EventStore, stateStore store.MutableStateStore, logger *slog.Logger) *Replayer {
 	if logger == nil {
 		logger = slog.Default()
@@ -37,7 +37,7 @@ func NewReplayer(eventStore store.EventStore, stateStore store.MutableStateStore
 	}
 }
 
-// ReplayResult contains the result of a replay operation
+// ReplayResult contains the result of a replay operation.
 type ReplayResult struct {
 	ExecutionID    string
 	MutableState   *engine.MutableState
@@ -46,13 +46,13 @@ type ReplayResult struct {
 	Errors         []ReplayError
 }
 
-// ReplayError represents an error during replay
+// ReplayError represents an error during replay.
 type ReplayError struct {
 	EventID int64
 	Error   error
 }
 
-// Replay replays an execution from its event history
+// Replay replays an execution from its event history.
 func (r *Replayer) Replay(ctx context.Context, key history.ExecutionKey, targetEventID int64) (*ReplayResult, error) {
 	start := time.Now()
 
@@ -119,7 +119,7 @@ func (r *Replayer) Replay(ctx context.Context, key history.ExecutionKey, targetE
 	return result, nil
 }
 
-// ReplayToPoint replays to a specific point in time
+// ReplayToPoint replays to a specific point in time.
 func (r *Replayer) ReplayToPoint(ctx context.Context, key history.ExecutionKey, timestamp time.Time) (*ReplayResult, error) {
 	// Fetch all events
 	events, err := r.eventStore.GetEvents(ctx, key, 0, 10000)
@@ -144,7 +144,7 @@ func (r *Replayer) ReplayToPoint(ctx context.Context, key history.ExecutionKey, 
 	return r.Replay(ctx, key, targetEventID)
 }
 
-// Compare compares the replay result with stored mutable state
+// Compare compares the replay result with stored mutable state.
 func (r *Replayer) Compare(ctx context.Context, key history.ExecutionKey) (*ComparisonResult, error) {
 	// Get stored state
 	stored, err := r.stateStore.GetMutableState(ctx, key)
@@ -199,21 +199,21 @@ func (r *Replayer) Compare(ctx context.Context, key history.ExecutionKey) (*Comp
 	return result, nil
 }
 
-// ComparisonResult contains the result of comparing stored vs replayed state
+// ComparisonResult contains the result of comparing stored vs replayed state.
 type ComparisonResult struct {
 	ExecutionID string
 	Match       bool
 	Differences []Difference
 }
 
-// Difference represents a single difference between stored and replayed state
+// Difference represents a single difference between stored and replayed state.
 type Difference struct {
 	Field    string
 	Stored   interface{}
 	Replayed interface{}
 }
 
-// ValidateHistoryIntegrity validates the integrity of execution history
+// ValidateHistoryIntegrity validates the integrity of execution history.
 func (r *Replayer) ValidateHistoryIntegrity(ctx context.Context, key history.ExecutionKey) error {
 	// Fetch all events
 	events, err := r.eventStore.GetEvents(ctx, key, 0, 100000)

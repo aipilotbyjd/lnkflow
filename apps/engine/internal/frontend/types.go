@@ -87,19 +87,19 @@ type DescribeExecutionRequest struct {
 }
 
 type DescribeExecutionResponse struct {
-	Execution          *WorkflowExecution
-	PendingActivities  []*PendingActivity
-	PendingChildExecs  []*PendingChildExecution
+	Execution         *WorkflowExecution
+	PendingActivities []*PendingActivity
+	PendingChildExecs []*PendingChildExecution
 }
 
 type WorkflowExecution struct {
-	WorkflowID   string
-	RunID        string
-	WorkflowType string
-	TaskQueue    string
-	Status       ExecutionStatus
-	StartTime    time.Time
-	CloseTime    *time.Time
+	WorkflowID    string
+	RunID         string
+	WorkflowType  string
+	TaskQueue     string
+	Status        ExecutionStatus
+	StartTime     time.Time
+	CloseTime     *time.Time
 	HistoryLength int64
 	Memo          map[string][]byte
 	SearchAttrs   map[string][]byte
@@ -119,15 +119,15 @@ const (
 )
 
 type PendingActivity struct {
-	ActivityID         string
-	ActivityType       string
-	State              PendingActivityState
-	ScheduledTime      time.Time
-	LastStartedTime    *time.Time
-	Attempt            int32
-	MaximumAttempts    int32
-	LastFailure        *Failure
-	LastHeartbeatTime  *time.Time
+	ActivityID        string
+	ActivityType      string
+	State             PendingActivityState
+	ScheduledTime     time.Time
+	LastStartedTime   *time.Time
+	Attempt           int32
+	MaximumAttempts   int32
+	LastFailure       *Failure
+	LastHeartbeatTime *time.Time
 }
 
 type PendingActivityState int32
@@ -168,13 +168,13 @@ type RecordEventRequest struct {
 }
 
 type GetHistoryRequest struct {
-	NamespaceID       string
-	WorkflowID        string
-	RunID             string
-	FirstEventID      int64
-	NextEventID       int64
-	PageSize          int32
-	NextPageToken     []byte
+	NamespaceID   string
+	WorkflowID    string
+	RunID         string
+	FirstEventID  int64
+	NextEventID   int64
+	PageSize      int32
+	NextPageToken []byte
 }
 
 type GetHistoryResponse struct {
@@ -190,25 +190,25 @@ type HistoryEvent struct {
 }
 
 type MutableState struct {
-	ExecutionInfo    *WorkflowExecution
-	NextEventID      int64
-	LastEventTaskID  int64
-	ActivityInfos    map[int64]*ActivityInfo
-	TimerInfos       map[string]*TimerInfo
-	ChildExecutions  map[int64]*ChildExecutionInfo
-	SignalInfos      map[int64]*SignalInfo
-	BufferedEvents   []*HistoryEvent
+	ExecutionInfo   *WorkflowExecution
+	NextEventID     int64
+	LastEventTaskID int64
+	ActivityInfos   map[int64]*ActivityInfo
+	TimerInfos      map[string]*TimerInfo
+	ChildExecutions map[int64]*ChildExecutionInfo
+	SignalInfos     map[int64]*SignalInfo
+	BufferedEvents  []*HistoryEvent
 }
 
 type ActivityInfo struct {
-	ScheduleID     int64
-	ActivityID     string
-	ActivityType   string
-	TaskQueue      string
-	StartedID      int64
-	Attempt        int32
-	ScheduledTime  time.Time
-	StartedTime    *time.Time
+	ScheduleID    int64
+	ActivityID    string
+	ActivityType  string
+	TaskQueue     string
+	StartedID     int64
+	Attempt       int32
+	ScheduledTime time.Time
+	StartedTime   *time.Time
 }
 
 type TimerInfo struct {
@@ -219,12 +219,12 @@ type TimerInfo struct {
 }
 
 type ChildExecutionInfo struct {
-	InitiatedID   int64
-	StartedID     int64
-	Namespace     string
-	WorkflowID    string
-	RunID         string
-	WorkflowType  string
+	InitiatedID  int64
+	StartedID    int64
+	Namespace    string
+	WorkflowID   string
+	RunID        string
+	WorkflowType string
 }
 
 type SignalInfo struct {

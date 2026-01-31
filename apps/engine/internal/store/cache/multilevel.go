@@ -13,7 +13,7 @@ var (
 	ErrExpired  = errors.New("cache: key expired")
 )
 
-// Cache is the interface for cache implementations
+// Cache is the interface for cache implementations.
 type Cache interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
@@ -21,7 +21,7 @@ type Cache interface {
 	Clear(ctx context.Context) error
 }
 
-// MultiLevelCache implements L1/L2 caching
+// MultiLevelCache implements L1/L2 caching.
 type MultiLevelCache struct {
 	l1 *LRUCache // In-process cache (fastest)
 	l2 Cache     // Optional distributed cache (e.g., Redis)
@@ -33,7 +33,7 @@ type MultiLevelCache struct {
 	mu      sync.RWMutex
 }
 
-// MultiLevelConfig holds multi-level cache configuration
+// MultiLevelConfig holds multi-level cache configuration.
 type MultiLevelConfig struct {
 	L1MaxSize int
 	L1TTL     time.Duration
@@ -41,7 +41,7 @@ type MultiLevelConfig struct {
 	EnableL2  bool
 }
 
-// DefaultMultiLevelConfig returns default config
+// DefaultMultiLevelConfig returns default config.
 func DefaultMultiLevelConfig() MultiLevelConfig {
 	return MultiLevelConfig{
 		L1MaxSize: 10000,
@@ -51,7 +51,7 @@ func DefaultMultiLevelConfig() MultiLevelConfig {
 	}
 }
 
-// NewMultiLevelCache creates a new multi-level cache
+// NewMultiLevelCache creates a new multi-level cache.
 func NewMultiLevelCache(config MultiLevelConfig, l2 Cache) *MultiLevelCache {
 	return &MultiLevelCache{
 		l1:      NewLRUCache(config.L1MaxSize),
@@ -62,7 +62,7 @@ func NewMultiLevelCache(config MultiLevelConfig, l2 Cache) *MultiLevelCache {
 	}
 }
 
-// Get retrieves a value from the cache
+// Get retrieves a value from the cache.
 func (c *MultiLevelCache) Get(ctx context.Context, key string) ([]byte, error) {
 	// Try L1 first
 	if value, err := c.l1.Get(key); err == nil {
@@ -85,7 +85,7 @@ func (c *MultiLevelCache) Get(ctx context.Context, key string) ([]byte, error) {
 	return nil, ErrNotFound
 }
 
-// Set stores a value in the cache
+// Set stores a value in the cache.
 func (c *MultiLevelCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	// Set in L1
 	l1TTL := ttl
@@ -106,7 +106,7 @@ func (c *MultiLevelCache) Set(ctx context.Context, key string, value []byte, ttl
 	return nil
 }
 
-// Delete removes a value from the cache
+// Delete removes a value from the cache.
 func (c *MultiLevelCache) Delete(ctx context.Context, key string) error {
 	c.l1.Delete(key)
 	if c.l2 != nil {
@@ -115,7 +115,7 @@ func (c *MultiLevelCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Clear clears all cache entries
+// Clear clears all cache entries.
 func (c *MultiLevelCache) Clear(ctx context.Context) error {
 	c.l1.Clear()
 	if c.l2 != nil {
@@ -124,7 +124,7 @@ func (c *MultiLevelCache) Clear(ctx context.Context) error {
 	return nil
 }
 
-// GetOrSet gets a value or sets it using the loader
+// GetOrSet gets a value or sets it using the loader.
 func (c *MultiLevelCache) GetOrSet(ctx context.Context, key string, loader func() ([]byte, error)) ([]byte, error) {
 	// Try cache first
 	value, err := c.Get(ctx, key)
@@ -143,14 +143,14 @@ func (c *MultiLevelCache) GetOrSet(ctx context.Context, key string, loader func(
 	return value, nil
 }
 
-// Metrics returns cache metrics
+// Metrics returns cache metrics.
 func (c *MultiLevelCache) Metrics() CacheMetrics {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return *c.metrics
 }
 
-// CacheMetrics holds cache metrics
+// CacheMetrics holds cache metrics.
 type CacheMetrics struct {
 	l1Hits   int64
 	l1Misses int64
@@ -158,7 +158,7 @@ type CacheMetrics struct {
 	l2Misses int64
 }
 
-// LRUCache is a simple LRU cache implementation
+// LRUCache is a simple LRU cache implementation.
 type LRUCache struct {
 	capacity int
 	items    map[string]*list.Element
@@ -172,7 +172,7 @@ type lruItem struct {
 	expiresAt time.Time
 }
 
-// NewLRUCache creates a new LRU cache
+// NewLRUCache creates a new LRU cache.
 func NewLRUCache(capacity int) *LRUCache {
 	return &LRUCache{
 		capacity: capacity,
@@ -181,7 +181,7 @@ func NewLRUCache(capacity int) *LRUCache {
 	}
 }
 
-// Get retrieves a value
+// Get retrieves a value.
 func (c *LRUCache) Get(key string) ([]byte, error) {
 	c.mu.RLock()
 	elem, exists := c.items[key]
@@ -205,7 +205,7 @@ func (c *LRUCache) Get(key string) ([]byte, error) {
 	return item.value, nil
 }
 
-// Set stores a value
+// Set stores a value.
 func (c *LRUCache) Set(key string, value []byte, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -241,7 +241,7 @@ func (c *LRUCache) Set(key string, value []byte, ttl time.Duration) {
 	c.items[key] = elem
 }
 
-// Delete removes a value
+// Delete removes a value.
 func (c *LRUCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -252,7 +252,7 @@ func (c *LRUCache) Delete(key string) {
 	}
 }
 
-// Clear removes all values
+// Clear removes all values.
 func (c *LRUCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -270,14 +270,14 @@ func (c *LRUCache) evict() {
 	}
 }
 
-// Size returns current cache size
+// Size returns current cache size.
 func (c *LRUCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.order.Len()
 }
 
-// InMemoryCache is a simple in-memory cache
+// InMemoryCache is a simple in-memory cache.
 type InMemoryCache struct {
 	items map[string]*cacheEntry
 	mu    sync.RWMutex
@@ -288,7 +288,7 @@ type cacheEntry struct {
 	expiresAt time.Time
 }
 
-// NewInMemoryCache creates a new in-memory cache
+// NewInMemoryCache creates a new in-memory cache.
 func NewInMemoryCache() *InMemoryCache {
 	cache := &InMemoryCache{
 		items: make(map[string]*cacheEntry),

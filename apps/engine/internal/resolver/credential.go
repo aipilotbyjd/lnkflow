@@ -18,7 +18,7 @@ var (
 	ErrDecryptionFailed   = errors.New("credential decryption failed")
 )
 
-// Credential represents a decrypted credential
+// Credential represents a decrypted credential.
 type Credential struct {
 	ID        int64
 	Name      string
@@ -27,7 +27,7 @@ type Credential struct {
 	ExpiresAt *time.Time
 }
 
-// CredentialResolver resolves and decrypts credentials
+// CredentialResolver resolves and decrypts credentials.
 type CredentialResolver struct {
 	pool      *pgxpool.Pool
 	encryptor *crypto.Encryptor
@@ -36,13 +36,13 @@ type CredentialResolver struct {
 	cacheTTL time.Duration
 }
 
-// CredentialConfig holds resolver configuration
+// CredentialConfig holds resolver configuration.
 type CredentialConfig struct {
 	MasterKey string
 	CacheTTL  time.Duration
 }
 
-// NewCredentialResolver creates a new credential resolver
+// NewCredentialResolver creates a new credential resolver.
 func NewCredentialResolver(pool *pgxpool.Pool, config CredentialConfig) (*CredentialResolver, error) {
 	encryptor, err := crypto.NewEncryptorFromString(config.MasterKey)
 	if err != nil {
@@ -62,7 +62,7 @@ func NewCredentialResolver(pool *pgxpool.Pool, config CredentialConfig) (*Creden
 	}, nil
 }
 
-// Resolve resolves credentials by IDs
+// Resolve resolves credentials by IDs.
 func (r *CredentialResolver) Resolve(
 	ctx context.Context,
 	namespaceID string,
@@ -128,7 +128,7 @@ func (r *CredentialResolver) Resolve(
 	return result, nil
 }
 
-// ResolveByName resolves a credential by name
+// ResolveByName resolves a credential by name.
 func (r *CredentialResolver) ResolveByName(
 	ctx context.Context,
 	namespaceID string,
@@ -171,7 +171,7 @@ func (r *CredentialResolver) ResolveByName(
 	return cred, nil
 }
 
-// InvalidateCache invalidates cached credentials
+// InvalidateCache invalidates cached credentials.
 func (r *CredentialResolver) InvalidateCache(namespaceID string, credentialIDs ...string) {
 	if len(credentialIDs) == 0 {
 		r.cache.clearNamespace(namespaceID)
@@ -182,7 +182,7 @@ func (r *CredentialResolver) InvalidateCache(namespaceID string, credentialIDs .
 	}
 }
 
-// credentialCache is a simple in-memory credential cache
+// credentialCache is a simple in-memory credential cache.
 type credentialCache struct {
 	items map[string]*cacheItem
 	ttl   time.Duration

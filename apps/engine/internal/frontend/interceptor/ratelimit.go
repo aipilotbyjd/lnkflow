@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	namespaceHeader = "x-namespace"
+	namespaceHeader  = "x-namespace"
 	defaultNamespace = "default"
 )
 

@@ -10,7 +10,7 @@ var (
 	ErrCircuitOpen = errors.New("circuit breaker is open")
 )
 
-// State represents circuit breaker state
+// State represents circuit breaker state.
 type State int
 
 const (
@@ -32,7 +32,7 @@ func (s State) String() string {
 	}
 }
 
-// Config holds circuit breaker configuration
+// Config holds circuit breaker configuration.
 type Config struct {
 	FailureThreshold    int           // Number of failures before opening
 	SuccessThreshold    int           // Successes needed in half-open to close
@@ -42,7 +42,7 @@ type Config struct {
 	MinRequestsInWindow int           // Min requests before calculating rate
 }
 
-// DefaultConfig returns default circuit breaker config
+// DefaultConfig returns default circuit breaker config.
 func DefaultConfig() Config {
 	return Config{
 		FailureThreshold:    5,
@@ -54,7 +54,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Breaker is a circuit breaker implementation
+// Breaker is a circuit breaker implementation.
 type Breaker struct {
 	name   string
 	config Config
@@ -73,7 +73,7 @@ type Breaker struct {
 	mu sync.RWMutex
 }
 
-// NewBreaker creates a new circuit breaker
+// NewBreaker creates a new circuit breaker.
 func NewBreaker(name string, config Config) *Breaker {
 	return &Breaker{
 		name:            name,
@@ -85,7 +85,7 @@ func NewBreaker(name string, config Config) *Breaker {
 	}
 }
 
-// Allow checks if a request is allowed
+// Allow checks if a request is allowed.
 func (b *Breaker) Allow() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -116,7 +116,7 @@ func (b *Breaker) Allow() bool {
 	return false
 }
 
-// Execute executes a function with circuit breaker protection
+// Execute executes a function with circuit breaker protection.
 func (b *Breaker) Execute(fn func() error) error {
 	if !b.Allow() {
 		return ErrCircuitOpen
@@ -132,7 +132,7 @@ func (b *Breaker) Execute(fn func() error) error {
 	return nil
 }
 
-// RecordSuccess records a successful request
+// RecordSuccess records a successful request.
 func (b *Breaker) RecordSuccess() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -151,7 +151,7 @@ func (b *Breaker) RecordSuccess() {
 	}
 }
 
-// RecordFailure records a failed request
+// RecordFailure records a failed request.
 func (b *Breaker) RecordFailure() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -175,14 +175,14 @@ func (b *Breaker) RecordFailure() {
 	}
 }
 
-// State returns the current state
+// State returns the current state.
 func (b *Breaker) State() State {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.state
 }
 
-// Metrics returns circuit breaker metrics
+// Metrics returns circuit breaker metrics.
 func (b *Breaker) Metrics() BreakerMetrics {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -201,7 +201,7 @@ func (b *Breaker) Metrics() BreakerMetrics {
 	}
 }
 
-// BreakerMetrics holds circuit breaker metrics
+// BreakerMetrics holds circuit breaker metrics.
 type BreakerMetrics struct {
 	Name            string
 	State           string
@@ -259,14 +259,14 @@ func (b *Breaker) calculateFailureRate() float64 {
 	return float64(len(b.failureTimes)) / float64(len(b.requestTimes))
 }
 
-// BreakerRegistry manages multiple circuit breakers
+// BreakerRegistry manages multiple circuit breakers.
 type BreakerRegistry struct {
 	breakers map[string]*Breaker
 	config   Config
 	mu       sync.RWMutex
 }
 
-// NewBreakerRegistry creates a new breaker registry
+// NewBreakerRegistry creates a new breaker registry.
 func NewBreakerRegistry(defaultConfig Config) *BreakerRegistry {
 	return &BreakerRegistry{
 		breakers: make(map[string]*Breaker),
@@ -274,7 +274,7 @@ func NewBreakerRegistry(defaultConfig Config) *BreakerRegistry {
 	}
 }
 
-// Get gets or creates a circuit breaker by name
+// Get gets or creates a circuit breaker by name.
 func (r *BreakerRegistry) Get(name string) *Breaker {
 	r.mu.RLock()
 	if b, exists := r.breakers[name]; exists {
@@ -296,7 +296,7 @@ func (r *BreakerRegistry) Get(name string) *Breaker {
 	return b
 }
 
-// List returns all breakers
+// List returns all breakers.
 func (r *BreakerRegistry) List() []*Breaker {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -308,7 +308,7 @@ func (r *BreakerRegistry) List() []*Breaker {
 	return breakers
 }
 
-// AllMetrics returns metrics for all breakers
+// AllMetrics returns metrics for all breakers.
 func (r *BreakerRegistry) AllMetrics() []BreakerMetrics {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

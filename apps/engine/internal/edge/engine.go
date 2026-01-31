@@ -15,7 +15,7 @@ var (
 	ErrExecutionPending = errors.New("execution pending sync")
 )
 
-// ExecutionMode represents the edge execution mode
+// ExecutionMode represents the edge execution mode.
 type ExecutionMode int
 
 const (
@@ -24,7 +24,7 @@ const (
 	ExecutionModeHybrid
 )
 
-// SyncStatus represents synchronization status
+// SyncStatus represents synchronization status.
 type SyncStatus int
 
 const (
@@ -34,7 +34,7 @@ const (
 	SyncStatusFailed
 )
 
-// EdgeExecution represents an execution on the edge
+// EdgeExecution represents an execution on the edge.
 type EdgeExecution struct {
 	ID           string
 	NamespaceID  string
@@ -51,7 +51,7 @@ type EdgeExecution struct {
 	Version      int64
 }
 
-// ExecutionStatus for edge
+// ExecutionStatus for edge.
 type ExecutionStatus int
 
 const (
@@ -61,7 +61,7 @@ const (
 	ExecutionStatusFailed
 )
 
-// EdgeEvent represents an event captured at the edge
+// EdgeEvent represents an event captured at the edge.
 type EdgeEvent struct {
 	ID         int64
 	Type       string
@@ -70,14 +70,14 @@ type EdgeEvent struct {
 	SyncStatus SyncStatus
 }
 
-// CentralClient interface for communicating with central cluster
+// CentralClient interface for communicating with central cluster.
 type CentralClient interface {
 	SyncExecution(ctx context.Context, exec *EdgeExecution) error
 	GetWorkflowDefinition(ctx context.Context, namespaceID, workflowID string) (json.RawMessage, error)
 	SendHeartbeat(ctx context.Context, edgeID string) error
 }
 
-// LocalStore interface for local edge storage
+// LocalStore interface for local edge storage.
 type LocalStore interface {
 	SaveExecution(ctx context.Context, exec *EdgeExecution) error
 	GetExecution(ctx context.Context, id string) (*EdgeExecution, error)
@@ -86,7 +86,7 @@ type LocalStore interface {
 	CacheWorkflowDefinition(ctx context.Context, namespaceID, workflowID string, def json.RawMessage) error
 }
 
-// Config holds edge engine configuration
+// Config holds edge engine configuration.
 type Config struct {
 	EdgeID             string
 	Region             string
@@ -97,7 +97,7 @@ type Config struct {
 	Logger             *slog.Logger
 }
 
-// DefaultConfig returns default edge configuration
+// DefaultConfig returns default edge configuration.
 func DefaultConfig() Config {
 	return Config{
 		SyncInterval:       30 * time.Second,
@@ -106,7 +106,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Engine is the edge execution engine
+// Engine is the edge execution engine.
 type Engine struct {
 	config        Config
 	logger        *slog.Logger
@@ -124,7 +124,7 @@ type Engine struct {
 	running bool
 }
 
-// NewEngine creates a new edge engine
+// NewEngine creates a new edge engine.
 func NewEngine(config Config, centralClient CentralClient, localStore LocalStore) *Engine {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -148,7 +148,7 @@ func NewEngine(config Config, centralClient CentralClient, localStore LocalStore
 	}
 }
 
-// Start starts the edge engine
+// Start starts the edge engine.
 func (e *Engine) Start(ctx context.Context) error {
 	e.mu.Lock()
 	if e.running {
@@ -176,7 +176,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the edge engine
+// Stop stops the edge engine.
 func (e *Engine) Stop(ctx context.Context) error {
 	e.mu.Lock()
 	if !e.running {
@@ -194,7 +194,7 @@ func (e *Engine) Stop(ctx context.Context) error {
 	return nil
 }
 
-// StartExecution starts a new execution on the edge
+// StartExecution starts a new execution on the edge.
 func (e *Engine) StartExecution(ctx context.Context, namespaceID, workflowID string, input json.RawMessage) (*EdgeExecution, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -233,7 +233,7 @@ func (e *Engine) StartExecution(ctx context.Context, namespaceID, workflowID str
 	return exec, nil
 }
 
-// CompleteExecution completes an execution
+// CompleteExecution completes an execution.
 func (e *Engine) CompleteExecution(ctx context.Context, executionID string, output json.RawMessage) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -269,7 +269,7 @@ func (e *Engine) CompleteExecution(ctx context.Context, executionID string, outp
 	return nil
 }
 
-// FailExecution fails an execution
+// FailExecution fails an execution.
 func (e *Engine) FailExecution(ctx context.Context, executionID string, reason string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -301,7 +301,7 @@ func (e *Engine) FailExecution(ctx context.Context, executionID string, reason s
 	return nil
 }
 
-// RecordEvent records an event for an execution
+// RecordEvent records an event for an execution.
 func (e *Engine) RecordEvent(ctx context.Context, executionID, eventType string, data json.RawMessage) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -325,7 +325,7 @@ func (e *Engine) RecordEvent(ctx context.Context, executionID, eventType string,
 	return e.localStore.SaveExecution(ctx, exec)
 }
 
-// GetExecution retrieves an execution
+// GetExecution retrieves an execution.
 func (e *Engine) GetExecution(ctx context.Context, executionID string) (*EdgeExecution, error) {
 	e.mu.RLock()
 	exec, exists := e.executions[executionID]
@@ -338,14 +338,14 @@ func (e *Engine) GetExecution(ctx context.Context, executionID string) (*EdgeExe
 	return e.localStore.GetExecution(ctx, executionID)
 }
 
-// GetMode returns the current execution mode
+// GetMode returns the current execution mode.
 func (e *Engine) GetMode() ExecutionMode {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.mode
 }
 
-// SetMode sets the execution mode
+// SetMode sets the execution mode.
 func (e *Engine) SetMode(mode ExecutionMode) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -353,7 +353,7 @@ func (e *Engine) SetMode(mode ExecutionMode) {
 	e.logger.Info("execution mode changed", slog.String("mode", mode.String()))
 }
 
-// GetPendingSyncCount returns count of executions pending sync
+// GetPendingSyncCount returns count of executions pending sync.
 func (e *Engine) GetPendingSyncCount() int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

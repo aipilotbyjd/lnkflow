@@ -19,13 +19,13 @@ var (
 	ErrOptimisticLock = errors.New("optimistic lock failure: version mismatch")
 )
 
-// PostgresEventStore implements EventStore using PostgreSQL
+// PostgresEventStore implements EventStore using PostgreSQL.
 type PostgresEventStore struct {
 	pool       *pgxpool.Pool
 	serializer *events.Serializer
 }
 
-// NewPostgresEventStore creates a new PostgreSQL-backed event store
+// NewPostgresEventStore creates a new PostgreSQL-backed event store.
 func NewPostgresEventStore(pool *pgxpool.Pool) *PostgresEventStore {
 	return &PostgresEventStore{
 		pool:       pool,
@@ -33,7 +33,7 @@ func NewPostgresEventStore(pool *pgxpool.Pool) *PostgresEventStore {
 	}
 }
 
-// AppendEvents appends events to the history for an execution
+// AppendEvents appends events to the history for an execution.
 func (s *PostgresEventStore) AppendEvents(
 	ctx context.Context,
 	key history.ExecutionKey,
@@ -54,8 +54,8 @@ func (s *PostgresEventStore) AppendEvents(
 	if expectedVersion >= 0 {
 		var currentMaxEventID int64
 		err := tx.QueryRow(ctx, `
-			SELECT COALESCE(MAX(event_id), 0) 
-			FROM history_events 
+			SELECT COALESCE(MAX(event_id), 0)
+			FROM history_events
 			WHERE namespace_id = $1 AND workflow_id = $2 AND run_id = $3
 		`, key.NamespaceID, key.WorkflowID, key.RunID).Scan(&currentMaxEventID)
 
@@ -80,7 +80,7 @@ func (s *PostgresEventStore) AppendEvents(
 
 		_, err = tx.Exec(ctx, `
 			INSERT INTO history_events (
-				shard_id, namespace_id, workflow_id, run_id, 
+				shard_id, namespace_id, workflow_id, run_id,
 				event_id, event_type, version, timestamp, data
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		`,
@@ -106,7 +106,7 @@ func (s *PostgresEventStore) AppendEvents(
 	return nil
 }
 
-// GetEvents retrieves events for an execution within the specified range
+// GetEvents retrieves events for an execution within the specified range.
 func (s *PostgresEventStore) GetEvents(
 	ctx context.Context,
 	key history.ExecutionKey,
@@ -157,7 +157,7 @@ func (s *PostgresEventStore) GetEvents(
 	return events, nil
 }
 
-// GetLatestEventID returns the latest event ID for an execution
+// GetLatestEventID returns the latest event ID for an execution.
 func (s *PostgresEventStore) GetLatestEventID(ctx context.Context, key history.ExecutionKey) (int64, error) {
 	var eventID int64
 	err := s.pool.QueryRow(ctx, `
@@ -171,7 +171,7 @@ func (s *PostgresEventStore) GetLatestEventID(ctx context.Context, key history.E
 	return eventID, nil
 }
 
-// DeleteEvents deletes all events for an execution (used for cleanup)
+// DeleteEvents deletes all events for an execution (used for cleanup).
 func (s *PostgresEventStore) DeleteEvents(ctx context.Context, key history.ExecutionKey) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM history_events
@@ -183,7 +183,7 @@ func (s *PostgresEventStore) DeleteEvents(ctx context.Context, key history.Execu
 	return nil
 }
 
-// PostgresMutableStateStore implements MutableStateStore using PostgreSQL
+// PostgresMutableStateStore implements MutableStateStore using PostgreSQL.
 type PostgresMutableStateStore struct {
 	pool       *pgxpool.Pool
 	serializer *mutableStateSerializer
@@ -216,7 +216,7 @@ func (s *mutableStateSerializer) Deserialize(data []byte) (*engine.MutableState,
 	return &state, nil
 }
 
-// NewPostgresMutableStateStore creates a new PostgreSQL-backed mutable state store
+// NewPostgresMutableStateStore creates a new PostgreSQL-backed mutable state store.
 func NewPostgresMutableStateStore(pool *pgxpool.Pool) *PostgresMutableStateStore {
 	return &PostgresMutableStateStore{
 		pool:       pool,
@@ -224,7 +224,7 @@ func NewPostgresMutableStateStore(pool *pgxpool.Pool) *PostgresMutableStateStore
 	}
 }
 
-// GetMutableState retrieves the mutable state for an execution
+// GetMutableState retrieves the mutable state for an execution.
 func (s *PostgresMutableStateStore) GetMutableState(
 	ctx context.Context,
 	key history.ExecutionKey,
@@ -257,7 +257,7 @@ func (s *PostgresMutableStateStore) GetMutableState(
 	return state, nil
 }
 
-// UpdateMutableState updates the mutable state for an execution
+// UpdateMutableState updates the mutable state for an execution.
 func (s *PostgresMutableStateStore) UpdateMutableState(
 	ctx context.Context,
 	key history.ExecutionKey,
@@ -281,7 +281,7 @@ func (s *PostgresMutableStateStore) UpdateMutableState(
 
 	// Try to update existing row
 	tag, err := tx.Exec(ctx, `
-		UPDATE mutable_state 
+		UPDATE mutable_state
 		SET state = $1, next_event_id = $2, db_version = $3, checksum = $4
 		WHERE namespace_id = $5 AND workflow_id = $6 AND run_id = $7 AND db_version = $8
 	`,
@@ -303,7 +303,7 @@ func (s *PostgresMutableStateStore) UpdateMutableState(
 		if expectedVersion == 0 {
 			_, err = tx.Exec(ctx, `
 				INSERT INTO mutable_state (
-					shard_id, namespace_id, workflow_id, run_id, 
+					shard_id, namespace_id, workflow_id, run_id,
 					state, next_event_id, db_version, checksum
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			`,
@@ -331,7 +331,7 @@ func (s *PostgresMutableStateStore) UpdateMutableState(
 	return nil
 }
 
-// DeleteMutableState deletes the mutable state for an execution
+// DeleteMutableState deletes the mutable state for an execution.
 func (s *PostgresMutableStateStore) DeleteMutableState(ctx context.Context, key history.ExecutionKey) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM mutable_state
@@ -345,8 +345,7 @@ func (s *PostgresMutableStateStore) DeleteMutableState(ctx context.Context, key 
 
 // Helper functions
 
-// getShardIDForExecution calculates shard ID based on execution key
-// Uses consistent hashing to distribute executions across shards
+// Uses consistent hashing to distribute executions across shards.
 func getShardIDForExecution(key history.ExecutionKey) int32 {
 	// Simple hash-based sharding
 	data := key.NamespaceID + "/" + key.WorkflowID
@@ -358,7 +357,7 @@ func getShardIDForExecution(key history.ExecutionKey) int32 {
 	return int32(hash % 16)
 }
 
-// calculateChecksum creates a simple checksum for data integrity
+// calculateChecksum creates a simple checksum for data integrity.
 func calculateChecksum(data []byte) []byte {
 	var sum uint32
 	for _, b := range data {

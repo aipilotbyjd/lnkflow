@@ -22,7 +22,7 @@ var (
 	ErrMemoryExceeded      = errors.New("memory limit exceeded")
 )
 
-// ExecutionMode represents the isolation mode
+// ExecutionMode represents the isolation mode.
 type ExecutionMode int
 
 const (
@@ -32,7 +32,7 @@ const (
 	ExecutionModeWASM
 )
 
-// ExecutionRequest represents a sandboxed execution request
+// ExecutionRequest represents a sandboxed execution request.
 type ExecutionRequest struct {
 	Code        string
 	Language    string
@@ -44,8 +44,7 @@ type ExecutionRequest struct {
 	Environment map[string]string
 }
 
-// sanitizedEnvVars returns a list of safe environment variable names
-// that can be passed to sandboxed processes
+// that can be passed to sandboxed processes.
 var safeEnvVars = map[string]bool{
 	"PATH":   true,
 	"HOME":   true, // Often needed by runtimes
@@ -54,7 +53,7 @@ var safeEnvVars = map[string]bool{
 	"LC_ALL": true,
 }
 
-// ExecutionResult represents the result of a sandboxed execution
+// ExecutionResult represents the result of a sandboxed execution.
 type ExecutionResult struct {
 	Output   map[string]interface{}
 	Stdout   string
@@ -64,7 +63,7 @@ type ExecutionResult struct {
 	Memory   int64
 }
 
-// Sandbox provides isolated code execution
+// Sandbox provides isolated code execution.
 type Sandbox struct {
 	logger   *slog.Logger
 	workDir  string
@@ -72,14 +71,14 @@ type Sandbox struct {
 	mu       sync.RWMutex
 }
 
-// Runtime represents a language runtime
+// Runtime represents a language runtime.
 type Runtime interface {
 	Language() string
 	Available() bool
 	Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error)
 }
 
-// Config holds sandbox configuration
+// Config holds sandbox configuration.
 type Config struct {
 	Logger                 *slog.Logger
 	WorkDir                string
@@ -91,7 +90,7 @@ type Config struct {
 	EnableNetworkIsolation bool          // Block network access in process mode
 }
 
-// NewSandbox creates a new sandbox
+// NewSandbox creates a new sandbox.
 func NewSandbox(config Config) (*Sandbox, error) {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -114,7 +113,7 @@ func NewSandbox(config Config) (*Sandbox, error) {
 	return sandbox, nil
 }
 
-// RegisterRuntime registers a language runtime
+// RegisterRuntime registers a language runtime.
 func (s *Sandbox) RegisterRuntime(runtime Runtime) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -122,7 +121,7 @@ func (s *Sandbox) RegisterRuntime(runtime Runtime) {
 	s.logger.Info("runtime registered", slog.String("language", runtime.Language()))
 }
 
-// Execute executes code in a sandbox
+// Execute executes code in a sandbox.
 func (s *Sandbox) Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error) {
 	s.mu.RLock()
 	runtime, exists := s.runtimes[req.Language]
@@ -157,7 +156,7 @@ func (s *Sandbox) Execute(ctx context.Context, req *ExecutionRequest) (*Executio
 	return result, err
 }
 
-// ListRuntimes returns available runtimes
+// ListRuntimes returns available runtimes.
 func (s *Sandbox) ListRuntimes() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -171,7 +170,7 @@ func (s *Sandbox) ListRuntimes() []string {
 	return languages
 }
 
-// NodeJSRuntime executes JavaScript code using Node.js
+// NodeJSRuntime executes JavaScript code using Node.js.
 type NodeJSRuntime struct{}
 
 func (r *NodeJSRuntime) Language() string {
@@ -251,7 +250,7 @@ console.log(JSON.stringify({ __output: output }));
 	return result, nil
 }
 
-// PythonRuntime executes Python code
+// PythonRuntime executes Python code.
 type PythonRuntime struct{}
 
 func (r *PythonRuntime) Language() string {
@@ -343,7 +342,7 @@ print(json.dumps({"__output": output}))
 	return result, nil
 }
 
-// BashRuntime executes shell commands
+// BashRuntime executes shell commands.
 type BashRuntime struct{}
 
 func (r *BashRuntime) Language() string {
@@ -426,7 +425,7 @@ func (r *BashRuntime) Execute(ctx context.Context, req *ExecutionRequest) (*Exec
 	return result, nil
 }
 
-// ContainerRuntime executes code in Docker containers
+// ContainerRuntime executes code in Docker containers.
 type ContainerRuntime struct {
 	image   string
 	command []string
@@ -508,8 +507,7 @@ func (r *ContainerRuntime) Execute(ctx context.Context, req *ExecutionRequest) (
 
 // Helpers
 
-// buildSafeEnv creates a minimal, safe environment for sandboxed processes
-// It only includes essential variables and explicitly requested ones
+// It only includes essential variables and explicitly requested ones.
 func buildSafeEnv(requestedEnv map[string]string) []string {
 	env := []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin",
@@ -528,8 +526,7 @@ func buildSafeEnv(requestedEnv map[string]string) []string {
 	return env
 }
 
-// isValidEnvKey validates an environment variable key
-// Returns false for keys that could be used for injection attacks
+// Returns false for keys that could be used for injection attacks.
 func isValidEnvKey(key string) bool {
 	if key == "" {
 		return false
@@ -596,12 +593,12 @@ func indentCode(code, indent string) string {
 	return result.String()
 }
 
-// CodeExecutor is the executor that uses the sandbox
+// CodeExecutor is the executor that uses the sandbox.
 type CodeExecutor struct {
 	sandbox *Sandbox
 }
 
-// NewCodeExecutorWithSandbox creates a new code executor with sandbox
+// NewCodeExecutorWithSandbox creates a new code executor with sandbox.
 func NewCodeExecutorWithSandbox(sandbox *Sandbox) *CodeExecutor {
 	return &CodeExecutor{sandbox: sandbox}
 }
@@ -619,5 +616,5 @@ func (e *CodeExecutor) Execute(ctx context.Context, code, language string, input
 	})
 }
 
-// Ensure io is imported even if not directly used in visible code
+// Ensure io is imported even if not directly used in visible code.
 var _ = io.EOF

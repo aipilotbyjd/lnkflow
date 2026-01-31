@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DatabaseExecutor handles database operations
+// DatabaseExecutor handles database operations.
 type DatabaseExecutor struct {
 	pools map[string]*pgxpool.Pool
 }
 
-// DatabaseConfig represents the configuration for a database node
+// DatabaseConfig represents the configuration for a database node.
 type DatabaseConfig struct {
 	// Connection
 	ConnectionString string `json:"connection_string"` // Full connection string
@@ -32,13 +32,13 @@ type DatabaseConfig struct {
 	RowsAsArray bool `json:"rows_as_array"` // Return rows as array instead of objects
 }
 
-// QueryWithParams represents a query with its parameters
+// QueryWithParams represents a query with its parameters.
 type QueryWithParams struct {
 	Query  string        `json:"query"`
 	Params []interface{} `json:"params"`
 }
 
-// DatabaseResponse represents the result of a database operation
+// DatabaseResponse represents the result of a database operation.
 type DatabaseResponse struct {
 	Rows         []map[string]interface{} `json:"rows,omitempty"`
 	Row          map[string]interface{}   `json:"row,omitempty"`
@@ -47,14 +47,14 @@ type DatabaseResponse struct {
 	Duration     string                   `json:"duration"`
 }
 
-// NewDatabaseExecutor creates a new database executor
+// NewDatabaseExecutor creates a new database executor.
 func NewDatabaseExecutor() *DatabaseExecutor {
 	return &DatabaseExecutor{
 		pools: make(map[string]*pgxpool.Pool),
 	}
 }
 
-// RegisterConnection registers a named connection pool
+// RegisterConnection registers a named connection pool.
 func (e *DatabaseExecutor) RegisterConnection(name string, pool *pgxpool.Pool) {
 	e.pools[name] = pool
 }
@@ -321,7 +321,7 @@ func (e *DatabaseExecutor) executeTransaction(ctx context.Context, pool *pgxpool
 	return response, nil
 }
 
-// convertValue converts pgx values to JSON-serializable types
+// convertValue converts pgx values to JSON-serializable types.
 func convertValue(v interface{}) interface{} {
 	if v == nil {
 		return nil

@@ -17,7 +17,7 @@ var (
 	ErrReplicationFailed = errors.New("replication failed")
 )
 
-// Replicator handles N-DC (multi-datacenter) replication
+// Replicator handles N-DC (multi-datacenter) replication.
 type Replicator struct {
 	localClusterID  string
 	remoteClients   map[string]ReplicationClient
@@ -27,14 +27,14 @@ type Replicator struct {
 	mu sync.RWMutex
 }
 
-// ReplicationClient is the interface for remote cluster communication
+// ReplicationClient is the interface for remote cluster communication.
 type ReplicationClient interface {
 	SendReplicationTask(ctx context.Context, task *ReplicationTask) error
 	FetchMissingEvents(ctx context.Context, executionID string, fromEventID int64) ([]*history.HistoryEvent, error)
 	GetClusterInfo(ctx context.Context) (*ClusterInfo, error)
 }
 
-// ClusterInfo contains information about a remote cluster
+// ClusterInfo contains information about a remote cluster.
 type ClusterInfo struct {
 	ClusterID   string
 	ClusterName string
@@ -43,7 +43,7 @@ type ClusterInfo struct {
 	LastSync    time.Time
 }
 
-// ReplicationTask represents a task to replicate events
+// ReplicationTask represents a task to replicate events.
 type ReplicationTask struct {
 	TaskID        string
 	SourceCluster string
@@ -54,7 +54,7 @@ type ReplicationTask struct {
 	CreatedAt     time.Time
 }
 
-// Config holds replicator configuration
+// Config holds replicator configuration.
 type Config struct {
 	LocalClusterID   string
 	ReplicationDelay time.Duration
@@ -63,7 +63,7 @@ type Config struct {
 	RetryBackoff     time.Duration
 }
 
-// DefaultConfig returns default replicator config
+// DefaultConfig returns default replicator config.
 func DefaultConfig() Config {
 	return Config{
 		LocalClusterID:   "cluster-1",
@@ -74,7 +74,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewReplicator creates a new replicator
+// NewReplicator creates a new replicator.
 func NewReplicator(config Config, conflictHandler ConflictHandler, logger *slog.Logger) *Replicator {
 	if logger == nil {
 		logger = slog.Default()
@@ -91,21 +91,21 @@ func NewReplicator(config Config, conflictHandler ConflictHandler, logger *slog.
 	}
 }
 
-// AddRemoteCluster adds a remote cluster for replication
+// AddRemoteCluster adds a remote cluster for replication.
 func (r *Replicator) AddRemoteCluster(clusterID string, client ReplicationClient) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.remoteClients[clusterID] = client
 }
 
-// RemoveRemoteCluster removes a remote cluster
+// RemoveRemoteCluster removes a remote cluster.
 func (r *Replicator) RemoveRemoteCluster(clusterID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.remoteClients, clusterID)
 }
 
-// ReplicateEvents replicates events to remote clusters
+// ReplicateEvents replicates events to remote clusters.
 func (r *Replicator) ReplicateEvents(ctx context.Context, executionID string, events []*history.HistoryEvent) error {
 	r.mu.RLock()
 	clients := make(map[string]ReplicationClient)
@@ -170,7 +170,7 @@ func (r *Replicator) ReplicateEvents(ctx context.Context, executionID string, ev
 	return nil
 }
 
-// ApplyReplicationTask applies incoming replication events
+// ApplyReplicationTask applies incoming replication events.
 func (r *Replicator) ApplyReplicationTask(ctx context.Context, task *ReplicationTask, localEvents []*history.HistoryEvent) ([]*history.HistoryEvent, error) {
 	// Check for conflicts
 	conflicts := r.detectConflicts(localEvents, task.Events)
@@ -195,14 +195,14 @@ func (r *Replicator) ApplyReplicationTask(ctx context.Context, task *Replication
 	return merged, nil
 }
 
-// Conflict represents a conflict between local and remote events
+// Conflict represents a conflict between local and remote events.
 type Conflict struct {
 	LocalEvent  *history.HistoryEvent
 	RemoteEvent *history.HistoryEvent
 	Type        ConflictType
 }
 
-// ConflictType represents the type of conflict
+// ConflictType represents the type of conflict.
 type ConflictType int
 
 const (
@@ -270,12 +270,12 @@ func (r *Replicator) mergeEvents(local, remote []*history.HistoryEvent) []*histo
 	return result
 }
 
-// ConflictHandler resolves conflicts between events
+// ConflictHandler resolves conflicts between events.
 type ConflictHandler interface {
 	Resolve(ctx context.Context, conflicts []Conflict) ([]*history.HistoryEvent, error)
 }
 
-// LastWriterWinsHandler resolves conflicts using last-writer-wins
+// LastWriterWinsHandler resolves conflicts using last-writer-wins.
 type LastWriterWinsHandler struct{}
 
 func (h *LastWriterWinsHandler) Resolve(ctx context.Context, conflicts []Conflict) ([]*history.HistoryEvent, error) {

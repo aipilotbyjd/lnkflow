@@ -17,7 +17,7 @@ type AIExecutor struct {
 	defaultClaude string
 }
 
-// AIConfig represents the configuration for an AI node
+// AIConfig represents the configuration for an AI node.
 type AIConfig struct {
 	// Provider selection
 	Provider string `json:"provider"` // openai, anthropic, custom
@@ -43,13 +43,13 @@ type AIConfig struct {
 	Endpoint string `json:"endpoint"`
 }
 
-// AIMessage represents a chat message
+// AIMessage represents a chat message.
 type AIMessage struct {
 	Role    string `json:"role"` // system, user, assistant
 	Content string `json:"content"`
 }
 
-// AIResponse represents the result of an AI call
+// AIResponse represents the result of an AI call.
 type AIResponse struct {
 	Content      string  `json:"content"`
 	Model        string  `json:"model"`
@@ -59,14 +59,14 @@ type AIResponse struct {
 	Timestamp    string  `json:"timestamp"`
 }
 
-// AIUsage represents token usage
+// AIUsage represents token usage.
 type AIUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// NewAIExecutor creates a new AI executor with connection pooling
+// NewAIExecutor creates a new AI executor with connection pooling.
 func NewAIExecutor() *AIExecutor {
 	// Configure transport with connection pooling for better performance
 	transport := &http.Transport{
@@ -86,13 +86,13 @@ func NewAIExecutor() *AIExecutor {
 	}
 }
 
-// WithOpenAIKey sets the default OpenAI API key
+// WithOpenAIKey sets the default OpenAI API key.
 func (e *AIExecutor) WithOpenAIKey(key string) *AIExecutor {
 	e.defaultOpenAI = key
 	return e
 }
 
-// WithAnthropicKey sets the default Anthropic API key
+// WithAnthropicKey sets the default Anthropic API key.
 func (e *AIExecutor) WithAnthropicKey(key string) *AIExecutor {
 	e.defaultClaude = key
 	return e

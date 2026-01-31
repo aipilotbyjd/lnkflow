@@ -15,12 +15,12 @@ import (
 	"time"
 )
 
-// WebhookExecutor handles webhook calls to external services
+// WebhookExecutor handles webhook calls to external services.
 type WebhookExecutor struct {
 	client *http.Client
 }
 
-// WebhookConfig represents the configuration for a webhook node
+// WebhookConfig represents the configuration for a webhook node.
 type WebhookConfig struct {
 	// Request configuration
 	URL      string            `json:"url"`
@@ -51,7 +51,7 @@ type WebhookConfig struct {
 	ResponseType string `json:"response_type"` // json, text, binary
 }
 
-// WebhookResponse represents the result of a webhook call
+// WebhookResponse represents the result of a webhook call.
 type WebhookResponse struct {
 	StatusCode    int               `json:"status_code"`
 	Status        string            `json:"status"`
@@ -63,7 +63,7 @@ type WebhookResponse struct {
 	Duration      string            `json:"duration"`
 }
 
-// NewWebhookExecutor creates a new webhook executor with connection pooling
+// NewWebhookExecutor creates a new webhook executor with connection pooling.
 func NewWebhookExecutor() *WebhookExecutor {
 	// Configure transport with connection pooling for better performance
 	transport := &http.Transport{

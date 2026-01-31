@@ -16,15 +16,15 @@ var (
 	ErrPathNotFound      = errors.New("path not found")
 )
 
-// Engine evaluates expressions against data
+// Engine evaluates expressions against data.
 type Engine struct {
 	functions map[string]Function
 }
 
-// Function represents a custom function
+// Function represents a custom function.
 type Function func(args ...interface{}) (interface{}, error)
 
-// NewEngine creates a new expression engine
+// NewEngine creates a new expression engine.
 func NewEngine() *Engine {
 	e := &Engine{
 		functions: make(map[string]Function),
@@ -33,12 +33,12 @@ func NewEngine() *Engine {
 	return e
 }
 
-// RegisterFunction registers a custom function
+// RegisterFunction registers a custom function.
 func (e *Engine) RegisterFunction(name string, fn Function) {
 	e.functions[name] = fn
 }
 
-// Evaluate evaluates an expression against data
+// Evaluate evaluates an expression against data.
 func (e *Engine) Evaluate(expr string, data interface{}) (interface{}, error) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
@@ -65,7 +65,7 @@ func (e *Engine) Evaluate(expr string, data interface{}) (interface{}, error) {
 	return e.evaluatePath(expr, data)
 }
 
-// EvaluateBool evaluates an expression and returns a boolean
+// EvaluateBool evaluates an expression and returns a boolean.
 func (e *Engine) EvaluateBool(expr string, data interface{}) (bool, error) {
 	result, err := e.Evaluate(expr, data)
 	if err != nil {
@@ -88,7 +88,7 @@ func (e *Engine) EvaluateBool(expr string, data interface{}) (bool, error) {
 	}
 }
 
-// evaluateJSONPath evaluates a JSONPath expression
+// evaluateJSONPath evaluates a JSONPath expression.
 func (e *Engine) evaluateJSONPath(expr string, data interface{}) (interface{}, error) {
 	// Remove leading $
 	path := strings.TrimPrefix(expr, "$")
@@ -96,12 +96,12 @@ func (e *Engine) evaluateJSONPath(expr string, data interface{}) (interface{}, e
 	return e.resolvePath(path, data)
 }
 
-// evaluatePath evaluates a simple path expression
+// evaluatePath evaluates a simple path expression.
 func (e *Engine) evaluatePath(expr string, data interface{}) (interface{}, error) {
 	return e.resolvePath("."+expr, data)
 }
 
-// resolvePath resolves a path in the data
+// resolvePath resolves a path in the data.
 func (e *Engine) resolvePath(path string, data interface{}) (interface{}, error) {
 	if path == "" || path == "." {
 		return data, nil
@@ -247,7 +247,7 @@ func (e *Engine) evaluateFilterCondition(condition string, data interface{}) (bo
 	return ok && b, nil
 }
 
-// evaluateTemplate evaluates a template expression
+// evaluateTemplate evaluates a template expression.
 func (e *Engine) evaluateTemplate(template string, data interface{}) (interface{}, error) {
 	result := template
 
@@ -275,7 +275,7 @@ func (e *Engine) evaluateTemplate(template string, data interface{}) (interface{
 	return result, nil
 }
 
-// evaluateComparison evaluates a comparison expression
+// evaluateComparison evaluates a comparison expression.
 func (e *Engine) evaluateComparison(expr string, data interface{}) (interface{}, error) {
 	// Handle AND/OR
 	if idx := strings.Index(strings.ToUpper(expr), " AND "); idx > 0 {

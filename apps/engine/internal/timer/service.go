@@ -14,7 +14,7 @@ var (
 	ErrTimerAlreadyExists = errors.New("timer already exists")
 )
 
-// TimerStatus represents the status of a timer
+// TimerStatus represents the status of a timer.
 type TimerStatus int32
 
 const (
@@ -23,7 +23,7 @@ const (
 	TimerStatusCanceled
 )
 
-// Timer represents a scheduled timer
+// Timer represents a scheduled timer.
 type Timer struct {
 	ID          string
 	ShardID     int32
@@ -38,10 +38,10 @@ type Timer struct {
 	FiredAt     time.Time
 }
 
-// TimerCallback is called when a timer fires
+// TimerCallback is called when a timer fires.
 type TimerCallback func(ctx context.Context, timer *Timer) error
 
-// Store defines the interface for timer persistence
+// Store defines the interface for timer persistence.
 type Store interface {
 	// CreateTimer creates a new timer
 	CreateTimer(ctx context.Context, timer *Timer) error
@@ -57,13 +57,13 @@ type Store interface {
 	GetTimersByExecution(ctx context.Context, namespaceID, workflowID, runID string) ([]*Timer, error)
 }
 
-// HistoryClient defines the interface for history service communication
+// HistoryClient defines the interface for history service communication.
 type HistoryClient interface {
 	// RecordTimerFired records that a timer has fired
 	RecordTimerFired(ctx context.Context, namespaceID, workflowID, runID, timerID string) error
 }
 
-// Config holds the configuration for the timer service
+// Config holds the configuration for the timer service.
 type Config struct {
 	NumShards      int32
 	ScanInterval   time.Duration
@@ -74,7 +74,7 @@ type Config struct {
 	Logger         *slog.Logger
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() Config {
 	return Config{
 		NumShards:      16,
@@ -86,7 +86,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Service is the timer service that handles scheduled timers
+// Service is the timer service that handles scheduled timers.
 type Service struct {
 	store         Store
 	historyClient HistoryClient
@@ -105,7 +105,7 @@ type Service struct {
 	wg      sync.WaitGroup
 }
 
-// NewService creates a new timer service
+// NewService creates a new timer service.
 func NewService(store Store, historyClient HistoryClient, config Config) *Service {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
@@ -133,7 +133,7 @@ func NewService(store Store, historyClient HistoryClient, config Config) *Servic
 	}
 }
 
-// AssignShards assigns shards to this instance for processing
+// AssignShards assigns shards to this instance for processing.
 func (s *Service) AssignShards(shards []int32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -141,7 +141,7 @@ func (s *Service) AssignShards(shards []int32) {
 	s.logger.Info("assigned shards", slog.Any("shards", shards))
 }
 
-// Start starts the timer service
+// Start starts the timer service.
 func (s *Service) Start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.running {
@@ -170,7 +170,7 @@ func (s *Service) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the timer service
+// Stop stops the timer service.
 func (s *Service) Stop(ctx context.Context) error {
 	s.mu.Lock()
 	if !s.running {
@@ -200,7 +200,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	return nil
 }
 
-// CreateTimer creates a new timer
+// CreateTimer creates a new timer.
 func (s *Service) CreateTimer(ctx context.Context, timer *Timer) error {
 	s.mu.RLock()
 	running := s.running
@@ -223,7 +223,7 @@ func (s *Service) CreateTimer(ctx context.Context, timer *Timer) error {
 	return s.store.CreateTimer(ctx, timer)
 }
 
-// CancelTimer cancels a timer
+// CancelTimer cancels a timer.
 func (s *Service) CancelTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) error {
 	s.mu.RLock()
 	running := s.running
@@ -253,12 +253,12 @@ func (s *Service) CancelTimer(ctx context.Context, namespaceID, workflowID, runI
 	return s.store.UpdateTimer(ctx, timer)
 }
 
-// GetTimer retrieves a timer
+// GetTimer retrieves a timer.
 func (s *Service) GetTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) (*Timer, error) {
 	return s.store.GetTimer(ctx, namespaceID, workflowID, runID, timerID)
 }
 
-// runScanner scans for due timers and sends them to the processor
+// runScanner scans for due timers and sends them to the processor.
 func (s *Service) runScanner(ctx context.Context) {
 	defer s.wg.Done()
 
@@ -322,7 +322,7 @@ func (s *Service) scanDueTimers(ctx context.Context) {
 	}
 }
 
-// runProcessor processes due timers
+// runProcessor processes due timers.
 func (s *Service) runProcessor(ctx context.Context, id int) {
 	defer s.wg.Done()
 
@@ -397,7 +397,7 @@ func (s *Service) processTimer(ctx context.Context, timer *Timer) {
 	)
 }
 
-// getShardID calculates the shard ID for a timer
+// getShardID calculates the shard ID for a timer.
 func (s *Service) getShardID(namespaceID, workflowID string) int32 {
 	data := namespaceID + "/" + workflowID
 	var hash uint32
@@ -407,7 +407,7 @@ func (s *Service) getShardID(namespaceID, workflowID string) int32 {
 	return int32(hash % uint32(s.config.NumShards))
 }
 
-// IsRunning returns whether the service is running
+// IsRunning returns whether the service is running.
 func (s *Service) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

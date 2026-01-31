@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-// SlackExecutor handles Slack message sending
+// SlackExecutor handles Slack message sending.
 type SlackExecutor struct {
 	client       *http.Client
 	defaultToken string
 }
 
-// SlackConfig represents the configuration for a Slack node
+// SlackConfig represents the configuration for a Slack node.
 type SlackConfig struct {
 	// Authentication
 	Token      string `json:"token"`       // Bot or User OAuth token
@@ -40,7 +40,7 @@ type SlackConfig struct {
 	UnfurlMedia bool   `json:"unfurl_media"` // Enable media unfurling
 }
 
-// SlackBlock represents a Block Kit block
+// SlackBlock represents a Block Kit block.
 type SlackBlock struct {
 	Type     string      `json:"type"`
 	Text     *TextObject `json:"text,omitempty"`
@@ -48,14 +48,14 @@ type SlackBlock struct {
 	Elements []Element   `json:"elements,omitempty"`
 }
 
-// TextObject represents a text object in Block Kit
+// TextObject represents a text object in Block Kit.
 type TextObject struct {
 	Type  string `json:"type"` // plain_text or mrkdwn
 	Text  string `json:"text"`
 	Emoji bool   `json:"emoji,omitempty"`
 }
 
-// Element represents a block element
+// Element represents a block element.
 type Element struct {
 	Type     string      `json:"type"`
 	Text     *TextObject `json:"text,omitempty"`
@@ -64,7 +64,7 @@ type Element struct {
 	Style    string      `json:"style,omitempty"`
 }
 
-// Attachment represents a legacy attachment
+// Attachment represents a legacy attachment.
 type Attachment struct {
 	Color      string `json:"color,omitempty"`
 	Fallback   string `json:"fallback,omitempty"`
@@ -78,7 +78,7 @@ type Attachment struct {
 	Timestamp  int64  `json:"ts,omitempty"`
 }
 
-// SlackResponse represents the Slack API response
+// SlackResponse represents the Slack API response.
 type SlackResponse struct {
 	OK        bool              `json:"ok"`
 	Channel   string            `json:"channel,omitempty"`
@@ -87,7 +87,7 @@ type SlackResponse struct {
 	Error     string            `json:"error,omitempty"`
 }
 
-// SlackMessageResp represents the message in the response
+// SlackMessageResp represents the message in the response.
 type SlackMessageResp struct {
 	Text      string `json:"text"`
 	Username  string `json:"username"`
@@ -96,7 +96,7 @@ type SlackMessageResp struct {
 	Timestamp string `json:"ts"`
 }
 
-// NewSlackExecutor creates a new Slack executor with connection pooling
+// NewSlackExecutor creates a new Slack executor with connection pooling.
 func NewSlackExecutor() *SlackExecutor {
 	// Configure transport with connection pooling for better performance
 	transport := &http.Transport{
@@ -116,7 +116,7 @@ func NewSlackExecutor() *SlackExecutor {
 	}
 }
 
-// WithDefaultToken sets the default token
+// WithDefaultToken sets the default token.
 func (e *SlackExecutor) WithDefaultToken(token string) *SlackExecutor {
 	e.defaultToken = token
 	return e

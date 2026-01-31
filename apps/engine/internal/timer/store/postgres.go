@@ -12,17 +12,17 @@ import (
 	"github.com/linkflow/engine/internal/timer"
 )
 
-// PostgresStore is a PostgreSQL implementation of the timer store
+// PostgresStore is a PostgreSQL implementation of the timer store.
 type PostgresStore struct {
 	pool *pgxpool.Pool
 }
 
-// NewPostgresStore creates a new PostgreSQL timer store
+// NewPostgresStore creates a new PostgreSQL timer store.
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{pool: pool}
 }
 
-// CreateTimer creates a new timer
+// CreateTimer creates a new timer.
 func (s *PostgresStore) CreateTimer(ctx context.Context, t *timer.Timer) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO timers (
@@ -46,7 +46,7 @@ func (s *PostgresStore) CreateTimer(ctx context.Context, t *timer.Timer) error {
 	return nil
 }
 
-// GetTimer retrieves a timer by ID
+// GetTimer retrieves a timer by ID.
 func (s *PostgresStore) GetTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) (*timer.Timer, error) {
 	var t timer.Timer
 	var status int16
@@ -80,7 +80,7 @@ func (s *PostgresStore) GetTimer(ctx context.Context, namespaceID, workflowID, r
 	return &t, nil
 }
 
-// UpdateTimer updates a timer
+// UpdateTimer updates a timer.
 func (s *PostgresStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE timers
@@ -105,7 +105,7 @@ func (s *PostgresStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 	return nil
 }
 
-// DeleteTimer deletes a timer
+// DeleteTimer deletes a timer.
 func (s *PostgresStore) DeleteTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM timers
@@ -117,7 +117,7 @@ func (s *PostgresStore) DeleteTimer(ctx context.Context, namespaceID, workflowID
 	return nil
 }
 
-// GetDueTimers returns all timers that are due for firing
+// GetDueTimers returns all timers that are due for firing.
 func (s *PostgresStore) GetDueTimers(ctx context.Context, shardID int32, fireTime time.Time, limit int) ([]*timer.Timer, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT shard_id, namespace_id, workflow_id, run_id, timer_id,
@@ -157,7 +157,7 @@ func (s *PostgresStore) GetDueTimers(ctx context.Context, shardID int32, fireTim
 	return timers, rows.Err()
 }
 
-// GetTimersByExecution returns all timers for an execution
+// GetTimersByExecution returns all timers for an execution.
 func (s *PostgresStore) GetTimersByExecution(ctx context.Context, namespaceID, workflowID, runID string) ([]*timer.Timer, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT shard_id, namespace_id, workflow_id, run_id, timer_id,
@@ -196,7 +196,7 @@ func (s *PostgresStore) GetTimersByExecution(ctx context.Context, namespaceID, w
 	return timers, rows.Err()
 }
 
-// CleanupFiredTimers removes fired timers older than the specified retention period
+// CleanupFiredTimers removes fired timers older than the specified retention period.
 func (s *PostgresStore) CleanupFiredTimers(ctx context.Context, olderThan time.Time) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `
 		DELETE FROM timers

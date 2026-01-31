@@ -25,7 +25,7 @@ var (
 	ErrSignatureInvalid = errors.New("signature invalid")
 )
 
-// Claims represents JWT claims
+// Claims represents JWT claims.
 type Claims struct {
 	Subject   string   `json:"sub"`
 	Issuer    string   `json:"iss"`
@@ -41,12 +41,12 @@ type Claims struct {
 	Scopes      []string `json:"scopes,omitempty"`
 }
 
-// IsExpired checks if the token is expired
+// IsExpired checks if the token is expired.
 func (c *Claims) IsExpired() bool {
 	return time.Now().Unix() > c.ExpiresAt
 }
 
-// HasScope checks if the token has a specific scope
+// HasScope checks if the token has a specific scope.
 func (c *Claims) HasScope(scope string) bool {
 	for _, s := range c.Scopes {
 		if s == scope {
@@ -56,7 +56,7 @@ func (c *Claims) HasScope(scope string) bool {
 	return false
 }
 
-// HasRole checks if the token has a specific role
+// HasRole checks if the token has a specific role.
 func (c *Claims) HasRole(role string) bool {
 	for _, r := range c.Roles {
 		if r == role {
@@ -66,7 +66,7 @@ func (c *Claims) HasRole(role string) bool {
 	return false
 }
 
-// JWTValidator validates JWT tokens
+// JWTValidator validates JWT tokens.
 type JWTValidator struct {
 	issuer    string
 	audience  string
@@ -79,7 +79,7 @@ type JWTValidator struct {
 	jwksMu    sync.RWMutex
 }
 
-// JWTConfig holds JWT validator configuration
+// JWTConfig holds JWT validator configuration.
 type JWTConfig struct {
 	Issuer    string
 	Audience  string
@@ -88,7 +88,7 @@ type JWTConfig struct {
 	JWKSURL   string // For dynamic key fetching
 }
 
-// NewJWTValidator creates a new JWT validator
+// NewJWTValidator creates a new JWT validator.
 func NewJWTValidator(config JWTConfig) (*JWTValidator, error) {
 	v := &JWTValidator{
 		issuer:    config.Issuer,
@@ -123,8 +123,7 @@ func NewJWTValidator(config JWTConfig) (*JWTValidator, error) {
 	return v, nil
 }
 
-// Validate validates a JWT token and returns claims
-// Implements full signature verification for HMAC-SHA256 (HS256)
+// Implements full signature verification for HMAC-SHA256 (HS256).
 func (v *JWTValidator) Validate(ctx context.Context, token string) (*Claims, error) {
 	// Parse token parts (header.payload.signature)
 	parts := strings.Split(token, ".")
@@ -188,7 +187,7 @@ func (v *JWTValidator) Validate(ctx context.Context, token string) (*Claims, err
 	return &claims, nil
 }
 
-// verifySignature verifies the JWT signature based on the algorithm
+// verifySignature verifies the JWT signature based on the algorithm.
 func (v *JWTValidator) verifySignature(alg, signatureInput, signaturePart string) error {
 	// Decode the provided signature
 	providedSig, err := base64URLDecode(signaturePart)
@@ -225,16 +224,14 @@ func (v *JWTValidator) verifySignature(alg, signatureInput, signaturePart string
 	return nil
 }
 
-// computeHMAC256 computes HMAC-SHA256
+// computeHMAC256 computes HMAC-SHA256.
 func (v *JWTValidator) computeHMAC256(data []byte) []byte {
 	h := hmac.New(sha256.New, v.secretKey)
 	h.Write(data)
 	return h.Sum(nil)
 }
 
-// ExtractToken extracts JWT from request
-// SECURITY: Only extracts from Authorization header and secure cookies
-// Query parameter extraction has been removed as it's a security risk
+// Query parameter extraction has been removed as it's a security risk.
 func ExtractToken(r *http.Request) (string, error) {
 	// Check Authorization header (preferred method)
 	auth := r.Header.Get("Authorization")
@@ -268,7 +265,7 @@ func ExtractToken(r *http.Request) (string, error) {
 	return "", errors.New("no token found")
 }
 
-// APIKeyValidator validates API keys
+// APIKeyValidator validates API keys.
 type APIKeyValidator struct {
 	keys   map[string]*APIKey
 	keysMu sync.RWMutex
@@ -276,7 +273,7 @@ type APIKeyValidator struct {
 	loader APIKeyLoader
 }
 
-// APIKey represents an API key
+// APIKey represents an API key.
 type APIKey struct {
 	ID          string
 	Key         string
@@ -287,12 +284,12 @@ type APIKey struct {
 	CreatedAt   time.Time
 }
 
-// APIKeyLoader loads API keys
+// APIKeyLoader loads API keys.
 type APIKeyLoader interface {
 	Load(ctx context.Context, keyHash string) (*APIKey, error)
 }
 
-// NewAPIKeyValidator creates a new API key validator
+// NewAPIKeyValidator creates a new API key validator.
 func NewAPIKeyValidator(loader APIKeyLoader) *APIKeyValidator {
 	return &APIKeyValidator{
 		keys:   make(map[string]*APIKey),
@@ -300,7 +297,7 @@ func NewAPIKeyValidator(loader APIKeyLoader) *APIKeyValidator {
 	}
 }
 
-// Validate validates an API key
+// Validate validates an API key.
 func (v *APIKeyValidator) Validate(ctx context.Context, key string) (*APIKey, error) {
 	// Check cache
 	v.keysMu.RLock()
@@ -335,7 +332,7 @@ func (v *APIKeyValidator) Validate(ctx context.Context, key string) (*APIKey, er
 	return apiKey, nil
 }
 
-// ExtractAPIKey extracts API key from request
+// ExtractAPIKey extracts API key from request.
 func ExtractAPIKey(r *http.Request) (string, error) {
 	// Check header
 	key := r.Header.Get("X-API-Key")
@@ -347,7 +344,7 @@ func ExtractAPIKey(r *http.Request) (string, error) {
 	auth := r.Header.Get("Authorization")
 	if auth != "" {
 		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) == 2 && strings.ToLower(parts[0]) == "apikey" {
+		if len(parts) == 2 && strings.EqualFold(parts[0], "apikey") {
 			return parts[1], nil
 		}
 	}
@@ -357,8 +354,7 @@ func ExtractAPIKey(r *http.Request) (string, error) {
 
 // Helper functions
 
-// base64URLDecode decodes base64url-encoded data (RFC 4648)
-// This properly handles the URL-safe alphabet and missing padding
+// This properly handles the URL-safe alphabet and missing padding.
 func base64URLDecode(s string) ([]byte, error) {
 	// base64.RawURLEncoding handles URL-safe alphabet without padding
 	// We need to handle cases where padding might be present
@@ -375,8 +371,7 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
-// hashKey securely hashes an API key using SHA256
-// The hash is used for storage and comparison to avoid storing plaintext keys
+// The hash is used for storage and comparison to avoid storing plaintext keys.
 func hashKey(key string) string {
 	hash := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(hash[:])

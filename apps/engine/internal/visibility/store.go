@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-// MemoryStore is an in-memory implementation of the visibility store
+// MemoryStore is an in-memory implementation of the visibility store.
 type MemoryStore struct {
 	executions map[string]*ExecutionInfo
 	mu         sync.RWMutex
 }
 
-// NewMemoryStore creates a new in-memory visibility store
+// NewMemoryStore creates a new in-memory visibility store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		executions: make(map[string]*ExecutionInfo),
@@ -27,17 +27,17 @@ func (s *MemoryStore) makeKey(namespaceID, workflowID, runID string) string {
 	return namespaceID + "/" + workflowID + "/" + runID
 }
 
-// RecordExecutionStarted records a started execution
+// RecordExecutionStarted records a started execution.
 func (s *MemoryStore) RecordExecutionStarted(ctx context.Context, info *ExecutionInfo) error {
 	return s.UpsertExecution(ctx, info)
 }
 
-// RecordExecutionClosed records a closed execution
+// RecordExecutionClosed records a closed execution.
 func (s *MemoryStore) RecordExecutionClosed(ctx context.Context, info *ExecutionInfo) error {
 	return s.UpsertExecution(ctx, info)
 }
 
-// UpsertExecution upserts an execution record
+// UpsertExecution upserts an execution record.
 func (s *MemoryStore) UpsertExecution(ctx context.Context, info *ExecutionInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -57,7 +57,7 @@ func (s *MemoryStore) UpsertExecution(ctx context.Context, info *ExecutionInfo) 
 	return nil
 }
 
-// GetExecution retrieves an execution
+// GetExecution retrieves an execution.
 func (s *MemoryStore) GetExecution(ctx context.Context, namespaceID, workflowID, runID string) (*ExecutionInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -73,7 +73,7 @@ func (s *MemoryStore) GetExecution(ctx context.Context, namespaceID, workflowID,
 	return &clone, nil
 }
 
-// ListExecutions lists executions matching the criteria
+// ListExecutions lists executions matching the criteria.
 func (s *MemoryStore) ListExecutions(ctx context.Context, req *ListRequest) (*ListResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -138,7 +138,7 @@ func (s *MemoryStore) ListExecutions(ctx context.Context, req *ListRequest) (*Li
 	}, nil
 }
 
-// CountExecutions counts executions matching the criteria
+// CountExecutions counts executions matching the criteria.
 func (s *MemoryStore) CountExecutions(ctx context.Context, req *CountRequest) (*CountResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -161,7 +161,7 @@ func (s *MemoryStore) CountExecutions(ctx context.Context, req *CountRequest) (*
 	return &CountResponse{Count: count}, nil
 }
 
-// DeleteExecution deletes an execution record
+// DeleteExecution deletes an execution record.
 func (s *MemoryStore) DeleteExecution(ctx context.Context, namespaceID, workflowID, runID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -298,14 +298,14 @@ func (s *MemoryStore) sortExecutions(executions []*ExecutionInfo, query *Query) 
 	})
 }
 
-// Clear removes all executions (for testing)
+// Clear removes all executions (for testing).
 func (s *MemoryStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.executions = make(map[string]*ExecutionInfo)
 }
 
-// Count returns the number of executions
+// Count returns the number of executions.
 func (s *MemoryStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

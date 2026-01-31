@@ -13,7 +13,7 @@ var (
 	ErrRoleNotFound = errors.New("role not found")
 )
 
-// Permission represents a permission
+// Permission represents a permission.
 type Permission struct {
 	Resource string // e.g., "workflows", "executions"
 	Action   string // e.g., "read", "write", "delete", "execute"
@@ -23,14 +23,14 @@ func (p Permission) String() string {
 	return p.Resource + ":" + p.Action
 }
 
-// Role represents a role with permissions
+// Role represents a role with permissions.
 type Role struct {
 	Name        string
 	Description string
 	Permissions []Permission
 }
 
-// Subject represents a subject for authorization
+// Subject represents a subject for authorization.
 type Subject struct {
 	UserID      string
 	WorkspaceID string
@@ -38,7 +38,7 @@ type Subject struct {
 	ExtraAttrs  map[string]string
 }
 
-// RBACAuthorizer implements role-based access control
+// RBACAuthorizer implements role-based access control.
 type RBACAuthorizer struct {
 	roles   map[string]*Role
 	rolesMu sync.RWMutex
@@ -47,7 +47,7 @@ type RBACAuthorizer struct {
 	inheritance map[string][]string
 }
 
-// NewRBACAuthorizer creates a new RBAC authorizer
+// NewRBACAuthorizer creates a new RBAC authorizer.
 func NewRBACAuthorizer() *RBACAuthorizer {
 	authorizer := &RBACAuthorizer{
 		roles:       make(map[string]*Role),
@@ -125,14 +125,14 @@ func (a *RBACAuthorizer) registerDefaultRoles() {
 	a.inheritance["editor"] = []string{"viewer"}
 }
 
-// RegisterRole registers a role
+// RegisterRole registers a role.
 func (a *RBACAuthorizer) RegisterRole(role *Role) {
 	a.rolesMu.Lock()
 	defer a.rolesMu.Unlock()
 	a.roles[role.Name] = role
 }
 
-// Authorize checks if subject has permission
+// Authorize checks if subject has permission.
 func (a *RBACAuthorizer) Authorize(ctx context.Context, subject *Subject, resource, action string) error {
 	if subject == nil || len(subject.Roles) == 0 {
 		return ErrAccessDenied
@@ -199,7 +199,7 @@ func (a *RBACAuthorizer) matchPermission(perm Permission, resource, action strin
 	return true
 }
 
-// GetRole returns a role by name
+// GetRole returns a role by name.
 func (a *RBACAuthorizer) GetRole(name string) (*Role, error) {
 	a.rolesMu.RLock()
 	defer a.rolesMu.RUnlock()
@@ -211,7 +211,7 @@ func (a *RBACAuthorizer) GetRole(name string) (*Role, error) {
 	return role, nil
 }
 
-// ListRoles returns all roles
+// ListRoles returns all roles.
 func (a *RBACAuthorizer) ListRoles() []*Role {
 	a.rolesMu.RLock()
 	defer a.rolesMu.RUnlock()
@@ -223,13 +223,13 @@ func (a *RBACAuthorizer) ListRoles() []*Role {
 	return roles
 }
 
-// ABACAuthorizer implements attribute-based access control
+// ABACAuthorizer implements attribute-based access control.
 type ABACAuthorizer struct {
 	policies []*Policy
 	mu       sync.RWMutex
 }
 
-// Policy represents an ABAC policy
+// Policy represents an ABAC policy.
 type Policy struct {
 	Name        string
 	Description string
@@ -240,7 +240,7 @@ type Policy struct {
 	Conditions  []Condition
 }
 
-// Effect is the policy effect
+// Effect is the policy effect.
 type Effect string
 
 const (
@@ -248,41 +248,41 @@ const (
 	EffectDeny  Effect = "deny"
 )
 
-// SubjectMatcher matches subjects
+// SubjectMatcher matches subjects.
 type SubjectMatcher struct {
 	Type  string // "user", "role", "group"
 	Value string
 }
 
-// ResourceMatcher matches resources
+// ResourceMatcher matches resources.
 type ResourceMatcher struct {
 	Type  string // "workflow", "execution", "credential"
 	ID    string // Specific ID or "*"
 	Owner string // Owner constraint
 }
 
-// Condition represents a policy condition
+// Condition represents a policy condition.
 type Condition struct {
 	Attribute string
 	Operator  string // "eq", "ne", "in", "not_in", "gt", "lt"
 	Value     interface{}
 }
 
-// NewABACAuthorizer creates a new ABAC authorizer
+// NewABACAuthorizer creates a new ABAC authorizer.
 func NewABACAuthorizer() *ABACAuthorizer {
 	return &ABACAuthorizer{
 		policies: make([]*Policy, 0),
 	}
 }
 
-// AddPolicy adds a policy
+// AddPolicy adds a policy.
 func (a *ABACAuthorizer) AddPolicy(policy *Policy) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.policies = append(a.policies, policy)
 }
 
-// Authorize checks if request is authorized
+// Authorize checks if request is authorized.
 func (a *ABACAuthorizer) Authorize(ctx context.Context, req *AuthzRequest) error {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -300,7 +300,7 @@ func (a *ABACAuthorizer) Authorize(ctx context.Context, req *AuthzRequest) error
 	return ErrAccessDenied // Default deny
 }
 
-// AuthzRequest represents an authorization request
+// AuthzRequest represents an authorization request.
 type AuthzRequest struct {
 	Subject    *Subject
 	Resource   string
@@ -411,7 +411,7 @@ func (a *ABACAuthorizer) evaluateCondition(cond Condition, req *AuthzRequest) bo
 	}
 }
 
-// ResourceKey generates a resource key for permission checking
+// ResourceKey generates a resource key for permission checking.
 func ResourceKey(resourceType, resourceID string) string {
 	if resourceID == "" {
 		return resourceType
@@ -419,7 +419,7 @@ func ResourceKey(resourceType, resourceID string) string {
 	return resourceType + "/" + resourceID
 }
 
-// ParseResourceKey parses a resource key
+// ParseResourceKey parses a resource key.
 func ParseResourceKey(key string) (resourceType, resourceID string) {
 	parts := strings.SplitN(key, "/", 2)
 	resourceType = parts[0]

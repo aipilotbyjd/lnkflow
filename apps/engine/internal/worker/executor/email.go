@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-// EmailExecutor handles email sending via SMTP
+// EmailExecutor handles email sending via SMTP.
 type EmailExecutor struct {
 	defaultHost string
 	defaultPort int
 	defaultFrom string
 }
 
-// EmailConfig represents the configuration for an email node
+// EmailConfig represents the configuration for an email node.
 type EmailConfig struct {
 	// SMTP Configuration
 	Host     string `json:"host"`
@@ -43,7 +43,7 @@ type EmailConfig struct {
 	TemplateVars map[string]interface{} `json:"template_vars"`
 }
 
-// EmailResponse represents the result of an email send operation
+// EmailResponse represents the result of an email send operation.
 type EmailResponse struct {
 	Success    bool     `json:"success"`
 	MessageID  string   `json:"message_id"`
@@ -51,7 +51,7 @@ type EmailResponse struct {
 	Timestamp  string   `json:"timestamp"`
 }
 
-// NewEmailExecutor creates a new email executor
+// NewEmailExecutor creates a new email executor.
 func NewEmailExecutor() *EmailExecutor {
 	return &EmailExecutor{
 		defaultHost: "localhost",
@@ -59,7 +59,7 @@ func NewEmailExecutor() *EmailExecutor {
 	}
 }
 
-// WithDefaults sets default SMTP configuration
+// WithDefaults sets default SMTP configuration.
 func (e *EmailExecutor) WithDefaults(host string, port int, from string) *EmailExecutor {
 	e.defaultHost = host
 	e.defaultPort = port

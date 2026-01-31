@@ -8,18 +8,18 @@ import (
 )
 
 type Limiter struct {
-	limiters    map[string]*rate.Limiter
-	global      *rate.Limiter
-	mu          sync.RWMutex
-	defaultRate rate.Limit
+	limiters     map[string]*rate.Limiter
+	global       *rate.Limiter
+	mu           sync.RWMutex
+	defaultRate  rate.Limit
 	defaultBurst int
 }
 
 type Config struct {
-	GlobalRPS       float64
-	GlobalBurst     int
-	NamespaceRPS    float64
-	NamespaceBurst  int
+	GlobalRPS      float64
+	GlobalBurst    int
+	NamespaceRPS   float64
+	NamespaceBurst int
 }
 
 func DefaultConfig() Config {

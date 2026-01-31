@@ -18,12 +18,12 @@ var (
 	ErrExecutionTimeout = errors.New("execution timed out")
 )
 
-// NodeExecutor is the interface for node execution
+// NodeExecutor is the interface for node execution.
 type NodeExecutor interface {
 	Execute(ctx context.Context, nodeType string, input json.RawMessage, config json.RawMessage) (*NodeResult, error)
 }
 
-// Scheduler schedules and coordinates node execution
+// Scheduler schedules and coordinates node execution.
 type Scheduler struct {
 	dag         *graph.DAG
 	executor    NodeExecutor
@@ -39,13 +39,13 @@ type Scheduler struct {
 	wg sync.WaitGroup
 }
 
-// Config holds scheduler configuration
+// Config holds scheduler configuration.
 type Config struct {
 	Concurrency int
 	Timeout     time.Duration
 }
 
-// DefaultConfig returns default scheduler config
+// DefaultConfig returns default scheduler config.
 func DefaultConfig() Config {
 	return Config{
 		Concurrency: 10,
@@ -53,7 +53,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewScheduler creates a new scheduler
+// NewScheduler creates a new scheduler.
 func NewScheduler(dag *graph.DAG, executor NodeExecutor, config Config, logger *slog.Logger) *Scheduler {
 	if logger == nil {
 		logger = slog.Default()
@@ -71,7 +71,7 @@ func NewScheduler(dag *graph.DAG, executor NodeExecutor, config Config, logger *
 	}
 }
 
-// ExecutionState tracks the state of an execution
+// ExecutionState tracks the state of an execution.
 type ExecutionState struct {
 	ExecutionID string
 	Status      ExecutionStatus
@@ -88,7 +88,7 @@ type ExecutionState struct {
 	mu sync.RWMutex
 }
 
-// ExecutionStatus represents execution status
+// ExecutionStatus represents execution status.
 type ExecutionStatus int
 
 const (
@@ -100,7 +100,7 @@ const (
 	ExecutionStatusTimedOut
 )
 
-// NodeState represents node state
+// NodeState represents node state.
 type NodeState struct {
 	NodeID      string
 	Status      NodeStatus
@@ -110,7 +110,7 @@ type NodeState struct {
 	Error       *NodeError
 }
 
-// NodeStatus represents node status
+// NodeStatus represents node status.
 type NodeStatus int
 
 const (
@@ -121,7 +121,7 @@ const (
 	NodeStatusSkipped
 )
 
-// NodeTask represents a task to execute a node
+// NodeTask represents a task to execute a node.
 type NodeTask struct {
 	NodeID   string
 	NodeType string
@@ -130,7 +130,7 @@ type NodeTask struct {
 	Attempt  int
 }
 
-// NodeResult represents the result of node execution
+// NodeResult represents the result of node execution.
 type NodeResult struct {
 	NodeID  string
 	Output  json.RawMessage
@@ -138,7 +138,7 @@ type NodeResult struct {
 	Metrics NodeMetrics
 }
 
-// NodeError represents a node execution error
+// NodeError represents a node execution error.
 type NodeError struct {
 	NodeID    string
 	Error     error
@@ -146,21 +146,21 @@ type NodeError struct {
 	Retryable bool
 }
 
-// LogEntry represents a log entry
+// LogEntry represents a log entry.
 type LogEntry struct {
 	Timestamp time.Time
 	Level     string
 	Message   string
 }
 
-// NodeMetrics holds node execution metrics
+// NodeMetrics holds node execution metrics.
 type NodeMetrics struct {
 	Duration   time.Duration
 	MemoryPeak int64
 	CPUTime    time.Duration
 }
 
-// ExecutionResult is the final result of execution
+// ExecutionResult is the final result of execution.
 type ExecutionResult struct {
 	ExecutionID string
 	Status      ExecutionStatus
@@ -169,7 +169,7 @@ type ExecutionResult struct {
 	NodeMetrics map[string]NodeMetrics
 }
 
-// Execute executes the workflow
+// Execute executes the workflow.
 func (s *Scheduler) Execute(ctx context.Context, executionID string, input json.RawMessage) (*ExecutionResult, error) {
 	// Apply timeout
 	if s.timeout > 0 {
@@ -374,7 +374,7 @@ func (s *Scheduler) handleNodeFailed(nodeErr *NodeError) error {
 		slog.String("error", nodeErr.Error.Error()),
 	)
 
-	return fmt.Errorf("%w: %s: %v", ErrNodeFailed, nodeErr.NodeID, nodeErr.Error)
+	return fmt.Errorf("%w: %s: %w", ErrNodeFailed, nodeErr.NodeID, nodeErr.Error)
 }
 
 func (s *Scheduler) scheduleRetry(ctx context.Context, nodeErr *NodeError) {

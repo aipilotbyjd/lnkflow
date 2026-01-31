@@ -6,20 +6,20 @@ import (
 	"sync"
 )
 
-// Registry manages all available node executors
+// Registry manages all available node executors.
 type Registry struct {
 	executors map[string]Executor
 	mu        sync.RWMutex
 }
 
-// NewRegistry creates a new executor registry
+// NewRegistry creates a new executor registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		executors: make(map[string]Executor),
 	}
 }
 
-// Register registers an executor for a node type
+// Register registers an executor for a node type.
 func (r *Registry) Register(executor Executor) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -33,14 +33,14 @@ func (r *Registry) Register(executor Executor) error {
 	return nil
 }
 
-// MustRegister registers an executor, panicking on error
+// MustRegister registers an executor, panicking on error.
 func (r *Registry) MustRegister(executor Executor) {
 	if err := r.Register(executor); err != nil {
 		panic(err)
 	}
 }
 
-// Get retrieves an executor by node type
+// Get retrieves an executor by node type.
 func (r *Registry) Get(nodeType string) (Executor, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -48,7 +48,7 @@ func (r *Registry) Get(nodeType string) (Executor, bool) {
 	return executor, exists
 }
 
-// Execute executes a request using the appropriate executor
+// Execute executes a request using the appropriate executor.
 func (r *Registry) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {
 	executor, exists := r.Get(req.NodeType)
 	if !exists {
@@ -63,7 +63,7 @@ func (r *Registry) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteRe
 	return executor.Execute(ctx, req)
 }
 
-// NodeTypes returns all registered node types
+// NodeTypes returns all registered node types.
 func (r *Registry) NodeTypes() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -75,17 +75,17 @@ func (r *Registry) NodeTypes() []string {
 	return types
 }
 
-// Count returns the number of registered executors
+// Count returns the number of registered executors.
 func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.executors)
 }
 
-// DefaultRegistry is the global default registry
+// DefaultRegistry is the global default registry.
 var DefaultRegistry = NewRegistry()
 
-// DefaultRegistryInit initializes the default registry with all built-in executors
+// DefaultRegistryInit initializes the default registry with all built-in executors.
 func DefaultRegistryInit() *Registry {
 	registry := NewRegistry()
 
@@ -108,10 +108,10 @@ func DefaultRegistryInit() *Registry {
 	return registry
 }
 
-// TransformExecutor handles data transformation nodes
+// TransformExecutor handles data transformation nodes.
 type TransformExecutor struct{}
 
-// TransformConfig represents the configuration for a transform node
+// TransformConfig represents the configuration for a transform node.
 type TransformConfig struct {
 	// Transformation type
 	Type string `json:"type"` // map, filter, reduce, pick, omit, merge, flatten, group
@@ -129,7 +129,7 @@ type TransformConfig struct {
 	Data interface{} `json:"data"`
 }
 
-// NewTransformExecutor creates a new transform executor
+// NewTransformExecutor creates a new transform executor.
 func NewTransformExecutor() *TransformExecutor {
 	return &TransformExecutor{}
 }
@@ -149,10 +149,10 @@ func (e *TransformExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*
 	}, nil
 }
 
-// LoopExecutor handles loop/iteration nodes
+// LoopExecutor handles loop/iteration nodes.
 type LoopExecutor struct{}
 
-// LoopConfig represents the configuration for a loop node
+// LoopConfig represents the configuration for a loop node.
 type LoopConfig struct {
 	// Loop type
 	Type string `json:"type"` // forEach, while, repeat, parallel
@@ -175,7 +175,7 @@ type LoopConfig struct {
 	Actions []string `json:"actions"`
 }
 
-// NewLoopExecutor creates a new loop executor
+// NewLoopExecutor creates a new loop executor.
 func NewLoopExecutor() *LoopExecutor {
 	return &LoopExecutor{}
 }
