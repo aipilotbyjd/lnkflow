@@ -4,7 +4,7 @@
 # ============================================
 # Base Stage - Common dependencies
 # ============================================
-FROM php:8.3-fpm-alpine AS base
+FROM php:8.4-fpm-alpine AS base
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -35,7 +35,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     opcache
 
 # Install Redis extension
-RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS re2c \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apk del .build-deps

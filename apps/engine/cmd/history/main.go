@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,6 +22,7 @@ import (
 func main() {
 	var (
 		port       = flag.Int("port", 7234, "gRPC server port")
+		httpPort   = flag.Int("http-port", 8080, "HTTP server port")
 		shardCount = flag.Int("shard-count", 16, "Number of shards")
 		dbURL      = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
 	)
@@ -74,6 +76,26 @@ func main() {
 	go func() {
 		if err := server.Serve(lis); err != nil {
 			logger.Error("server failed", slog.String("error", err.Error()))
+			cancel()
+		}
+	}()
+
+	// Start HTTP Server for Health Checks
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+
+		httpServer := &http.Server{
+			Addr:    fmt.Sprintf(":%d", *httpPort),
+			Handler: mux,
+		}
+
+		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("http server failed", slog.String("error", err.Error()))
 			cancel()
 		}
 	}()

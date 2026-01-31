@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +16,7 @@ import (
 func main() {
 	var (
 		port         = flag.Int("port", 7239, "Edge proxy port")
+		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
 		upstreamAddr = flag.String("upstream-addr", "localhost:7233", "Upstream frontend address")
 	)
 	flag.Parse()
@@ -36,6 +38,26 @@ func main() {
 		sig := <-sigCh
 		logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
 		cancel()
+	}()
+
+	// Start HTTP Server for Health Checks
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+
+		httpServer := &http.Server{
+			Addr:    fmt.Sprintf(":%d", *httpPort),
+			Handler: mux,
+		}
+
+		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("http server failed", slog.String("error", err.Error()))
+			cancel()
+		}
 	}()
 
 	logger.Info("edge proxy started", slog.Int("port", *port), slog.String("upstream_addr", *upstreamAddr))

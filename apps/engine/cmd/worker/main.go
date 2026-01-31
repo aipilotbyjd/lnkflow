@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 func main() {
 	var (
 		port         = flag.Int("port", 7236, "Worker service port")
+		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
 		taskQueue    = flag.String("task-queue", "default", "Task queue name")
 		matchingAddr = flag.String("matching-addr", "localhost:7235", "Matching service address")
 		numWorkers   = flag.Int("num-workers", 4, "Number of worker goroutines")
@@ -58,6 +60,26 @@ func main() {
 		logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
 		cancel()
 		_ = svc.Stop()
+	}()
+
+	// Start HTTP Server for Health Checks
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+
+		httpServer := &http.Server{
+			Addr:    fmt.Sprintf(":%d", *httpPort),
+			Handler: mux,
+		}
+
+		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("http server failed", slog.String("error", err.Error()))
+			cancel()
+		}
 	}()
 
 	logger.Info("worker pool started",
