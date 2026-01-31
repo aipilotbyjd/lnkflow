@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - linkflow-net
+
+  engine:
+    build: 
+      context: ./apps/engine
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - POSTGRES_HOST=postgres
+      - API_ENDPOINT=http://api:8000
+    depends_on:
+      - postgres
+    networks:
+      - linkflow-net
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: linkflow
+      POSTGRES_PASSWORD: secret_password
+      POSTGRES_DB: linkflow_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/init:/docker-entrypoint-initdb.d
+    networks:
+      - linkflow-net
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - linkflow-net
+
+networks:
+  linkflow-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
