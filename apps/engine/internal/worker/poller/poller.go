@@ -29,10 +29,14 @@ type TaskResult struct {
 
 type TaskHandler func(task *Task) (*TaskResult, error)
 
+type MatchingClient interface {
+	PollTask(ctx context.Context, taskQueue string, identity string) (*Task, error)
+}
+
 type Poller struct {
+	client       MatchingClient
 	taskQueue    string
 	identity     string
-	matchingAddr string
 	pollInterval time.Duration
 	logger       *slog.Logger
 
@@ -44,9 +48,9 @@ type Poller struct {
 }
 
 type Config struct {
+	Client       MatchingClient
 	TaskQueue    string
 	Identity     string
-	MatchingAddr string
 	PollInterval time.Duration
 	Logger       *slog.Logger
 }
@@ -60,9 +64,9 @@ func New(cfg Config) *Poller {
 	}
 
 	return &Poller{
+		client:       cfg.Client,
 		taskQueue:    cfg.TaskQueue,
 		identity:     cfg.Identity,
-		matchingAddr: cfg.MatchingAddr,
 		pollInterval: cfg.PollInterval,
 		logger:       cfg.Logger,
 		stopCh:       make(chan struct{}),
@@ -149,12 +153,12 @@ func (p *Poller) pollLoop(ctx context.Context) {
 }
 
 func (p *Poller) Poll(ctx context.Context) (*Task, error) {
-	p.logger.Debug("polling for tasks",
-		slog.String("task_queue", p.taskQueue),
-		slog.String("matching_addr", p.matchingAddr),
-	)
-
-	return nil, nil
+	/*
+		p.logger.Debug("polling for tasks",
+			slog.String("task_queue", p.taskQueue),
+		)
+	*/
+	return p.client.PollTask(ctx, p.taskQueue, p.identity)
 }
 
 func (p *Poller) IsRunning() bool {

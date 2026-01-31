@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	"github.com/linkflow/engine/internal/history"
 	"github.com/linkflow/engine/internal/history/shard"
 	"github.com/linkflow/engine/internal/version"
@@ -44,6 +45,7 @@ func main() {
 	)
 
 	server := grpc.NewServer()
+	historyv1.RegisterHistoryServiceServer(server, history.NewGRPCServer(svc))
 	reflection.Register(server)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))

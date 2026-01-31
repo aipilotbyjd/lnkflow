@@ -11,10 +11,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/redis/go-redis/v9"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/linkflow/engine/internal/frontend"
+	"github.com/linkflow/engine/internal/frontend/adapter"
 	"github.com/linkflow/engine/internal/frontend/interceptor"
 	"github.com/linkflow/engine/internal/version"
 )
@@ -35,13 +38,56 @@ func main() {
 	_ = *historyAddr
 	_ = *matchingAddr
 
+	// Initialize Redis
+	redisURL := os.Getenv("REDIS_URL")
+	var redisOpt *redis.Options
+	if redisURL != "" {
+		var err error
+		redisOpt, err = redis.ParseURL(redisURL)
+		if err != nil {
+			logger.Error("failed to parse REDIS_URL", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	} else {
+		redisOpt = &redis.Options{
+			Addr: "localhost:6379",
+		}
+	}
+	rdb := redis.NewClient(redisOpt)
+
+	// Initialize gRPC Connections
+	historyConn, err := grpc.Dial(*historyAddr, grpc.WithInsecure())
+	if err != nil {
+		logger.Error("failed to connect to history service", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer historyConn.Close()
+
+	matchingConn, err := grpc.Dial(*matchingAddr, grpc.WithInsecure())
+	if err != nil {
+		logger.Error("failed to connect to matching service", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer matchingConn.Close()
+
+	// Initialize Real Clients
+	historyClient := adapter.NewHistoryClient(historyConn)
+	matchingClient := adapter.NewMatchingClient(matchingConn)
+
 	loggingInterceptor := interceptor.NewLoggingInterceptor(logger)
 	authInterceptor := interceptor.NewAuthInterceptor(interceptor.AuthConfig{
 		SkipMethods: []string{"/grpc.health.v1.Health/Check"},
 	})
 
-	svc := frontend.NewService(nil, nil, logger, frontend.DefaultServiceConfig())
-	_ = svc
+	svc := frontend.NewService(historyClient, matchingClient, logger, frontend.DefaultServiceConfig())
+
+	// Start Redis Consumer
+	consumer := frontend.NewRedisConsumer(rdb, svc, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start consumer in background
+	go consumer.Start(ctx)
 
 	server := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
@@ -62,8 +108,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// ctx and cancel already defined above
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

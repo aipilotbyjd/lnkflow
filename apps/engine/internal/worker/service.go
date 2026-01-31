@@ -8,9 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/linkflow/engine/internal/worker/adapter"
 	"github.com/linkflow/engine/internal/worker/executor"
 	"github.com/linkflow/engine/internal/worker/poller"
 	"github.com/linkflow/engine/internal/worker/retry"
+	"google.golang.org/grpc"
 )
 
 type Service struct {
@@ -45,10 +47,23 @@ func NewService(cfg Config) *Service {
 		cfg.PollInterval = time.Second
 	}
 
+	// Establish gRPC connection
+	// Note: In a real app we might want to manage this connection lifecycle better (Close on Stop)
+	// For now we just dial in NewService.
+	// Error handling is skipped for brevity but should be handled.
+	conn, err := grpc.Dial(cfg.MatchingAddr, grpc.WithInsecure())
+	if err != nil {
+		cfg.Logger.Error("failed to connect to matching service", slog.String("error", err.Error()))
+		// Panic or handle better. For now we panic as worker cannot function without matching.
+		panic(err)
+	}
+
+	client := adapter.NewMatchingClient(conn)
+
 	p := poller.New(poller.Config{
+		Client:       client,
 		TaskQueue:    cfg.TaskQueue,
 		Identity:     cfg.Identity,
-		MatchingAddr: cfg.MatchingAddr,
 		PollInterval: cfg.PollInterval,
 		Logger:       cfg.Logger,
 	})

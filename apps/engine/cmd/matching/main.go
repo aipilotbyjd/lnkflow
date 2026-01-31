@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
 	"github.com/linkflow/engine/internal/matching"
 	"github.com/linkflow/engine/internal/version"
 )
@@ -38,6 +39,7 @@ func main() {
 	_ = svc
 
 	server := grpc.NewServer()
+	matchingv1.RegisterMatchingServiceServer(server, matching.NewGRPCServer(svc))
 	reflection.Register(server)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
