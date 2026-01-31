@@ -1,0 +1,100 @@
+# LinkFlow API - Docker Compose
+# Connects to external 'linkflow' network (start infrastructure first)
+#
+# Prerequisites:
+#   1. Start infrastructure: cd ../infrastructure && docker-compose up -d
+#   2. Copy env file: cp .env.docker.example .env.docker (first time only)
+#
+# Usage:
+#   docker-compose up -d                    # Start API + Queue
+#   docker-compose --profile full up -d     # Start all (including scheduler)
+#   docker-compose logs -f                  # View logs
+#   docker-compose exec api php artisan migrate  # Run migrations
+
+services:
+  # ============================================
+  # Laravel API
+  # ============================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: linkflow-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    environment:
+      # Override for Docker networking
+      DB_HOST: linkflow-postgres
+      REDIS_HOST: linkflow-redis
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    networks:
+      - linkflow
+    healthcheck:
+      test: [ "CMD", "php", "-r", "echo 'OK';" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # Queue Worker
+  # ============================================
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: linkflow-queue
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DB_HOST: linkflow-postgres
+      REDIS_HOST: linkflow-redis
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 --verbose
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - linkflow
+
+  # ============================================
+  # Scheduler (Cron) - Optional
+  # ============================================
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: linkflow-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DB_HOST: linkflow-postgres
+      REDIS_HOST: linkflow-redis
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    command: >
+      sh -c "while true; do php artisan schedule:run --verbose; sleep 60; done"
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - linkflow
+    profiles:
+      - full
+
+networks:
+  linkflow:
+    external: true
