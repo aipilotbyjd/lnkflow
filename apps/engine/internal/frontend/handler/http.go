@@ -245,11 +245,167 @@ func (h *HTTPHandler) CancelExecution(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "canceled"})
 }
 
-// RetryExecution retries a failed execution
+// RetryExecutionRequest contains optional retry configuration
+type RetryExecutionRequest struct {
+	MaxAttempts int    `json:"max_attempts,omitempty"`
+	TaskQueue   string `json:"task_queue,omitempty"`
+}
+
+// RetryExecutionResponse is the response from retrying an execution
+type RetryExecutionResponse struct {
+	ExecutionID         string `json:"execution_id"`
+	RunID               string `json:"run_id"`
+	OriginalExecutionID string `json:"original_execution_id"`
+	Status              string `json:"status"`
+}
+
+// RetryExecution retries a failed or canceled execution
 // POST /api/v1/workspaces/{workspace_id}/executions/{execution_id}/retry
 func (h *HTTPHandler) RetryExecution(w http.ResponseWriter, r *http.Request) {
-	// Placeholder - will be implemented
-	h.writeJSON(w, http.StatusOK, map[string]string{"status": "retry_initiated"})
+	ctx := r.Context()
+	workspaceID := r.PathValue("workspace_id")
+	executionID := r.PathValue("execution_id")
+
+	if workspaceID == "" {
+		h.writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	if executionID == "" {
+		h.writeError(w, http.StatusBadRequest, "execution_id is required")
+		return
+	}
+
+	var retryReq RetryExecutionRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&retryReq); err != nil {
+			if err.Error() == "http: request body too large" {
+				h.writeError(w, http.StatusRequestEntityTooLarge, "Request body too large")
+				return
+			}
+			h.writeError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+	}
+
+	getReq := &frontend.GetExecutionRequest{
+		Namespace:  workspaceID,
+		WorkflowID: executionID,
+	}
+
+	execResp, err := h.service.GetExecution(ctx, getReq)
+	if err != nil {
+		h.logger.Error("failed to get execution for retry",
+			slog.String("workspace_id", workspaceID),
+			slog.String("execution_id", executionID),
+			slog.String("error", err.Error()),
+		)
+		h.writeError(w, http.StatusNotFound, "Execution not found")
+		return
+	}
+
+	status := execResp.Execution.Status
+	if status != frontend.ExecutionStatusFailed &&
+		status != frontend.ExecutionStatusCanceled &&
+		status != frontend.ExecutionStatusTerminated &&
+		status != frontend.ExecutionStatusTimedOut {
+		h.logger.Warn("retry attempted on non-retryable execution",
+			slog.String("workspace_id", workspaceID),
+			slog.String("execution_id", executionID),
+			slog.String("status", statusToString(status)),
+		)
+		h.writeError(w, http.StatusConflict, "Only failed, canceled, terminated, or timed_out executions can be retried")
+		return
+	}
+
+	descReq := &frontend.DescribeExecutionRequest{
+		Namespace:  workspaceID,
+		WorkflowID: executionID,
+		RunID:      execResp.Execution.RunID,
+	}
+
+	descResp, err := h.service.DescribeExecution(ctx, descReq)
+	if err != nil {
+		h.logger.Error("failed to describe execution for retry",
+			slog.String("workspace_id", workspaceID),
+			slog.String("execution_id", executionID),
+			slog.String("error", err.Error()),
+		)
+		h.writeError(w, http.StatusInternalServerError, "Failed to retrieve execution details")
+		return
+	}
+
+	histReq := &frontend.GetHistoryRequest{
+		NamespaceID:  workspaceID,
+		WorkflowID:   executionID,
+		RunID:        execResp.Execution.RunID,
+		FirstEventID: 1,
+		NextEventID:  2,
+		PageSize:     1,
+	}
+
+	histResp, err := h.service.HistoryClient().GetHistory(ctx, histReq)
+	if err != nil {
+		h.logger.Error("failed to get execution history for retry",
+			slog.String("workspace_id", workspaceID),
+			slog.String("execution_id", executionID),
+			slog.String("error", err.Error()),
+		)
+		h.writeError(w, http.StatusInternalServerError, "Failed to retrieve execution history")
+		return
+	}
+
+	var originalInput []byte
+	if len(histResp.Events) > 0 {
+		originalInput = histResp.Events[0].Data
+	}
+
+	newExecutionID := generateExecutionID()
+	taskQueue := descResp.Execution.TaskQueue
+	if retryReq.TaskQueue != "" {
+		taskQueue = retryReq.TaskQueue
+	}
+
+	startReq := &frontend.StartWorkflowExecutionRequest{
+		Namespace:    workspaceID,
+		WorkflowID:   newExecutionID,
+		WorkflowType: descResp.Execution.WorkflowType,
+		TaskQueue:    taskQueue,
+		Input:        originalInput,
+		Memo:         descResp.Execution.Memo,
+	}
+
+	if retryReq.MaxAttempts > 0 {
+		startReq.RetryPolicy = &frontend.RetryPolicy{
+			MaximumAttempts: int32(retryReq.MaxAttempts),
+		}
+	}
+
+	resp, err := h.service.StartWorkflowExecution(ctx, startReq)
+	if err != nil {
+		h.logger.Error("failed to start retry execution",
+			slog.String("workspace_id", workspaceID),
+			slog.String("original_execution_id", executionID),
+			slog.String("new_execution_id", newExecutionID),
+			slog.String("error", err.Error()),
+		)
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.logger.Info("execution retry started",
+		slog.String("workspace_id", workspaceID),
+		slog.String("original_execution_id", executionID),
+		slog.String("new_execution_id", newExecutionID),
+		slog.String("run_id", resp.RunID),
+		slog.String("original_status", statusToString(status)),
+	)
+
+	h.writeJSON(w, http.StatusOK, RetryExecutionResponse{
+		ExecutionID:         newExecutionID,
+		RunID:               resp.RunID,
+		OriginalExecutionID: executionID,
+		Status:              "retry_initiated",
+	})
 }
 
 // SendSignal sends a signal to a running execution
