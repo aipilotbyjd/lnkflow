@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
+	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
 	"github.com/linkflow/engine/internal/history/engine"
 	"github.com/linkflow/engine/internal/history/shard"
 	"github.com/linkflow/engine/internal/history/types"
@@ -47,17 +49,18 @@ type Metrics interface {
 }
 
 // noopMetrics is a no-op implementation of Metrics.
-type noopMetrics struct{}
+type noopMetrics1 struct{}
 
-func (noopMetrics) RecordEventRecorded(types.EventType)        {}
-func (noopMetrics) RecordEventRetrieved(int)                   {}
-func (noopMetrics) RecordServiceLatency(string, time.Duration) {}
+func (noopMetrics1) RecordEventRecorded(types.EventType)        {}
+func (noopMetrics1) RecordEventRetrieved(int)                   {}
+func (noopMetrics1) RecordServiceLatency(string, time.Duration) {}
 
 // Service provides workflow history management capabilities.
 type Service struct {
 	shardController ShardController
 	eventStore      EventStore
 	stateStore      MutableStateStore
+	matchingClient  matchingv1.MatchingServiceClient
 	historyEngine   *engine.Engine
 	metrics         Metrics
 	logger          *slog.Logger
@@ -71,6 +74,7 @@ type Config struct {
 	ShardController ShardController
 	EventStore      EventStore
 	StateStore      MutableStateStore
+	MatchingClient  matchingv1.MatchingServiceClient
 	Logger          *slog.Logger
 	Metrics         Metrics
 }
@@ -80,12 +84,14 @@ func NewService(
 	shardController ShardController,
 	eventStore EventStore,
 	stateStore MutableStateStore,
+	matchingClient matchingv1.MatchingServiceClient,
 	logger *slog.Logger,
 ) *Service {
 	return NewServiceWithConfig(Config{
 		ShardController: shardController,
 		EventStore:      eventStore,
 		StateStore:      stateStore,
+		MatchingClient:  matchingClient,
 		Logger:          logger,
 	})
 }
@@ -97,7 +103,7 @@ func NewServiceWithConfig(cfg Config) *Service {
 	}
 	metrics := cfg.Metrics
 	if metrics == nil {
-		metrics = noopMetrics{}
+		metrics = noopMetrics1{}
 	}
 	return &Service{
 		shardController: cfg.ShardController,
@@ -211,7 +217,61 @@ func (s *Service) RecordEvent(ctx context.Context, key types.ExecutionKey, event
 	}
 
 	s.metrics.RecordEventRecorded(event.EventType)
+
+	// Post-processing: Push tasks to matching service if needed
+	if s.matchingClient != nil {
+		if err := s.dispatchTasks(ctx, key, event, state); err != nil {
+			s.logger.Error("failed to dispatch tasks to matching", "error", err)
+			// Don't fail the request, as persistence succeeded.
+			// In production, we should have a background queue to retry this.
+		}
+	}
+
 	return nil
+}
+
+func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, event *types.HistoryEvent, state *engine.MutableState) error {
+	var taskType commonv1.TaskType
+	var taskQueue string
+
+	switch event.EventType {
+	case types.EventTypeNodeScheduled:
+		attrs, ok := event.Attributes.(*types.NodeScheduledAttributes)
+		if !ok {
+			return nil
+		}
+		taskType = commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK
+		taskQueue = attrs.TaskQueue
+
+	case types.EventTypeActivityScheduled:
+		attrs, ok := event.Attributes.(*types.ActivityScheduledAttributes)
+		if !ok {
+			return nil
+		}
+		taskType = commonv1.TaskType_TASK_TYPE_ACTIVITY_TASK
+		taskQueue = attrs.TaskQueue
+
+	default:
+		return nil
+	}
+
+	// Create task request
+	req := &matchingv1.AddTaskRequest{
+		Namespace: key.NamespaceID,
+		TaskQueue: &matchingv1.TaskQueue{
+			Name: taskQueue,
+			Kind: commonv1.TaskQueueKind_TASK_QUEUE_KIND_NORMAL,
+		},
+		TaskType: taskType,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: key.WorkflowID,
+			RunId:      key.RunID,
+		},
+		ScheduledEventId: event.EventID,
+	}
+
+	_, err := s.matchingClient.AddTask(ctx, req)
+	return err
 }
 
 func (s *Service) RecordEvents(ctx context.Context, key types.ExecutionKey, events []*types.HistoryEvent) error {

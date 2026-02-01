@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
+	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
 	"github.com/linkflow/engine/internal/history"
 	"github.com/linkflow/engine/internal/history/shard"
 	"github.com/linkflow/engine/internal/history/store"
@@ -32,10 +34,11 @@ func main() {
 
 func run() error {
 	var (
-		port       = flag.Int("port", 7234, "gRPC server port")
-		httpPort   = flag.Int("http-port", 8080, "HTTP server port")
-		shardCount = flag.Int("shard-count", 16, "Number of shards")
-		dbUrl      = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
+		port         = flag.Int("port", 7234, "gRPC server port")
+		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
+		shardCount   = flag.Int("shard-count", 16, "Number of shards")
+		dbUrl        = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
+		matchingAddr = flag.String("matching-addr", getEnv("MATCHING_ADDR", "localhost:7235"), "Matching service address")
 	)
 	flag.Parse()
 
@@ -57,6 +60,15 @@ func run() error {
 	}
 	logger.Info("connected to database")
 
+	// Connect to Matching Service
+	matchingConn, err := grpc.NewClient(*matchingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		logger.Error("failed to connect to matching service", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer matchingConn.Close()
+	matchingClient := matchingv1.NewMatchingServiceClient(matchingConn)
+
 	shardController := shard.NewController(int32(*shardCount))
 
 	// Initialize stores
@@ -67,6 +79,7 @@ func run() error {
 		shardController,
 		eventStore,
 		stateStore,
+		matchingClient,
 		logger,
 	)
 
@@ -142,4 +155,11 @@ func printBanner(service string, logger *slog.Logger) {
 		slog.String("commit", version.GitCommit),
 		slog.String("build_time", version.BuildTime),
 	)
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }
