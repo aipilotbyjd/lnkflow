@@ -47,7 +47,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
     ) {
         $this->jobId = (string) Str::uuid();
         $this->partition = $workflow->workspace_id % 16;
-        $this->onQueue("workflows-{$priority}");
+        $this->onQueue('default');
     }
 
     /**

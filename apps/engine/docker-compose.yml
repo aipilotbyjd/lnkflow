@@ -169,7 +169,7 @@ services:
       # History service for results
       HISTORY_ADDR: linkflow-history:7234
       # Worker config
-      TASK_QUEUE: default
+      TASK_QUEUE: workflows-high,workflows-default,default
       NUM_WORKERS: 4
       POLL_INTERVAL: 1s
       # Laravel callback (for hybrid mode)
