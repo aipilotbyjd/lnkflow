@@ -24,13 +24,15 @@ var (
 type PostgresEventStore struct {
 	pool       *pgxpool.Pool
 	serializer *events.Serializer
+	shardCount int32
 }
 
 // NewPostgresEventStore creates a new PostgreSQL-backed event store.
-func NewPostgresEventStore(pool *pgxpool.Pool) *PostgresEventStore {
+func NewPostgresEventStore(pool *pgxpool.Pool, shardCount int32) *PostgresEventStore {
 	return &PostgresEventStore{
 		pool:       pool,
 		serializer: events.NewJSONSerializer(),
+		shardCount: shardCount,
 	}
 }
 
@@ -63,15 +65,10 @@ func (s *PostgresEventStore) AppendEvents(
 		if err != nil {
 			return fmt.Errorf("failed to check current version: %w", err)
 		}
-
-		// This logic might need refinement depending on exactly what expectedVersion represents
-		// (e.g. DBVersion vs MaxEventID). Assuming simple optimistic lock:
-		// But in postgres store impl, we might be tracking version column.
-		// For now simple pass.
 	}
 
 	// Get shard ID for this execution
-	shardID := getShardIDForExecution(key)
+	shardID := getShardIDForExecution(key, s.shardCount)
 
 	// Insert events
 	for _, event := range evts {
@@ -189,6 +186,7 @@ func (s *PostgresEventStore) DeleteEvents(ctx context.Context, key types.Executi
 type PostgresMutableStateStore struct {
 	pool       *pgxpool.Pool
 	serializer *mutableStateSerializer
+	shardCount int32
 }
 
 type mutableStateSerializer struct{}
@@ -219,10 +217,11 @@ func (s *mutableStateSerializer) Deserialize(data []byte) (*engine.MutableState,
 }
 
 // NewPostgresMutableStateStore creates a new PostgreSQL-backed mutable state store.
-func NewPostgresMutableStateStore(pool *pgxpool.Pool) *PostgresMutableStateStore {
+func NewPostgresMutableStateStore(pool *pgxpool.Pool, shardCount int32) *PostgresMutableStateStore {
 	return &PostgresMutableStateStore{
 		pool:       pool,
 		serializer: &mutableStateSerializer{},
+		shardCount: shardCount,
 	}
 }
 
@@ -271,7 +270,7 @@ func (s *PostgresMutableStateStore) UpdateMutableState(
 		return fmt.Errorf("failed to serialize mutable state: %w", err)
 	}
 
-	shardID := getShardIDForExecution(key)
+	shardID := getShardIDForExecution(key, s.shardCount)
 	checksum := calculateChecksum(data)
 	newVersion := state.DBVersion + 1
 
@@ -348,15 +347,18 @@ func (s *PostgresMutableStateStore) DeleteMutableState(ctx context.Context, key 
 // Helper functions
 
 // Uses consistent hashing to distribute executions across shards.
-func getShardIDForExecution(key types.ExecutionKey) int32 {
+func getShardIDForExecution(key types.ExecutionKey, shardCount int32) int32 {
 	// Simple hash-based sharding
 	data := key.NamespaceID + "/" + key.WorkflowID
 	var hash uint32
 	for i := 0; i < len(data); i++ {
 		hash = 31*hash + uint32(data[i])
 	}
-	// Assume 16 shards by default
-	return int32(hash % 16)
+	// Use configured shard count
+	if shardCount <= 0 {
+		shardCount = 16 // Fallback
+	}
+	return int32(hash % uint32(shardCount))
 }
 
 // calculateChecksum creates a simple checksum for data integrity.

@@ -5,7 +5,7 @@
 -- NAMESPACES
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS namespaces (
-    id              BIGSERIAL PRIMARY KEY,
+    id              VARCHAR(255) PRIMARY KEY,
     name            VARCHAR(255) UNIQUE NOT NULL,
     description     TEXT,
     owner_email     VARCHAR(255),
@@ -22,7 +22,7 @@ CREATE INDEX idx_namespaces_name ON namespaces (name);
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS executions (
     shard_id            INTEGER NOT NULL,
-    namespace_id        BIGINT NOT NULL REFERENCES namespaces(id),
+    namespace_id        VARCHAR(255) NOT NULL REFERENCES namespaces(id),
     workflow_id         VARCHAR(255) NOT NULL,
     run_id              UUID NOT NULL,
     parent_workflow_id  VARCHAR(255),
@@ -51,7 +51,7 @@ CREATE INDEX idx_executions_close_time ON executions (namespace_id, close_time D
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS history_events (
     shard_id        INTEGER NOT NULL,
-    namespace_id    BIGINT NOT NULL,
+    namespace_id    VARCHAR(255) NOT NULL,
     workflow_id     VARCHAR(255) NOT NULL,
     run_id          UUID NOT NULL,
     event_id        BIGINT NOT NULL,
@@ -70,7 +70,7 @@ CREATE INDEX idx_history_events_version ON history_events (shard_id, namespace_i
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS mutable_state (
     shard_id        INTEGER NOT NULL,
-    namespace_id    BIGINT NOT NULL,
+    namespace_id    VARCHAR(255) NOT NULL,
     workflow_id     VARCHAR(255) NOT NULL,
     run_id          UUID NOT NULL,
     state           BYTEA NOT NULL,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS mutable_state (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS activity_tasks (
     shard_id            INTEGER NOT NULL,
-    namespace_id        BIGINT NOT NULL,
+    namespace_id        VARCHAR(255) NOT NULL,
     task_queue          VARCHAR(255) NOT NULL,
     task_id             UUID PRIMARY KEY,
     workflow_id         VARCHAR(255) NOT NULL,
@@ -108,7 +108,7 @@ CREATE INDEX idx_activity_tasks_expiry ON activity_tasks (expiry_time) WHERE exp
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS timers (
     shard_id        INTEGER NOT NULL,
-    namespace_id    BIGINT NOT NULL,
+    namespace_id    VARCHAR(255) NOT NULL,
     workflow_id     VARCHAR(255) NOT NULL,
     run_id          UUID NOT NULL,
     timer_id        VARCHAR(255) NOT NULL,
@@ -124,7 +124,7 @@ CREATE INDEX idx_timers_workflow ON timers (namespace_id, workflow_id, run_id);
 -- VISIBILITY (for search/list)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS visibility (
-    namespace_id        BIGINT NOT NULL,
+    namespace_id        VARCHAR(255) NOT NULL,
     workflow_id         VARCHAR(255) NOT NULL,
     run_id              UUID NOT NULL,
     workflow_type_name  VARCHAR(255),
@@ -148,7 +148,7 @@ CREATE INDEX idx_visibility_search_attrs ON visibility USING GIN (search_attribu
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS task_queues (
     shard_id            INTEGER NOT NULL,
-    namespace_id        BIGINT NOT NULL,
+    namespace_id        VARCHAR(255) NOT NULL,
     name                VARCHAR(255) NOT NULL,
     kind                SMALLINT NOT NULL,
     last_update_time    TIMESTAMPTZ,

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	"github.com/linkflow/engine/internal/history"
 	"github.com/linkflow/engine/internal/history/shard"
@@ -34,7 +35,7 @@ func run() error {
 		port       = flag.Int("port", 7234, "gRPC server port")
 		httpPort   = flag.Int("http-port", 8080, "HTTP server port")
 		shardCount = flag.Int("shard-count", 16, "Number of shards")
-		_          = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
+		dbUrl      = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
 	)
 	flag.Parse()
 
@@ -42,23 +43,25 @@ func run() error {
 
 	printBanner("History", logger)
 
-	shardController := shard.NewController(int32(*shardCount)) // Cast to int32
+	// Connect to database
+	dbpool, err := pgxpool.New(context.Background(), *dbUrl)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer dbpool.Close()
 
-	// Use store package implementations
-	// In memory by default as per existing main.go logic, though User asked for Postgres later.
-	// For "production ready" checking, I should probably leave hooks for Postgres but default to memory
-	// until config is fully parsed.
-	// But the user's "Previous Session Summary" said: "Current Implementation: The History service uses in-memory stores by default... which needs to be switched to PostgreSQL for production readiness."
+	if err := dbpool.Ping(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to ping database: %v\n", err)
+		os.Exit(1)
+	}
+	logger.Info("connected to database")
 
-	// I will stick to memory for now to make it compile and run, as setting up Postgres requires connection strings and pools which I don't have handy environment for (and "SafeToAutoRun" prevents me from guessing too much).
-	// But I will make it easy to switch.
+	shardController := shard.NewController(int32(*shardCount))
 
-	eventStore := store.NewMemoryEventStore()
-	stateStore := store.NewMemoryMutableStateStore()
-
-	// history.NewService expects specific interfaces.
-	// store.MemoryEventStore implements history.EventStore (which uses types.*)
-	// store.MemoryMutableStateStore implements history.MutableStateStore (which uses types.*, engine.*)
+	// Initialize stores
+	eventStore := store.NewPostgresEventStore(dbpool, int32(*shardCount))
+	stateStore := store.NewPostgresMutableStateStore(dbpool, int32(*shardCount))
 
 	svc := history.NewService(
 		shardController,
