@@ -1,8 +1,8 @@
 # LinkFlow Architecture Plan
 
-> **Primary Goal**: Maximum Performance  
-> **Stack**: Laravel (User API) + Go (Execution Engine)  
-> **Author**: System Architect  
+> **Primary Goal**: Maximum Performance
+> **Stack**: Laravel (User API) + Go (Execution Engine)
+> **Author**: System Architect
 > **Created**: 2026-01-30
 
 ---
@@ -369,12 +369,12 @@ func main() {
     // Variables
     name := "LinkFlow"
     count := 42
-    
+
     // Control flow
     if count > 0 {
         fmt.Println(name)
     }
-    
+
     // Loops
     for i := 0; i < 10; i++ {
         fmt.Println(i)

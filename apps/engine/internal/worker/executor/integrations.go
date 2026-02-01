@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+
 	"time"
 )
 
 // DiscordExecutor handles Discord webhook messages.
 type DiscordExecutor struct {
-	client *http.Client
+	client       *http.Client
+	defaultToken string
 }
 
 // DiscordConfig represents the configuration for a Discord node.
@@ -78,11 +81,15 @@ func NewDiscordExecutor() *DiscordExecutor {
 		ForceAttemptHTTP2:   true,
 	}
 
+	// Get default token from environment
+	defaultToken := os.Getenv("DISCORD_BOT_TOKEN")
+
 	return &DiscordExecutor{
 		client: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
 		},
+		defaultToken: defaultToken,
 	}
 }
 
@@ -247,8 +254,9 @@ func (e *DiscordExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 // TwilioExecutor handles Twilio SMS messages.
 type TwilioExecutor struct {
 	client       *http.Client
-	defaultSID   string
-	defaultToken string
+	accountSid   string
+	authToken    string
+	defaultFrom  string
 }
 
 // TwilioConfig represents the configuration for a Twilio node.
@@ -273,18 +281,26 @@ func NewTwilioExecutor() *TwilioExecutor {
 		ForceAttemptHTTP2:   true,
 	}
 
+	// Get credentials from environment
+	accountSid := os.Getenv("TWILIO_ACCOUNT_SID")
+	authToken := os.Getenv("TWILIO_AUTH_TOKEN")
+	defaultFrom := os.Getenv("TWILIO_PHONE_NUMBER")
+
 	return &TwilioExecutor{
 		client: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
 		},
+		accountSid:  accountSid,
+		authToken:   authToken,
+		defaultFrom: defaultFrom,
 	}
 }
 
 // WithCredentials sets default credentials.
 func (e *TwilioExecutor) WithCredentials(sid, token string) *TwilioExecutor {
-	e.defaultSID = sid
-	e.defaultToken = token
+	e.accountSid = sid
+	e.authToken = token
 	return e
 }
 
@@ -316,10 +332,10 @@ func (e *TwilioExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
 
 	// Apply defaults
 	if config.AccountSID == "" {
-		config.AccountSID = e.defaultSID
+		config.AccountSID = e.accountSid
 	}
 	if config.AuthToken == "" {
-		config.AuthToken = e.defaultToken
+		config.AuthToken = e.authToken
 	}
 
 	// Validate

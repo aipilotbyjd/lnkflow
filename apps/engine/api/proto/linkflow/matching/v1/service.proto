@@ -21,7 +21,7 @@ service MatchingService {
   rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
 
   // QueryWorkflow queries a workflow directly through matching.
-  rpc QueryWorkflow(QueryWorkflowMatchingRequest) returns (QueryWorkflowMatchingResponse);
+  rpc QueryWorkflow(MatchingServiceQueryWorkflowRequest) returns (MatchingServiceQueryWorkflowResponse);
 
   // HeartbeatTask sends a heartbeat for an activity task.
   rpc HeartbeatTask(HeartbeatTaskRequest) returns (HeartbeatTaskResponse);
@@ -46,8 +46,8 @@ message TaskForwardInfo {
 // AddTaskResponse is the response for adding a task.
 message AddTaskResponse {}
 
-// QueryWorkflowMatchingRequest is the request for querying workflow through matching.
-message QueryWorkflowMatchingRequest {
+// MatchingServiceQueryWorkflowRequest is the request for querying workflow through matching.
+message MatchingServiceQueryWorkflowRequest {
   string namespace = 1;
   TaskQueue task_queue = 2;
   linkflow.common.v1.WorkflowExecution workflow_execution = 3;
@@ -61,8 +61,8 @@ message QueryInput {
   linkflow.common.v1.Payloads query_args = 2;
 }
 
-// QueryWorkflowMatchingResponse is the response for querying workflow through matching.
-message QueryWorkflowMatchingResponse {
+// MatchingServiceQueryWorkflowResponse is the response for querying workflow through matching.
+message MatchingServiceQueryWorkflowResponse {
   linkflow.common.v1.Payloads query_result = 1;
 }
 

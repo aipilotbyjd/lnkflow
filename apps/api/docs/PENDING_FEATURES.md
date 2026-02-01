@@ -1,6 +1,6 @@
 # LinkFlow - Complete Pending Features Specification
 
-> **Status**: Phase 2 - Core Workflow Features  
+> **Status**: Phase 2 - Core Workflow Features
 > **Last Updated**: 2026-01-30
 
 ---
@@ -35,39 +35,39 @@ CREATE TABLE workflows (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workspace_id        BIGINT UNSIGNED NOT NULL,
     created_by          BIGINT UNSIGNED NOT NULL,
-    
+
     -- Basic Info
     name                VARCHAR(255) NOT NULL,
     description         TEXT NULL,
     icon                VARCHAR(50) DEFAULT 'workflow',
     color               VARCHAR(20) DEFAULT '#6366f1',
-    
+
     -- Status
     is_active           BOOLEAN DEFAULT FALSE,
     is_locked           BOOLEAN DEFAULT FALSE,          -- Prevent edits during execution
-    
+
     -- Trigger Configuration
     trigger_type        ENUM('manual', 'webhook', 'schedule', 'event') NOT NULL,
     trigger_config      JSON NULL,                       -- Cron expression, webhook path, etc.
-    
+
     -- Workflow Definition (Node-based)
     nodes               JSON NOT NULL,                   -- Array of node definitions
     edges               JSON NOT NULL,                   -- Connections between nodes
     viewport            JSON NULL,                       -- Canvas position/zoom for UI
-    
+
     -- Settings
     settings            JSON NULL,                       -- Retry policy, timeout, notifications
-    
+
     -- Statistics (cached)
     execution_count     INT UNSIGNED DEFAULT 0,
     last_executed_at    TIMESTAMP NULL,
     success_rate        DECIMAL(5,2) DEFAULT 0.00,
-    
+
     -- Timestamps
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at          TIMESTAMP NULL,                  -- Soft delete
-    
+
     -- Indexes
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
@@ -346,7 +346,7 @@ class Workflow extends Model
     public function incrementExecutionCount(bool $success): void
     {
         $this->increment('execution_count');
-        
+
         // Recalculate success rate
         $totalSuccess = $this->executions()->where('status', 'completed')->count();
         $this->update([
@@ -470,12 +470,12 @@ class StoreWorkflowRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:1000'],
             'icon' => ['nullable', 'string', 'max:50'],
             'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            
+
             'trigger_type' => ['required', Rule::enum(TriggerType::class)],
             'trigger_config' => ['nullable', 'array'],
             'trigger_config.cron' => ['required_if:trigger_type,schedule', 'string'],
             'trigger_config.path' => ['required_if:trigger_type,webhook', 'string', 'max:100'],
-            
+
             'nodes' => ['required', 'array', 'min:1'],
             'nodes.*.id' => ['required', 'string'],
             'nodes.*.type' => ['required', 'string'],
@@ -483,12 +483,12 @@ class StoreWorkflowRequest extends FormRequest
             'nodes.*.position.x' => ['required', 'numeric'],
             'nodes.*.position.y' => ['required', 'numeric'],
             'nodes.*.data' => ['required', 'array'],
-            
+
             'edges' => ['present', 'array'],
             'edges.*.id' => ['required', 'string'],
             'edges.*.source' => ['required', 'string'],
             'edges.*.target' => ['required', 'string'],
-            
+
             'viewport' => ['nullable', 'array'],
             'settings' => ['nullable', 'array'],
             'settings.retry' => ['nullable', 'array'],
@@ -496,7 +496,7 @@ class StoreWorkflowRequest extends FormRequest
             'settings.retry.max_attempts' => ['integer', 'min:1', 'max:10'],
             'settings.timeout' => ['nullable', 'array'],
             'settings.timeout.workflow' => ['integer', 'min:60', 'max:86400'],
-            
+
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['exists:tags,id'],
         ];
@@ -561,36 +561,36 @@ CREATE TABLE node_categories (
 CREATE TABLE nodes (
     id              BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     category_id     BIGINT UNSIGNED NOT NULL,
-    
+
     -- Identification
     type            VARCHAR(100) NOT NULL UNIQUE,    -- e.g., 'action_http_request'
     name            VARCHAR(255) NOT NULL,           -- e.g., 'HTTP Request'
     description     TEXT NULL,
-    
+
     -- Display
     icon            VARCHAR(50) NOT NULL,
     color           VARCHAR(20) NOT NULL,
-    
+
     -- Classification
     node_kind       ENUM('trigger', 'action', 'logic', 'transform') NOT NULL,
-    
+
     -- Configuration Schema (JSON Schema format)
     config_schema   JSON NOT NULL,                   -- Input fields definition
     output_schema   JSON NULL,                       -- Expected output structure
-    
+
     -- Credential requirement
     credential_type VARCHAR(100) NULL,               -- Required credential type
-    
+
     -- Availability
     is_active       BOOLEAN DEFAULT TRUE,
     is_premium      BOOLEAN DEFAULT FALSE,           -- Pro/Business only
-    
+
     -- Documentation
     docs_url        VARCHAR(500) NULL,
-    
+
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (category_id) REFERENCES node_categories(id),
     INDEX idx_node_kind (node_kind),
     INDEX idx_category (category_id)
@@ -758,7 +758,7 @@ $nodes = [
             ]
         ]
     ],
-    
+
     // ─────────────────────────────────────────────────────────────
     // HTTP & APIS
     // ─────────────────────────────────────────────────────────────
@@ -846,7 +846,7 @@ $nodes = [
             'required' => ['endpoint', 'query']
         ]
     ],
-    
+
     // ─────────────────────────────────────────────────────────────
     // COMMUNICATION
     // ─────────────────────────────────────────────────────────────
@@ -954,7 +954,7 @@ $nodes = [
             'required' => ['to', 'message']
         ]
     ],
-    
+
     // ─────────────────────────────────────────────────────────────
     // LOGIC
     // ─────────────────────────────────────────────────────────────
@@ -1097,7 +1097,7 @@ $nodes = [
             ]
         ]
     ],
-    
+
     // ─────────────────────────────────────────────────────────────
     // DATA TRANSFORM
     // ─────────────────────────────────────────────────────────────
@@ -1219,7 +1219,7 @@ $nodes = [
             'required' => ['input', 'operations']
         ]
     ],
-    
+
     // ─────────────────────────────────────────────────────────────
     // INTEGRATIONS
     // ─────────────────────────────────────────────────────────────
@@ -1382,16 +1382,16 @@ CREATE TABLE credential_types (
     description     TEXT NULL,
     icon            VARCHAR(50) NOT NULL,
     color           VARCHAR(20) NOT NULL,
-    
+
     -- Field Schema
     fields_schema   JSON NOT NULL,                   -- What fields are needed
-    
+
     -- Test endpoint
     test_config     JSON NULL,                       -- How to test the credential
-    
+
     -- Documentation
     docs_url        VARCHAR(500) NULL,
-    
+
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -1401,22 +1401,22 @@ CREATE TABLE credentials (
     id              BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workspace_id    BIGINT UNSIGNED NOT NULL,
     created_by      BIGINT UNSIGNED NOT NULL,
-    
+
     -- Info
     name            VARCHAR(255) NOT NULL,
     type            VARCHAR(100) NOT NULL,           -- References credential_types.type
-    
+
     -- Encrypted Data
     data            TEXT NOT NULL,                   -- AES-256 encrypted JSON
-    
+
     -- Metadata
     last_used_at    TIMESTAMP NULL,
     expires_at      TIMESTAMP NULL,
-    
+
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at      TIMESTAMP NULL,
-    
+
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id),
     INDEX idx_workspace_type (workspace_id, type),
@@ -1429,9 +1429,9 @@ CREATE TABLE workflow_credentials (
     workflow_id     BIGINT UNSIGNED NOT NULL,
     credential_id   BIGINT UNSIGNED NOT NULL,
     node_id         VARCHAR(100) NOT NULL,           -- Which node uses it
-    
+
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
     FOREIGN KEY (credential_id) REFERENCES credentials(id) ON DELETE CASCADE,
     UNIQUE KEY unique_workflow_node (workflow_id, node_id)
@@ -1709,10 +1709,10 @@ class CredentialEncryptionService
     public function mask(array $data, array $schema): array
     {
         $masked = [];
-        
+
         foreach ($data as $key => $value) {
             $fieldSchema = $schema['properties'][$key] ?? [];
-            
+
             if (isset($fieldSchema['secret']) && $fieldSchema['secret']) {
                 // Mask secret fields
                 $masked[$key] = str_repeat('•', 8) . substr($value, -4);
@@ -1720,7 +1720,7 @@ class CredentialEncryptionService
                 $masked[$key] = $value;
             }
         }
-        
+
         return $masked;
     }
 }
@@ -1783,34 +1783,34 @@ CREATE TABLE executions (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workflow_id         BIGINT UNSIGNED NOT NULL,
     workspace_id        BIGINT UNSIGNED NOT NULL,      -- Denormalized for queries
-    
+
     -- Execution Info
     status              ENUM('pending', 'running', 'completed', 'failed', 'cancelled', 'waiting') NOT NULL DEFAULT 'pending',
     mode                ENUM('manual', 'webhook', 'schedule', 'retry') NOT NULL,
     triggered_by        BIGINT UNSIGNED NULL,          -- User who triggered (if manual)
-    
+
     -- Timing
     started_at          TIMESTAMP NULL,
     finished_at         TIMESTAMP NULL,
     duration_ms         INT UNSIGNED NULL,
-    
+
     -- Data
     trigger_data        JSON NULL,                     -- Input data that triggered
     result_data         JSON NULL,                     -- Final output
     error               JSON NULL,                     -- Error details if failed
-    
+
     -- Retry Info
     attempt             INT UNSIGNED DEFAULT 1,
     max_attempts        INT UNSIGNED DEFAULT 1,
     parent_execution_id BIGINT UNSIGNED NULL,          -- If this is a retry
-    
+
     -- Metadata
     ip_address          VARCHAR(45) NULL,
     user_agent          VARCHAR(500) NULL,
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (triggered_by) REFERENCES users(id) ON DELETE SET NULL,
@@ -1824,30 +1824,30 @@ CREATE TABLE executions (
 CREATE TABLE execution_nodes (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     execution_id        BIGINT UNSIGNED NOT NULL,
-    
+
     -- Node Info
     node_id             VARCHAR(100) NOT NULL,         -- Matches workflow node id
     node_type           VARCHAR(100) NOT NULL,
     node_name           VARCHAR(255) NULL,
-    
+
     -- Status
     status              ENUM('pending', 'running', 'completed', 'failed', 'skipped') NOT NULL DEFAULT 'pending',
-    
+
     -- Timing
     started_at          TIMESTAMP(3) NULL,             -- Millisecond precision
     finished_at         TIMESTAMP(3) NULL,
     duration_ms         INT UNSIGNED NULL,
-    
+
     -- Data
     input_data          JSON NULL,                     -- What went into the node
     output_data         JSON NULL,                     -- What came out
     error               JSON NULL,                     -- Error if failed
-    
+
     -- Execution order
     sequence            INT UNSIGNED NOT NULL,
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (execution_id) REFERENCES executions(id) ON DELETE CASCADE,
     INDEX idx_execution_sequence (execution_id, sequence)
 );
@@ -1857,13 +1857,13 @@ CREATE TABLE execution_logs (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     execution_id        BIGINT UNSIGNED NOT NULL,
     execution_node_id   BIGINT UNSIGNED NULL,
-    
+
     level               ENUM('debug', 'info', 'warning', 'error') NOT NULL DEFAULT 'info',
     message             TEXT NOT NULL,
     context             JSON NULL,
-    
+
     logged_at           TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
-    
+
     FOREIGN KEY (execution_id) REFERENCES executions(id) ON DELETE CASCADE,
     FOREIGN KEY (execution_node_id) REFERENCES execution_nodes(id) ON DELETE CASCADE,
     INDEX idx_execution_level (execution_id, level)
@@ -1970,34 +1970,34 @@ CREATE TABLE webhooks (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workflow_id         BIGINT UNSIGNED NOT NULL UNIQUE,
     workspace_id        BIGINT UNSIGNED NOT NULL,
-    
+
     -- Webhook Path
     uuid                CHAR(36) NOT NULL UNIQUE,      -- Public identifier
     path                VARCHAR(100) NULL,             -- Custom path (optional)
-    
+
     -- Configuration
     methods             JSON NOT NULL DEFAULT '["POST"]',
     is_active           BOOLEAN DEFAULT TRUE,
-    
+
     -- Authentication
     auth_type           ENUM('none', 'header', 'basic', 'bearer') DEFAULT 'none',
     auth_config         JSON NULL,                     -- Encrypted auth details
-    
+
     -- Rate Limiting
     rate_limit          INT UNSIGNED NULL,             -- Requests per minute
-    
+
     -- Response Config
     response_mode       ENUM('immediate', 'wait') DEFAULT 'immediate',
     response_status     INT DEFAULT 200,
     response_body       JSON NULL,
-    
+
     -- Statistics
     call_count          BIGINT UNSIGNED DEFAULT 0,
     last_called_at      TIMESTAMP NULL,
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     INDEX idx_uuid (uuid),
@@ -2135,18 +2135,18 @@ CREATE TABLE variables (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workspace_id        BIGINT UNSIGNED NOT NULL,
     created_by          BIGINT UNSIGNED NOT NULL,
-    
+
     -- Variable Info
     key                 VARCHAR(100) NOT NULL,
     value               TEXT NOT NULL,               -- Encrypted if is_secret
     description         TEXT NULL,
-    
+
     -- Type
     is_secret           BOOLEAN DEFAULT FALSE,
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id),
     UNIQUE KEY unique_workspace_key (workspace_id, key)
@@ -2196,13 +2196,13 @@ Organize workflows with tags.
 CREATE TABLE tags (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workspace_id        BIGINT UNSIGNED NOT NULL,
-    
+
     name                VARCHAR(50) NOT NULL,
     color               VARCHAR(20) DEFAULT '#6366f1',
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     UNIQUE KEY unique_workspace_name (workspace_id, name)
 );
@@ -2210,7 +2210,7 @@ CREATE TABLE tags (
 CREATE TABLE workflow_tags (
     workflow_id         BIGINT UNSIGNED NOT NULL,
     tag_id              BIGINT UNSIGNED NOT NULL,
-    
+
     PRIMARY KEY (workflow_id, tag_id),
     FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
@@ -2259,25 +2259,25 @@ CREATE TABLE activity_logs (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     workspace_id        BIGINT UNSIGNED NOT NULL,
     user_id             BIGINT UNSIGNED NULL,
-    
+
     -- Action Info
     action              VARCHAR(100) NOT NULL,        -- e.g., 'workflow.created'
     description         VARCHAR(500) NULL,
-    
+
     -- Subject
     subject_type        VARCHAR(100) NULL,            -- e.g., 'App\Models\Workflow'
     subject_id          BIGINT UNSIGNED NULL,
-    
+
     -- Changes
     old_values          JSON NULL,
     new_values          JSON NULL,
-    
+
     -- Metadata
     ip_address          VARCHAR(45) NULL,
     user_agent          VARCHAR(500) NULL,
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_workspace_created (workspace_id, created_at),
@@ -2325,19 +2325,19 @@ CREATE TABLE job_statuses (
     id                  BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     job_id              VARCHAR(100) NOT NULL UNIQUE,
     execution_id        BIGINT UNSIGNED NULL,
-    
+
     status              ENUM('pending', 'processing', 'completed', 'failed') NOT NULL DEFAULT 'pending',
     progress            TINYINT UNSIGNED DEFAULT 0,   -- 0-100
-    
+
     result              JSON NULL,
     error               JSON NULL,
-    
+
     started_at          TIMESTAMP NULL,
     completed_at        TIMESTAMP NULL,
-    
+
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (execution_id) REFERENCES executions(id) ON DELETE SET NULL,
     INDEX idx_status (status)
 );
@@ -2364,7 +2364,7 @@ class ExecuteWorkflowJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public string $jobId;
-    
+
     public function __construct(
         public Workflow $workflow,
         public string $mode,
@@ -2463,8 +2463,8 @@ class JobCallbackController extends Controller
             'result_data' => $validated['result_data'],
             'error' => $validated['error'],
             'duration_ms' => $validated['duration_ms'],
-            'finished_at' => in_array($validated['status'], ['completed', 'failed']) 
-                ? now() 
+            'finished_at' => in_array($validated['status'], ['completed', 'failed'])
+                ? now()
                 : null,
         ]);
 
@@ -2720,11 +2720,11 @@ routes/
 // routes/api.php - Add these routes
 
 Route::middleware('auth:api')->group(function () {
-    
+
     // ... existing routes ...
 
     Route::prefix('workspaces/{workspace}')->as('workspaces.')->group(function () {
-        
+
         // Workflows
         Route::apiResource('workflows', WorkflowController::class);
         Route::post('workflows/{workflow}/execute', [WorkflowController::class, 'execute']);
@@ -2733,11 +2733,11 @@ Route::middleware('auth:api')->group(function () {
         Route::post('workflows/{workflow}/duplicate', [WorkflowController::class, 'duplicate']);
         Route::get('workflows/{workflow}/versions', [WorkflowController::class, 'versions']);
         Route::get('workflows/{workflow}/executions', [WorkflowController::class, 'executions']);
-        
+
         // Credentials
         Route::apiResource('credentials', CredentialController::class);
         Route::post('credentials/{credential}/test', [CredentialController::class, 'test']);
-        
+
         // Executions
         Route::apiResource('executions', ExecutionController::class)->only(['index', 'show', 'destroy']);
         Route::get('executions/{execution}/nodes', [ExecutionController::class, 'nodes']);
@@ -2745,27 +2745,27 @@ Route::middleware('auth:api')->group(function () {
         Route::post('executions/{execution}/retry', [ExecutionController::class, 'retry']);
         Route::post('executions/{execution}/cancel', [ExecutionController::class, 'cancel']);
         Route::get('executions/stats', [ExecutionController::class, 'stats']);
-        
+
         // Variables
         Route::apiResource('variables', VariableController::class)->except(['show']);
-        
+
         // Tags
         Route::apiResource('tags', TagController::class)->except(['show']);
-        
+
         // Activity Logs
         Route::get('activity', [ActivityLogController::class, 'index']);
     });
-    
+
     // Nodes (not workspace-scoped)
     Route::get('nodes', [NodeController::class, 'index']);
     Route::get('nodes/categories', [NodeController::class, 'categories']);
     Route::get('nodes/search', [NodeController::class, 'search']);
     Route::get('nodes/{type}', [NodeController::class, 'show']);
-    
+
     // Credential Types (not workspace-scoped)
     Route::get('credential-types', [CredentialTypeController::class, 'index']);
     Route::get('credential-types/{type}', [CredentialTypeController::class, 'show']);
-    
+
     // Job Callback (internal)
     Route::post('internal/job-callback', [JobCallbackController::class, 'handle'])
         ->name('webhooks.job-callback');

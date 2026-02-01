@@ -58,7 +58,7 @@ services:
   # Laravel API
   # ----------------------------------------------------------------
   api:
-    build: 
+    build:
       context: ./apps/api
       dockerfile: Dockerfile
     ports:
@@ -76,7 +76,7 @@ services:
   # Go Engine (Control Plane)
   # ----------------------------------------------------------------
   engine:
-    build: 
+    build:
       context: ./apps/engine
       dockerfile: Dockerfile
     ports:

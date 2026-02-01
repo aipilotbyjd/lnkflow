@@ -71,7 +71,7 @@ Create a new user account with default workspace.
 
 ### Logout
 
-**Endpoint:** `POST /logout`  
+**Endpoint:** `POST /logout`
 **Auth:** Required
 
 **Success Response (200):**
@@ -141,7 +141,7 @@ Create a new user account with default workspace.
 
 ### Resend Verification Email
 
-**Endpoint:** `POST /resend-verification-email`  
+**Endpoint:** `POST /resend-verification-email`
 **Auth:** Required
 
 **Success Response (200):**
@@ -157,7 +157,7 @@ Create a new user account with default workspace.
 
 ### Get Profile
 
-**Endpoint:** `GET /user`  
+**Endpoint:** `GET /user`
 **Auth:** Required
 
 **Success Response (200):**
@@ -179,7 +179,7 @@ Create a new user account with default workspace.
 
 ### Update Profile
 
-**Endpoint:** `PUT /user`  
+**Endpoint:** `PUT /user`
 **Auth:** Required
 
 **Request Body:**
@@ -195,7 +195,7 @@ Create a new user account with default workspace.
 
 ### Change Password
 
-**Endpoint:** `PUT /user/password`  
+**Endpoint:** `PUT /user/password`
 **Auth:** Required
 
 **Request Body:**
@@ -211,7 +211,7 @@ Create a new user account with default workspace.
 
 ### Delete Account
 
-**Endpoint:** `DELETE /user`  
+**Endpoint:** `DELETE /user`
 **Auth:** Required
 
 ---
@@ -220,7 +220,7 @@ Create a new user account with default workspace.
 
 ### List Workspaces
 
-**Endpoint:** `GET /workspaces`  
+**Endpoint:** `GET /workspaces`
 **Auth:** Required
 
 **Success Response (200):**
@@ -245,7 +245,7 @@ Create a new user account with default workspace.
 
 ### Create Workspace
 
-**Endpoint:** `POST /workspaces`  
+**Endpoint:** `POST /workspaces`
 **Auth:** Required
 
 **Request Body:**
@@ -259,14 +259,14 @@ Create a new user account with default workspace.
 
 ### Get Workspace
 
-**Endpoint:** `GET /workspaces/{workspace}`  
+**Endpoint:** `GET /workspaces/{workspace}`
 **Auth:** Required
 
 ---
 
 ### Update Workspace
 
-**Endpoint:** `PUT /workspaces/{workspace}`  
+**Endpoint:** `PUT /workspaces/{workspace}`
 **Auth:** Required (Owner/Admin)
 
 **Request Body:**
@@ -281,7 +281,7 @@ Create a new user account with default workspace.
 
 ### Delete Workspace
 
-**Endpoint:** `DELETE /workspaces/{workspace}`  
+**Endpoint:** `DELETE /workspaces/{workspace}`
 **Auth:** Required (Owner only)
 
 ---
@@ -290,7 +290,7 @@ Create a new user account with default workspace.
 
 ### List Members
 
-**Endpoint:** `GET /workspaces/{workspace}/members`  
+**Endpoint:** `GET /workspaces/{workspace}/members`
 **Auth:** Required
 
 **Success Response (200):**
@@ -313,7 +313,7 @@ Create a new user account with default workspace.
 
 ### Update Member Role
 
-**Endpoint:** `PUT /workspaces/{workspace}/members/{user}`  
+**Endpoint:** `PUT /workspaces/{workspace}/members/{user}`
 **Auth:** Required (Owner/Admin)
 
 **Request Body:**
@@ -329,7 +329,7 @@ Create a new user account with default workspace.
 
 ### Remove Member
 
-**Endpoint:** `DELETE /workspaces/{workspace}/members/{user}`  
+**Endpoint:** `DELETE /workspaces/{workspace}/members/{user}`
 **Auth:** Required (Owner/Admin)
 
 ---
@@ -338,14 +338,14 @@ Create a new user account with default workspace.
 
 ### List Pending Invitations
 
-**Endpoint:** `GET /workspaces/{workspace}/invitations`  
+**Endpoint:** `GET /workspaces/{workspace}/invitations`
 **Auth:** Required
 
 ---
 
 ### Send Invitation
 
-**Endpoint:** `POST /workspaces/{workspace}/invitations`  
+**Endpoint:** `POST /workspaces/{workspace}/invitations`
 **Auth:** Required (Owner/Admin)
 
 **Request Body:**
@@ -360,7 +360,7 @@ Create a new user account with default workspace.
 
 ### Cancel Invitation
 
-**Endpoint:** `DELETE /workspaces/{workspace}/invitations/{invitation}`  
+**Endpoint:** `DELETE /workspaces/{workspace}/invitations/{invitation}`
 **Auth:** Required (Owner/Admin)
 
 ---
@@ -438,7 +438,7 @@ Create a new user account with default workspace.
 
 ### Get Subscription
 
-**Endpoint:** `GET /workspaces/{workspace}/subscription`  
+**Endpoint:** `GET /workspaces/{workspace}/subscription`
 **Auth:** Required
 
 **Success Response (200):**
@@ -459,7 +459,7 @@ Create a new user account with default workspace.
 
 ### Create/Update Subscription
 
-**Endpoint:** `POST /workspaces/{workspace}/subscription`  
+**Endpoint:** `POST /workspaces/{workspace}/subscription`
 **Auth:** Required (Owner)
 
 **Request Body:**
@@ -473,7 +473,7 @@ Create a new user account with default workspace.
 
 ### Cancel Subscription
 
-**Endpoint:** `DELETE /workspaces/{workspace}/subscription`  
+**Endpoint:** `DELETE /workspaces/{workspace}/subscription`
 **Auth:** Required (Owner)
 
 ---

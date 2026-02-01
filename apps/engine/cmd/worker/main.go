@@ -47,6 +47,37 @@ func run() error {
 	httpExecutor := executor.NewHTTPExecutor()
 	svc.RegisterExecutor(httpExecutor)
 
+	// Register additional executors
+	transformExecutor := executor.NewTransformExecutor()
+	svc.RegisterExecutor(transformExecutor)
+
+	loopExecutor := executor.NewLoopExecutor()
+	svc.RegisterExecutor(loopExecutor)
+
+	conditionExecutor := executor.NewConditionExecutor()
+	svc.RegisterExecutor(conditionExecutor)
+
+	emailExecutor := executor.NewEmailExecutor()
+	svc.RegisterExecutor(emailExecutor)
+
+	delayExecutor := executor.NewDelayExecutor()
+	svc.RegisterExecutor(delayExecutor)
+
+	aiExecutor := executor.NewAIExecutor()
+	svc.RegisterExecutor(aiExecutor)
+
+	webhookExecutor := executor.NewWebhookExecutor()
+	svc.RegisterExecutor(webhookExecutor)
+
+	slackExecutor := executor.NewSlackExecutor()
+	svc.RegisterExecutor(slackExecutor)
+
+	discordExecutor := executor.NewDiscordExecutor()
+	svc.RegisterExecutor(discordExecutor)
+
+	twilioExecutor := executor.NewTwilioExecutor()
+	svc.RegisterExecutor(twilioExecutor)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

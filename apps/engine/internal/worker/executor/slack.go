@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -108,11 +109,15 @@ func NewSlackExecutor() *SlackExecutor {
 		ForceAttemptHTTP2:   true,
 	}
 
+	// Get default token from environment
+	defaultToken := os.Getenv("SLACK_BOT_TOKEN")
+
 	return &SlackExecutor{
 		client: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
 		},
+		defaultToken: defaultToken,
 	}
 }
 

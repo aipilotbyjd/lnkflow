@@ -2,7 +2,7 @@
 
 -- Create database (run as superuser)
 -- CREATE DATABASE linkflow;
--- CREATE USER linkflow WITH PASSWORD 'linkflow';
+-- CREATE USER linkflow WITH PASSWORD 'CHANGE_ME_IN_PRODUCTION';
 -- GRANT ALL PRIVILEGES ON DATABASE linkflow TO linkflow;
 
 \connect linkflow

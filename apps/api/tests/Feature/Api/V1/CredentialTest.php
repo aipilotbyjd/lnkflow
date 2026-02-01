@@ -79,7 +79,7 @@ describe('store', function () {
             'name' => 'My API Key',
             'type' => 'api_key',
             'data' => [
-                'api_key' => 'sk-test-12345',
+                'api_key' => 'sk-test-12345', // pragma: allowlist secret
                 'header_name' => 'X-API-Key',
             ],
         ];
@@ -102,7 +102,7 @@ describe('store', function () {
             'name' => 'My API Key',
             'type' => 'api_key',
             'data' => [
-                'api_key' => 'sk-test-secret-key-12345',
+                'api_key' => 'sk-test-secret-key-12345', // pragma: allowlist secret
                 'header_name' => 'X-API-Key',
             ],
         ];
@@ -133,7 +133,7 @@ describe('store', function () {
         $payload = [
             'name' => 'Existing Credential',
             'type' => 'api_key',
-            'data' => ['api_key' => 'test'],
+            'data' => ['api_key' => 'test'], // pragma: allowlist secret
         ];
 
         $response = $this->postJson("/api/v1/workspaces/{$this->workspace->id}/credentials", $payload);
@@ -211,7 +211,7 @@ describe('update', function () {
 
         $response = $this->putJson("/api/v1/workspaces/{$this->workspace->id}/credentials/{$credential->id}", [
             'data' => [
-                'api_key' => 'new-secret-key',
+                'api_key' => 'new-secret-key', // pragma: allowlist secret
                 'header_name' => 'Authorization',
             ],
         ]);

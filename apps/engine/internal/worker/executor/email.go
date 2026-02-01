@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/smtp"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,9 +55,26 @@ type EmailResponse struct {
 
 // NewEmailExecutor creates a new email executor.
 func NewEmailExecutor() *EmailExecutor {
+	// Get default SMTP settings from environment
+	defaultHost := os.Getenv("SMTP_HOST")
+	if defaultHost == "" {
+		defaultHost = "localhost"
+	}
+
+	defaultPortStr := os.Getenv("SMTP_PORT")
+	defaultPort := 25
+	if defaultPortStr != "" {
+		if port, err := strconv.Atoi(defaultPortStr); err == nil {
+			defaultPort = port
+		}
+	}
+
+	defaultFrom := os.Getenv("SMTP_FROM")
+
 	return &EmailExecutor{
-		defaultHost: "localhost",
-		defaultPort: 25,
+		defaultHost:  defaultHost,
+		defaultPort:  defaultPort,
+		defaultFrom:  defaultFrom,
 	}
 }
 

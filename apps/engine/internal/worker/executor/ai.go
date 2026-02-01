@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -78,11 +79,17 @@ func NewAIExecutor() *AIExecutor {
 		ForceAttemptHTTP2:   true,
 	}
 
+	// Get default API keys from environment
+	defaultOpenAI := os.Getenv("OPENAI_API_KEY")
+	defaultClaude := os.Getenv("ANTHROPIC_API_KEY")
+
 	return &AIExecutor{
 		client: &http.Client{
 			Timeout:   120 * time.Second, // AI calls can be slow
 			Transport: transport,
 		},
+		defaultOpenAI:  defaultOpenAI,
+		defaultClaude:  defaultClaude,
 	}
 }
 

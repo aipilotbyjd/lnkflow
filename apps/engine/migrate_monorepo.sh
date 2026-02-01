@@ -42,7 +42,7 @@ version: '3.8'
 
 services:
   api:
-    build: 
+    build:
       context: ./apps/api
       dockerfile: Dockerfile
     ports:
@@ -57,7 +57,7 @@ services:
       - linkflow-net
 
   engine:
-    build: 
+    build:
       context: ./apps/engine
       dockerfile: Dockerfile
     ports:

@@ -37,7 +37,7 @@ func run() error {
 		port         = flag.Int("port", 7234, "gRPC server port")
 		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
 		shardCount   = flag.Int("shard-count", 16, "Number of shards")
-		dbUrl        = flag.String("db-url", "postgres://localhost:5432/linkflow", "Database URL")
+		dbUrl        = flag.String("db-url", getEnv("DATABASE_URL", "postgres://linkflow-postgres:5432/linkflow"), "Database URL")
 		matchingAddr = flag.String("matching-addr", getEnv("MATCHING_ADDR", "localhost:7235"), "Matching service address")
 	)
 	flag.Parse()

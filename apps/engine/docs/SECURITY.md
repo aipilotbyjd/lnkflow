@@ -34,7 +34,7 @@ The following critical security vulnerabilities have been addressed:
 **Location:** `internal/security/authn/jwt.go`
 
 **Before:** Signature validation was TODO/placeholder
-**After:** 
+**After:**
 - Full HS256 (HMAC-SHA256) signature verification
 - Explicit rejection of "none" algorithm (JWT security vulnerability)
 - Proper base64url decoding (RFC 4648)
@@ -43,7 +43,7 @@ The following critical security vulnerabilities have been addressed:
 ### 3. Sandbox Isolation (CRITICAL)
 **Location:** `internal/sandbox/sandbox.go`
 
-**Before:** 
+**Before:**
 - Bash scripts inherited `os.Environ()` (leaking secrets)
 - No environment variable sanitization
 - Limited container security options

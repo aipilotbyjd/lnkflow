@@ -1,6 +1,6 @@
 # LinkFlow Execution Engine — Hyperscale Architecture
-> **Version**: 1.0.0  
-> **Status**: Architecture Specification  
+> **Version**: 1.0.0
+> **Status**: Architecture Specification
 > **Last Updated**: 2026-01-31
 ---
 ## Table of Contents
@@ -573,14 +573,14 @@ The Frontend Service is the API gateway that handles all external requests.
 package frontend
 import (
     "context"
-    
+
     apiv1 "github.com/linkflow/engine/api/proto/linkflow/api/v1"
 )
 type Service struct {
     historyClient  historyv1.HistoryServiceClient
     matchingClient matchingv1.MatchingServiceClient
     visibilityClient visibilityv1.VisibilityServiceClient
-    
+
     rateLimiter    ratelimit.Limiter
     circuitBreaker circuit.Breaker
     metrics        *metrics.Collector
@@ -603,7 +603,7 @@ func NewService(cfg *Config) (*Service, error) {
     if err != nil {
         return nil, fmt.Errorf("failed to connect to history service: %w", err)
     }
-    
+
     return &Service{
         historyClient:  historyv1.NewHistoryServiceClient(historyConn),
         rateLimiter:    ratelimit.NewHierarchical(cfg.RateLimits),
@@ -620,18 +620,18 @@ func (s *Service) StartWorkflowExecution(
     if err := s.rateLimiter.Allow(ctx, req.WorkspaceId); err != nil {
         return nil, status.Error(codes.ResourceExhausted, "rate limit exceeded")
     }
-    
+
     // Validate request
     if err := s.validateStartRequest(req); err != nil {
         return nil, status.Error(codes.InvalidArgument, err.Error())
     }
-    
+
     // Generate execution ID
     executionID := id.NewExecutionID()
-    
+
     // Record metrics
     s.metrics.ExecutionStarted(req.WorkspaceId, req.WorkflowId)
-    
+
     // Forward to history service
     historyReq := &historyv1.StartWorkflowExecutionRequest{
         WorkspaceId:   req.WorkspaceId,
@@ -640,13 +640,13 @@ func (s *Service) StartWorkflowExecution(
         Input:         req.Input,
         IdempotencyKey: req.IdempotencyKey,
     }
-    
+
     resp, err := s.historyClient.StartWorkflowExecution(ctx, historyReq)
     if err != nil {
         s.metrics.ExecutionStartFailed(req.WorkspaceId, req.WorkflowId)
         return nil, err
     }
-    
+
     return &apiv1.StartWorkflowExecutionResponse{
         ExecutionId: resp.ExecutionId,
         RunId:       resp.RunId,
@@ -669,7 +669,7 @@ type Service struct {
     engine          *engine.Engine
     historyStore    store.HistoryStore
     executionStore  store.ExecutionStore
-    
+
     eventSerializer serializer.Serializer
     metricsHandler  *metrics.Handler
 }
@@ -679,14 +679,14 @@ func (s *Service) StartWorkflowExecution(
 ) (*historyv1.StartWorkflowExecutionResponse, error) {
     // Get shard for this execution
     shardID := s.shardController.GetShardID(req.WorkspaceId, req.ExecutionId)
-    
+
     // Acquire shard lock
     shardCtx, err := s.shardController.AcquireShard(ctx, shardID)
     if err != nil {
         return nil, err
     }
     defer shardCtx.Release()
-    
+
     // Check idempotency
     if existing, err := s.executionStore.GetByIdempotencyKey(
         ctx, req.WorkspaceId, req.IdempotencyKey,
@@ -697,27 +697,27 @@ func (s *Service) StartWorkflowExecution(
             Started:     false, // Already existed
         }, nil
     }
-    
+
     // Create execution state
     mutableState := engine.NewMutableState(req)
-    
+
     // Build initial history events
     events := []*historyv1.HistoryEvent{
         s.buildWorkflowExecutionStartedEvent(req),
         s.buildDecisionTaskScheduledEvent(),
     }
-    
+
     // Persist atomically
     if err := s.persistExecution(ctx, shardCtx, mutableState, events); err != nil {
         return nil, err
     }
-    
+
     // Add decision task to matching service
     if err := s.addDecisionTask(ctx, mutableState); err != nil {
         // Execution persisted, task will be retried
         s.logger.Error("failed to add decision task", zap.Error(err))
     }
-    
+
     return &historyv1.StartWorkflowExecutionResponse{
         ExecutionId: req.ExecutionId,
         RunId:       mutableState.RunId,
@@ -739,7 +739,7 @@ package matching
 type Service struct {
     taskQueueManager *TaskQueueManager
     partitionManager *partition.Manager
-    
+
     historyClient   historyv1.HistoryServiceClient
     metricsHandler  *metrics.Handler
 }
@@ -754,18 +754,18 @@ func (s *Service) PollActivityTask(
         req.TaskQueue,
         req.WorkerIdentity,
     )
-    
+
     // Get or create task queue
     taskQueue := s.taskQueueManager.GetTaskQueue(
         req.WorkspaceId,
         req.TaskQueue,
         partitionID,
     )
-    
+
     // Poll with timeout
     pollCtx, cancel := context.WithTimeout(ctx, req.PollTimeout.AsDuration())
     defer cancel()
-    
+
     task, err := taskQueue.Poll(pollCtx, req.WorkerIdentity)
     if err != nil {
         if errors.Is(err, context.DeadlineExceeded) {
@@ -774,10 +774,10 @@ func (s *Service) PollActivityTask(
         }
         return nil, err
     }
-    
+
     // Record dispatch metrics
     s.metricsHandler.TaskDispatched(req.WorkspaceId, req.TaskQueue)
-    
+
     return &matchingv1.PollActivityTaskResponse{
         TaskToken:      task.Token,
         ActivityId:     task.ActivityId,
@@ -805,10 +805,10 @@ type Service struct {
     nodeRegistry    *nodes.Registry
     credResolver    *resolver.CredentialResolver
     varResolver     *resolver.VariableResolver
-    
+
     matchingClient  matchingv1.MatchingServiceClient
     historyClient   historyv1.HistoryServiceClient
-    
+
     isolationMode   IsolationMode // process, container, wasm, firecracker
     metrics         *metrics.Collector
 }
@@ -822,16 +822,16 @@ func (s *Service) Start(ctx context.Context) error {
         "ai":       {Workers: 20, Timeout: 300 * time.Second},
         "code":     {Workers: 20, Timeout: 30 * time.Second},
     }
-    
+
     g, ctx := errgroup.WithContext(ctx)
-    
+
     for category, cfg := range pools {
         category, cfg := category, cfg
         g.Go(func() error {
             return s.runWorkerPool(ctx, category, cfg)
         })
     }
-    
+
     return g.Wait()
 }
 func (s *Service) runWorkerPool(ctx context.Context, category string, cfg *pool.Config) error {
@@ -848,7 +848,7 @@ func (s *Service) pollAndExecute(ctx context.Context, category string, timeout t
             return
         default:
         }
-        
+
         // Poll for task
         task, err := s.matchingClient.PollActivityTask(ctx, &matchingv1.PollActivityTaskRequest{
             TaskQueue:      category,
@@ -858,12 +858,12 @@ func (s *Service) pollAndExecute(ctx context.Context, category string, timeout t
         if err != nil || task.TaskToken == nil {
             continue
         }
-        
+
         // Execute with timeout
         execCtx, cancel := context.WithTimeout(ctx, timeout)
         result, err := s.executeTask(execCtx, task)
         cancel()
-        
+
         // Report result
         if err != nil {
             s.historyClient.RespondActivityTaskFailed(ctx, &historyv1.RespondActivityTaskFailedRequest{
@@ -884,13 +884,13 @@ func (s *Service) executeTask(ctx context.Context, task *matchingv1.PollActivity
     if err != nil {
         return nil, fmt.Errorf("unknown node type: %s", task.ActivityType)
     }
-    
+
     // Resolve credentials
     creds, err := s.credResolver.Resolve(ctx, task.CredentialIds)
     if err != nil {
         return nil, fmt.Errorf("failed to resolve credentials: %w", err)
     }
-    
+
     // Build execution context
     nodeCtx := &nodes.Context{
         ExecutionID:  task.ExecutionId,
@@ -900,12 +900,12 @@ func (s *Service) executeTask(ctx context.Context, task *matchingv1.PollActivity
         Variables:    s.varResolver.GetAll(ctx, task.WorkspaceId),
         Attempt:      int(task.Attempt),
     }
-    
+
     // Execute in sandbox if needed
     if s.requiresIsolation(task.ActivityType) {
         return s.executeIsolated(ctx, runner, nodeCtx)
     }
-    
+
     return runner.Execute(ctx, nodeCtx)
 }
 ```
@@ -919,7 +919,7 @@ package events
 type EventType int32
 const (
     EventTypeUnspecified EventType = iota
-    
+
     // Workflow lifecycle
     EventTypeWorkflowExecutionStarted
     EventTypeWorkflowExecutionCompleted
@@ -928,14 +928,14 @@ const (
     EventTypeWorkflowExecutionCanceled
     EventTypeWorkflowExecutionTerminated
     EventTypeWorkflowExecutionContinuedAsNew
-    
+
     // Decision task lifecycle
     EventTypeDecisionTaskScheduled
     EventTypeDecisionTaskStarted
     EventTypeDecisionTaskCompleted
     EventTypeDecisionTaskTimedOut
     EventTypeDecisionTaskFailed
-    
+
     // Activity lifecycle
     EventTypeActivityTaskScheduled
     EventTypeActivityTaskStarted
@@ -943,21 +943,21 @@ const (
     EventTypeActivityTaskFailed
     EventTypeActivityTaskTimedOut
     EventTypeActivityTaskCanceled
-    
+
     // Timer lifecycle
     EventTypeTimerStarted
     EventTypeTimerFired
     EventTypeTimerCanceled
-    
+
     // Child workflow lifecycle
     EventTypeChildWorkflowExecutionStarted
     EventTypeChildWorkflowExecutionCompleted
     EventTypeChildWorkflowExecutionFailed
-    
+
     // Signals and queries
     EventTypeWorkflowExecutionSignaled
     EventTypeSignalExternalWorkflowExecutionInitiated
-    
+
     // Markers
     EventTypeMarkerRecorded
 )
@@ -992,27 +992,27 @@ type MutableState struct {
     // Execution info
     ExecutionInfo *ExecutionInfo
     ExecutionStats *ExecutionStats
-    
+
     // Pending activities
     PendingActivityInfos map[int64]*ActivityInfo
-    
+
     // Pending timers
     PendingTimerInfos map[string]*TimerInfo
-    
+
     // Child workflows
     PendingChildExecutionInfos map[int64]*ChildExecutionInfo
-    
+
     // Signals
     PendingSignalInfos map[int64]*SignalInfo
-    
+
     // Buffered events (not yet persisted)
     BufferedEvents []*HistoryEvent
-    
+
     // State tracking
     NextEventID       int64
     LastFirstEventID  int64
     LastProcessedEvent int64
-    
+
     // Checksum for corruption detection
     Checksum uint64
 }
@@ -1032,7 +1032,7 @@ func (ms *MutableState) ApplyEvent(event *HistoryEvent) error {
 }
 func (ms *MutableState) applyActivityScheduled(event *HistoryEvent) error {
     attrs := event.Attributes.(*ActivityTaskScheduledEventAttributes)
-    
+
     ms.PendingActivityInfos[event.EventID] = &ActivityInfo{
         ScheduleID:     event.EventID,
         ActivityID:     attrs.ActivityID,
@@ -1044,7 +1044,7 @@ func (ms *MutableState) applyActivityScheduled(event *HistoryEvent) error {
         RetryPolicy:    attrs.RetryPolicy,
         Status:         ActivityStatusScheduled,
     }
-    
+
     return nil
 }
 ```
@@ -1072,13 +1072,13 @@ func (r *Replayer) Replay(
     if err != nil {
         return nil, fmt.Errorf("failed to read history: %w", err)
     }
-    
+
     // Initialize mutable state
     ms := engine.NewMutableState(nil)
     result := &ReplayResult{
         MutableState: ms,
     }
-    
+
     // Replay each event
     for _, event := range history.Events {
         if err := ms.ApplyEvent(event); err != nil {
@@ -1087,13 +1087,13 @@ func (r *Replayer) Replay(
                 Error:   err,
             })
         }
-        
+
         // Track decisions for comparison
         if event.EventType == EventTypeDecisionTaskCompleted {
             result.Decisions = append(result.Decisions, r.extractDecisions(event)...)
         }
     }
-    
+
     return result, nil
 }
 // Shadow execution for testing changes
@@ -1107,14 +1107,14 @@ func (r *Replayer) ShadowReplay(
     if err != nil {
         return nil, err
     }
-    
+
     // Execute with new workflow definition
     shadow := engine.NewShadowEngine(newWorkflowDef)
     shadowResult, err := shadow.Execute(ctx, original.MutableState.ExecutionInfo.Input)
     if err != nil {
         return nil, err
     }
-    
+
     // Compare results
     return &ShadowResult{
         Original:    original,
@@ -1134,10 +1134,10 @@ type DAG struct {
     Nodes       map[string]*Node
     Edges       map[string][]string // source -> targets
     ReverseEdges map[string][]string // target -> sources
-    
+
     EntryNodes  []string
     ExitNodes   []string
-    
+
     // Topological ordering
     Order       []string
     Levels      map[string]int
@@ -1161,7 +1161,7 @@ func BuildDAG(workflow *Workflow) (*DAG, error) {
         ReverseEdges: make(map[string][]string),
         Levels:       make(map[string]int),
     }
-    
+
     // Add nodes
     for _, n := range workflow.Nodes {
         dag.Nodes[n.ID] = &Node{
@@ -1171,44 +1171,44 @@ func BuildDAG(workflow *Workflow) (*DAG, error) {
             Config: n.Data.Config,
         }
     }
-    
+
     // Add edges
     for _, e := range workflow.Edges {
         dag.Edges[e.Source] = append(dag.Edges[e.Source], e.Target)
         dag.ReverseEdges[e.Target] = append(dag.ReverseEdges[e.Target], e.Source)
     }
-    
+
     // Find entry nodes (no incoming edges)
     for id := range dag.Nodes {
         if len(dag.ReverseEdges[id]) == 0 {
             dag.EntryNodes = append(dag.EntryNodes, id)
         }
     }
-    
+
     // Find exit nodes (no outgoing edges)
     for id := range dag.Nodes {
         if len(dag.Edges[id]) == 0 {
             dag.ExitNodes = append(dag.ExitNodes, id)
         }
     }
-    
+
     // Compute topological order
     if err := dag.computeTopologicalOrder(); err != nil {
         return nil, fmt.Errorf("invalid DAG: %w", err)
     }
-    
+
     // Validate no cycles
     if err := dag.validateNoCycles(); err != nil {
         return nil, err
     }
-    
+
     return dag, nil
 }
 func (d *DAG) computeTopologicalOrder() error {
     visited := make(map[string]bool)
     temp := make(map[string]bool)
     order := make([]string, 0, len(d.Nodes))
-    
+
     var visit func(string) error
     visit = func(id string) error {
         if temp[id] {
@@ -1217,22 +1217,22 @@ func (d *DAG) computeTopologicalOrder() error {
         if visited[id] {
             return nil
         }
-        
+
         temp[id] = true
-        
+
         for _, next := range d.Edges[id] {
             if err := visit(next); err != nil {
                 return err
             }
         }
-        
+
         delete(temp, id)
         visited[id] = true
         order = append([]string{id}, order...)
-        
+
         return nil
     }
-    
+
     for id := range d.Nodes {
         if !visited[id] {
             if err := visit(id); err != nil {
@@ -1240,9 +1240,9 @@ func (d *DAG) computeTopologicalOrder() error {
             }
         }
     }
-    
+
     d.Order = order
-    
+
     // Compute levels for parallel execution
     for _, id := range order {
         level := 0
@@ -1253,7 +1253,7 @@ func (d *DAG) computeTopologicalOrder() error {
         }
         d.Levels[id] = level
     }
-    
+
     return nil
 }
 // GetParallelNodes returns nodes that can execute in parallel
@@ -1269,12 +1269,12 @@ func (d *DAG) GetParallelNodes(level int) []string {
 // GetNextNodes returns nodes ready to execute given completed nodes
 func (d *DAG) GetNextNodes(completed map[string]bool) []string {
     var ready []string
-    
+
     for id := range d.Nodes {
         if completed[id] {
             continue
         }
-        
+
         // Check if all dependencies are satisfied
         allDependenciesMet := true
         for _, dep := range d.ReverseEdges[id] {
@@ -1283,12 +1283,12 @@ func (d *DAG) GetNextNodes(completed map[string]bool) []string {
                 break
             }
         }
-        
+
         if allDependenciesMet {
             ready = append(ready, id)
         }
     }
-    
+
     return ready
 }
 ```
@@ -1301,28 +1301,28 @@ type Scheduler struct {
     dag          *graph.DAG
     state        *ExecutionState
     nodeRunner   nodes.Runner
-    
+
     taskQueue    chan *NodeTask
     resultQueue  chan *NodeResult
     errorQueue   chan *NodeError
-    
+
     concurrency  int
     timeout      time.Duration
 }
 type ExecutionState struct {
     ExecutionID  string
     Status       ExecutionStatus
-    
+
     NodeStates   map[string]*NodeState
     NodeOutputs  map[string]json.RawMessage
-    
+
     CompletedNodes map[string]bool
     FailedNodes    map[string]*NodeError
     SkippedNodes   map[string]bool
-    
+
     StartedAt    time.Time
     CompletedAt  time.Time
-    
+
     mu sync.RWMutex
 }
 type NodeState struct {
@@ -1336,7 +1336,7 @@ type NodeState struct {
 func (s *Scheduler) Execute(ctx context.Context, input json.RawMessage) (*ExecutionResult, error) {
     span, ctx := tracing.StartSpan(ctx, "scheduler.execute")
     defer span.End()
-    
+
     // Initialize state
     s.state = &ExecutionState{
         ExecutionID:    id.NewExecutionID(),
@@ -1348,40 +1348,40 @@ func (s *Scheduler) Execute(ctx context.Context, input json.RawMessage) (*Execut
         SkippedNodes:   make(map[string]bool),
         StartedAt:      time.Now(),
     }
-    
+
     // Store trigger data as entry node output
     for _, entryID := range s.dag.EntryNodes {
         s.state.NodeOutputs[entryID] = input
     }
-    
+
     // Start worker pool
     var wg sync.WaitGroup
     for i := 0; i < s.concurrency; i++ {
         wg.Add(1)
         go s.worker(ctx, &wg)
     }
-    
+
     // Schedule entry nodes
     for _, entryID := range s.dag.EntryNodes {
         s.scheduleNode(ctx, entryID, input)
     }
-    
+
     // Process results until complete
     err := s.processUntilComplete(ctx)
-    
+
     // Cleanup
     close(s.taskQueue)
     wg.Wait()
-    
+
     s.state.CompletedAt = time.Now()
-    
+
     if err != nil {
         s.state.Status = ExecutionStatusFailed
         return nil, err
     }
-    
+
     s.state.Status = ExecutionStatusCompleted
-    
+
     return &ExecutionResult{
         ExecutionID: s.state.ExecutionID,
         Status:      s.state.Status,
@@ -1391,17 +1391,17 @@ func (s *Scheduler) Execute(ctx context.Context, input json.RawMessage) (*Execut
 }
 func (s *Scheduler) worker(ctx context.Context, wg *sync.WaitGroup) {
     defer wg.Done()
-    
+
     for {
         select {
         case <-ctx.Done():
             return
-            
+
         case task, ok := <-s.taskQueue:
             if !ok {
                 return
             }
-            
+
             result, err := s.executeNode(ctx, task)
             if err != nil {
                 s.errorQueue <- &NodeError{
@@ -1420,15 +1420,15 @@ func (s *Scheduler) processUntilComplete(ctx context.Context) error {
         select {
         case <-ctx.Done():
             return ctx.Err()
-            
+
         case result := <-s.resultQueue:
             s.handleNodeCompleted(ctx, result)
-            
+
             // Check if execution is complete
             if s.isExecutionComplete() {
                 return nil
             }
-            
+
         case nodeErr := <-s.errorQueue:
             if s.shouldRetry(nodeErr) {
                 s.scheduleRetry(ctx, nodeErr)
@@ -1441,16 +1441,16 @@ func (s *Scheduler) processUntilComplete(ctx context.Context) error {
 func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult) {
     s.state.mu.Lock()
     defer s.state.mu.Unlock()
-    
+
     // Update state
     s.state.CompletedNodes[result.NodeID] = true
     s.state.NodeOutputs[result.NodeID] = result.Output
     s.state.NodeStates[result.NodeID].Status = NodeStatusCompleted
     s.state.NodeStates[result.NodeID].CompletedAt = time.Now()
-    
+
     // Find and schedule next nodes
     nextNodes := s.dag.GetNextNodes(s.state.CompletedNodes)
-    
+
     for _, nextID := range nextNodes {
         // Check conditions
         if s.dag.Nodes[nextID].Conditions != nil {
@@ -1460,7 +1460,7 @@ func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult)
                 continue
             }
         }
-        
+
         // Merge inputs from all upstream nodes
         input := s.mergeInputs(nextID)
         s.scheduleNode(ctx, nextID, input)
@@ -1469,15 +1469,15 @@ func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult)
 func (s *Scheduler) mergeInputs(nodeID string) json.RawMessage {
     s.state.mu.RLock()
     defer s.state.mu.RUnlock()
-    
+
     merged := make(map[string]json.RawMessage)
-    
+
     for _, upstream := range s.dag.ReverseEdges[nodeID] {
         if output, ok := s.state.NodeOutputs[upstream]; ok {
             merged[upstream] = output
         }
     }
-    
+
     result, _ := json.Marshal(merged)
     return result
 }
@@ -1492,20 +1492,20 @@ type TaskQueue struct {
     name        string
     workspaceID int64
     partitionID int32
-    
+
     // Tasks waiting to be dispatched
     tasks       *list.List
     tasksMap    map[string]*list.Element
-    
+
     // Workers waiting for tasks
     pollers     *list.List
-    
+
     // Rate limiting
     rateLimiter ratelimit.Limiter
-    
+
     // Metrics
     metrics     *metrics.TaskQueueMetrics
-    
+
     mu sync.Mutex
 }
 type Task struct {
@@ -1516,7 +1516,7 @@ type Task struct {
     Input          []byte
     ScheduledTime  time.Time
     Attempt        int32
-    
+
     // For ordering
     Priority       int32
     CreateTime     time.Time
@@ -1524,36 +1524,36 @@ type Task struct {
 func (tq *TaskQueue) AddTask(ctx context.Context, task *Task) error {
     tq.mu.Lock()
     defer tq.mu.Unlock()
-    
+
     // Check rate limit
     if !tq.rateLimiter.Allow() {
         return ErrRateLimited
     }
-    
+
     // Add to queue
     elem := tq.tasks.PushBack(task)
     tq.tasksMap[task.ID] = elem
-    
+
     // Update metrics
     tq.metrics.TaskAdded()
-    
+
     // Try to dispatch immediately if pollers waiting
     if tq.pollers.Len() > 0 {
         tq.tryDispatch()
     }
-    
+
     return nil
 }
 func (tq *TaskQueue) Poll(ctx context.Context, identity string) (*Task, error) {
     tq.mu.Lock()
-    
+
     // Try to get task immediately
     if tq.tasks.Len() > 0 {
         task := tq.dispatchNext()
         tq.mu.Unlock()
         return task, nil
     }
-    
+
     // Register as poller
     poller := &Poller{
         Identity:  identity,
@@ -1562,7 +1562,7 @@ func (tq *TaskQueue) Poll(ctx context.Context, identity string) (*Task, error) {
     }
     elem := tq.pollers.PushBack(poller)
     tq.mu.Unlock()
-    
+
     // Wait for task or timeout
     select {
     case <-ctx.Done():
@@ -1577,19 +1577,19 @@ func (tq *TaskQueue) tryDispatch() {
         // Get oldest task
         taskElem := tq.tasks.Front()
         task := taskElem.Value.(*Task)
-        
+
         // Get oldest poller
         pollerElem := tq.pollers.Front()
         poller := pollerElem.Value.(*Poller)
-        
+
         // Remove from queues
         tq.tasks.Remove(taskElem)
         delete(tq.tasksMap, task.ID)
         tq.pollers.Remove(pollerElem)
-        
+
         // Dispatch
         poller.ResultCh <- task
-        
+
         // Metrics
         tq.metrics.TaskDispatched(time.Since(task.CreateTime))
     }
@@ -1602,19 +1602,19 @@ package partition
 type Manager struct {
     numPartitions int32
     partitions    map[int32]*Partition
-    
+
     // Consistent hashing for partition assignment
     hashRing     *hashring.Ring
-    
+
     // Ownership tracking
     ownershipMgr *ownership.Manager
-    
+
     mu sync.RWMutex
 }
 type Partition struct {
     ID           int32
     TaskQueues   map[string]*engine.TaskQueue
-    
+
     // Load balancing
     Load         int64
     LastActive   time.Time
@@ -1627,16 +1627,16 @@ func (m *Manager) GetPartition(workspaceID int64, taskQueue string, workerID str
 func (m *Manager) RebalancePartitions(ctx context.Context) error {
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     // Calculate load per partition
     loads := make(map[int32]int64)
     for id, p := range m.partitions {
         loads[id] = p.Load
     }
-    
+
     // Find imbalanced partitions
     avgLoad := m.calculateAverageLoad(loads)
-    
+
     for id, load := range loads {
         if float64(load) > float64(avgLoad)*1.5 {
             // This partition is overloaded, split some task queues
@@ -1646,7 +1646,7 @@ func (m *Manager) RebalancePartitions(ctx context.Context) error {
             m.mergePartition(ctx, id)
         }
     }
-    
+
     return nil
 }
 ```
@@ -1665,7 +1665,7 @@ type ExecuteRequest struct {
     Config     json.RawMessage
     Input      json.RawMessage
     Timeout    time.Duration
-    
+
     // Resource limits
     MaxMemory  int64
     MaxCPU     float64
@@ -1679,7 +1679,7 @@ type ExecuteResponse struct {
 type ProcessSandbox struct {
     workDir    string
     binaryPath string
-    
+
     // cgroups for resource limiting
     cgroupPath string
 }
@@ -1690,37 +1690,37 @@ func (s *ProcessSandbox) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
         return nil, fmt.Errorf("failed to create cgroup: %w", err)
     }
     defer cgroup.Cleanup()
-    
+
     // Prepare input file
     inputFile, err := s.writeInput(req)
     if err != nil {
         return nil, err
     }
     defer os.Remove(inputFile)
-    
+
     // Execute in subprocess
     cmd := exec.CommandContext(ctx, s.binaryPath,
         "--type", req.NodeType,
         "--input", inputFile,
         "--config", string(req.Config),
     )
-    
+
     // Set resource limits
     cmd.SysProcAttr = &syscall.SysProcAttr{
         Cloneflags: syscall.CLONE_NEWNS | syscall.CLONE_NEWPID,
     }
-    
+
     // Capture output
     output, err := cmd.Output()
     if err != nil {
         return nil, fmt.Errorf("execution failed: %w", err)
     }
-    
+
     var response ExecuteResponse
     if err := json.Unmarshal(output, &response); err != nil {
         return nil, fmt.Errorf("invalid response: %w", err)
     }
-    
+
     return &response, nil
 }
 ```
@@ -1735,25 +1735,25 @@ import (
 type WASMSandbox struct {
     runtime wazero.Runtime
     cache   wazero.CompilationCache
-    
+
     // Module pool for reuse
     modules sync.Pool
 }
 func NewWASMSandbox() (*WASMSandbox, error) {
     ctx := context.Background()
-    
+
     // Create runtime with caching
     cache, err := wazero.NewCompilationCacheWithDir(".wasm-cache")
     if err != nil {
         return nil, err
     }
-    
+
     runtime := wazero.NewRuntimeWithConfig(ctx,
         wazero.NewRuntimeConfig().
             WithCompilationCache(cache).
             WithMemoryLimitPages(256), // 16MB max
     )
-    
+
     return &WASMSandbox{
         runtime: runtime,
         cache:   cache,
@@ -1765,50 +1765,50 @@ func (s *WASMSandbox) Execute(ctx context.Context, req *ExecuteRequest) (*Execut
     if err != nil {
         return nil, err
     }
-    
+
     // Compile module
     compiled, err := s.runtime.CompileModule(ctx, wasmBytes)
     if err != nil {
         return nil, fmt.Errorf("compilation failed: %w", err)
     }
     defer compiled.Close(ctx)
-    
+
     // Instantiate with memory limits
     moduleConfig := wazero.NewModuleConfig().
         WithStartFunctions(). // Don't auto-start
         WithStdout(io.Discard).
         WithStderr(io.Discard)
-    
+
     module, err := s.runtime.InstantiateModule(ctx, compiled, moduleConfig)
     if err != nil {
         return nil, fmt.Errorf("instantiation failed: %w", err)
     }
     defer module.Close(ctx)
-    
+
     // Call execute function
     execute := module.ExportedFunction("execute")
     if execute == nil {
         return nil, errors.New("module missing execute function")
     }
-    
+
     // Allocate input in WASM memory
     inputPtr, err := s.allocateInput(module, req.Input)
     if err != nil {
         return nil, err
     }
-    
+
     // Execute with timeout
     results, err := execute.Call(ctx, inputPtr)
     if err != nil {
         return nil, fmt.Errorf("execution failed: %w", err)
     }
-    
+
     // Read output from WASM memory
     output, err := s.readOutput(module, results[0])
     if err != nil {
         return nil, err
     }
-    
+
     return &ExecuteResponse{
         Output: output,
     }, nil
@@ -1827,22 +1827,22 @@ const (
 type Breaker struct {
     name          string
     state         State
-    
+
     // Thresholds
     failureThreshold    int
     successThreshold    int
     halfOpenRequests    int
-    
+
     // Timeouts
     openTimeout         time.Duration
-    
+
     // Counters
     failures       int
     successes      int
     requests       int
     lastFailure    time.Time
     lastStateChange time.Time
-    
+
     mu sync.RWMutex
 }
 func NewBreaker(name string, cfg *Config) *Breaker {
@@ -1858,11 +1858,11 @@ func NewBreaker(name string, cfg *Config) *Breaker {
 func (b *Breaker) Allow() bool {
     b.mu.Lock()
     defer b.mu.Unlock()
-    
+
     switch b.state {
     case StateClosed:
         return true
-        
+
     case StateOpen:
         // Check if we should transition to half-open
         if time.Since(b.lastStateChange) > b.openTimeout {
@@ -1870,7 +1870,7 @@ func (b *Breaker) Allow() bool {
             return true
         }
         return false
-        
+
     case StateHalfOpen:
         // Allow limited requests
         if b.requests < b.halfOpenRequests {
@@ -1879,13 +1879,13 @@ func (b *Breaker) Allow() bool {
         }
         return false
     }
-    
+
     return false
 }
 func (b *Breaker) RecordSuccess() {
     b.mu.Lock()
     defer b.mu.Unlock()
-    
+
     switch b.state {
     case StateHalfOpen:
         b.successes++
@@ -1899,10 +1899,10 @@ func (b *Breaker) RecordSuccess() {
 func (b *Breaker) RecordFailure() {
     b.mu.Lock()
     defer b.mu.Unlock()
-    
+
     b.failures++
     b.lastFailure = time.Now()
-    
+
     switch b.state {
     case StateClosed:
         if b.failures >= b.failureThreshold {
@@ -1933,16 +1933,16 @@ import (
 type Runner interface {
     // Type returns the node type identifier
     Type() string
-    
+
     // Category returns the node category (http, email, database, etc.)
     Category() string
-    
+
     // Execute runs the node with the given context
     Execute(ctx context.Context, execCtx *Context) (*Result, error)
-    
+
     // Validate validates the node configuration
     Validate(config json.RawMessage) error
-    
+
     // Schema returns the JSON schema for configuration
     Schema() *Schema
 }
@@ -1953,29 +1953,29 @@ type Context struct {
     WorkflowID    int64
     WorkspaceID   int64
     NodeID        string
-    
+
     // Input from previous nodes
     Input         json.RawMessage
     TriggerData   json.RawMessage
-    
+
     // All node outputs (for expressions)
     NodeOutputs   map[string]json.RawMessage
-    
+
     // Resolved credentials
     Credentials   map[string]map[string]string
-    
+
     // Workspace variables
     Variables     map[string]string
-    
+
     // Attempt info
     Attempt       int
     MaxAttempts   int
-    
+
     // Services
     HTTPClient    *http.Client
     Logger        *zap.Logger
     Metrics       *metrics.Collector
-    
+
     // Expression evaluator
     Evaluator     *expression.Evaluator
 }
@@ -1983,7 +1983,7 @@ type Context struct {
 type Result struct {
     Output    json.RawMessage
     Metadata  map[string]string
-    
+
     // For binary data (files, etc.)
     Binary    []byte
     MimeType  string
@@ -2014,7 +2014,7 @@ import (
     "io"
     "net/http"
     "time"
-    
+
     "github.com/linkflow/engine/internal/nodes"
 )
 type RequestRunner struct {
@@ -2058,18 +2058,18 @@ func (r *RequestRunner) Execute(ctx context.Context, execCtx *nodes.Context) (*n
     if err := json.Unmarshal(execCtx.Input, &cfg); err != nil {
         return nil, fmt.Errorf("invalid config: %w", err)
     }
-    
+
     // Interpolate expressions in URL, headers, body
     url, err := execCtx.Evaluator.Interpolate(cfg.URL, execCtx.NodeOutputs)
     if err != nil {
         return nil, fmt.Errorf("invalid URL expression: %w", err)
     }
-    
+
     headers := make(map[string]string)
     for k, v := range cfg.Headers {
         headers[k], _ = execCtx.Evaluator.Interpolate(v, execCtx.NodeOutputs)
     }
-    
+
     // Build request
     var body io.Reader
     if cfg.BodyType == "json" {
@@ -2077,17 +2077,17 @@ func (r *RequestRunner) Execute(ctx context.Context, execCtx *nodes.Context) (*n
         body = bytes.NewReader(interpolatedBody)
         headers["Content-Type"] = "application/json"
     }
-    
+
     req, err := http.NewRequestWithContext(ctx, cfg.Method, url, body)
     if err != nil {
         return nil, fmt.Errorf("failed to create request: %w", err)
     }
-    
+
     // Set headers
     for k, v := range headers {
         req.Header.Set(k, v)
     }
-    
+
     // Inject credentials
     if creds, ok := execCtx.Credentials["http"]; ok {
         if token, ok := creds["bearer_token"]; ok {
@@ -2101,23 +2101,23 @@ func (r *RequestRunner) Execute(ctx context.Context, execCtx *nodes.Context) (*n
             req.Header.Set(headerName, apiKey)
         }
     }
-    
+
     // Execute request
     start := time.Now()
     resp, err := r.client.Do(req)
     duration := time.Since(start)
-    
+
     if err != nil {
         return nil, fmt.Errorf("request failed: %w", err)
     }
     defer resp.Body.Close()
-    
+
     // Read response
     respBody, err := io.ReadAll(resp.Body)
     if err != nil {
         return nil, fmt.Errorf("failed to read response: %w", err)
     }
-    
+
     // Parse body based on content type
     var parsedBody interface{}
     contentType := resp.Header.Get("Content-Type")
@@ -2126,7 +2126,7 @@ func (r *RequestRunner) Execute(ctx context.Context, execCtx *nodes.Context) (*n
     } else {
         parsedBody = string(respBody)
     }
-    
+
     // Build output
     output := &Output{
         Status:     resp.StatusCode,
@@ -2135,10 +2135,10 @@ func (r *RequestRunner) Execute(ctx context.Context, execCtx *nodes.Context) (*n
         Body:       parsedBody,
         DurationMs: duration.Milliseconds(),
     }
-    
+
     // Record metrics
     execCtx.Metrics.HTTPRequestCompleted(url, cfg.Method, resp.StatusCode, duration)
-    
+
     result, _ := json.Marshal(output)
     return &nodes.Result{Output: result}, nil
 }
@@ -2147,19 +2147,19 @@ func (r *RequestRunner) Validate(config json.RawMessage) error {
     if err := json.Unmarshal(config, &cfg); err != nil {
         return err
     }
-    
+
     if cfg.URL == "" {
         return errors.New("url is required")
     }
-    
+
     validMethods := map[string]bool{
-        "GET": true, "POST": true, "PUT": true, 
+        "GET": true, "POST": true, "PUT": true,
         "PATCH": true, "DELETE": true, "HEAD": true,
     }
     if !validMethods[cfg.Method] {
         return fmt.Errorf("invalid method: %s", cfg.Method)
     }
-    
+
     return nil
 }
 func (r *RequestRunner) Schema() *nodes.Schema {
@@ -2201,7 +2201,7 @@ func (r *RequestRunner) Schema() *nodes.Schema {
 package registry
 import (
     "sync"
-    
+
     "github.com/linkflow/engine/internal/nodes"
     "github.com/linkflow/engine/internal/nodes/actions/http"
     "github.com/linkflow/engine/internal/nodes/actions/email"
@@ -2215,10 +2215,10 @@ func NewRegistry() *Registry {
     r := &Registry{
         runners: make(map[string]nodes.Runner),
     }
-    
+
     // Register built-in nodes
     r.registerBuiltins()
-    
+
     return r
 }
 func (r *Registry) registerBuiltins() {
@@ -2226,36 +2226,36 @@ func (r *Registry) registerBuiltins() {
     r.Register(triggers.NewManualTrigger())
     r.Register(triggers.NewWebhookTrigger())
     r.Register(triggers.NewScheduleTrigger())
-    
+
     // HTTP
     r.Register(http.NewRequestRunner())
     r.Register(http.NewGraphQLRunner())
-    
+
     // Email
     r.Register(email.NewSMTPRunner())
     r.Register(email.NewSendGridRunner())
-    
+
     // Messaging
     r.Register(messaging.NewSlackRunner())
     r.Register(messaging.NewDiscordRunner())
     r.Register(messaging.NewTelegramRunner())
-    
+
     // Database
     r.Register(database.NewPostgresRunner())
     r.Register(database.NewMySQLRunner())
     r.Register(database.NewMongoDBRunner())
     r.Register(database.NewRedisRunner())
-    
+
     // AI
     r.Register(ai.NewOpenAIRunner())
     r.Register(ai.NewAnthropicRunner())
-    
+
     // Logic
     r.Register(logic.NewConditionRunner())
     r.Register(logic.NewSwitchRunner())
     r.Register(logic.NewLoopRunner())
     r.Register(logic.NewDelayRunner())
-    
+
     // Transform
     r.Register(transform.NewSetRunner())
     r.Register(transform.NewCodeRunner())
@@ -2269,7 +2269,7 @@ func (r *Registry) Register(runner nodes.Runner) {
 func (r *Registry) Get(nodeType string) (nodes.Runner, error) {
     r.mu.RLock()
     defer r.mu.RUnlock()
-    
+
     runner, ok := r.runners[nodeType]
     if !ok {
         return nil, fmt.Errorf("unknown node type: %s", nodeType)
@@ -2279,7 +2279,7 @@ func (r *Registry) Get(nodeType string) (nodes.Runner, error) {
 func (r *Registry) List() []nodes.Runner {
     r.mu.RLock()
     defer r.mu.RUnlock()
-    
+
     list := make([]nodes.Runner, 0, len(r.runners))
     for _, runner := range r.runners {
         list = append(list, runner)
@@ -2289,7 +2289,7 @@ func (r *Registry) List() []nodes.Runner {
 func (r *Registry) ListByCategory(category string) []nodes.Runner {
     r.mu.RLock()
     defer r.mu.RUnlock()
-    
+
     var list []nodes.Runner
     for _, runner := range r.runners {
         if runner.Category() == category {
@@ -2323,7 +2323,7 @@ func NewEngine() (*Engine, error) {
         cel.Variable("nodes", cel.MapType(cel.StringType, cel.DynType)),
         cel.Variable("env", cel.MapType(cel.StringType, cel.StringType)),
         cel.Variable("now", cel.TimestampType),
-        
+
         // Custom functions
         cel.Function("json_parse",
             cel.Overload("json_parse_string",
@@ -2342,7 +2342,7 @@ func NewEngine() (*Engine, error) {
     if err != nil {
         return nil, err
     }
-    
+
     return &Engine{
         celEnv:    env,
         functions: builtinFunctions(),
@@ -2360,66 +2360,66 @@ func (e *Engine) Interpolate(template string, data map[string]interface{}) (stri
     if !strings.Contains(template, "{{") {
         return template, nil
     }
-    
+
     // Check cache
     if cached, ok := e.cache.Get(template); ok {
         return e.executeCompiled(cached.(*compiledTemplate), data)
     }
-    
+
     // Parse template
     compiled, err := e.compile(template)
     if err != nil {
         return "", err
     }
-    
+
     e.cache.Add(template, compiled)
-    
+
     return e.executeCompiled(compiled, data)
 }
 func (e *Engine) compile(template string) (*compiledTemplate, error) {
     compiled := &compiledTemplate{
         parts: make([]templatePart, 0),
     }
-    
+
     scanner := newScanner(template)
-    
+
     for scanner.Scan() {
         token := scanner.Token()
-        
+
         switch token.Type {
         case tokenText:
             compiled.parts = append(compiled.parts, templatePart{
                 isExpression: false,
                 text:         token.Value,
             })
-            
+
         case tokenExpression:
             // Compile CEL expression
             ast, issues := e.celEnv.Compile(token.Value)
             if issues != nil && issues.Err() != nil {
                 return nil, fmt.Errorf("expression error: %w", issues.Err())
             }
-            
+
             prg, err := e.celEnv.Program(ast)
             if err != nil {
                 return nil, err
             }
-            
+
             compiled.parts = append(compiled.parts, templatePart{
                 isExpression: true,
                 program:      prg,
             })
         }
     }
-    
+
     return compiled, nil
 }
 func (e *Engine) executeCompiled(compiled *compiledTemplate, data map[string]interface{}) (string, error) {
     ctx := e.pool.Get().(*evalContext)
     defer e.pool.Put(ctx)
-    
+
     ctx.reset()
-    
+
     // Build activation
     activation := map[string]interface{}{
         "trigger": data["trigger"],
@@ -2427,23 +2427,23 @@ func (e *Engine) executeCompiled(compiled *compiledTemplate, data map[string]int
         "env":     data["env"],
         "now":     time.Now(),
     }
-    
+
     var result strings.Builder
-    
+
     for _, part := range compiled.parts {
         if !part.isExpression {
             result.WriteString(part.text)
             continue
         }
-        
+
         out, _, err := part.program.Eval(activation)
         if err != nil {
             return "", fmt.Errorf("evaluation error: %w", err)
         }
-        
+
         result.WriteString(fmt.Sprintf("%v", out.Value()))
     }
-    
+
     return result.String(), nil
 }
 // EvaluateCondition evaluates a boolean condition
@@ -2452,28 +2452,28 @@ func (e *Engine) EvaluateCondition(expression string, data map[string]interface{
     if issues != nil && issues.Err() != nil {
         return false, issues.Err()
     }
-    
+
     prg, err := e.celEnv.Program(ast)
     if err != nil {
         return false, err
     }
-    
+
     activation := map[string]interface{}{
         "trigger": data["trigger"],
         "nodes":   data["nodes"],
         "env":     data["env"],
     }
-    
+
     out, _, err := prg.Eval(activation)
     if err != nil {
         return false, err
     }
-    
+
     result, ok := out.Value().(bool)
     if !ok {
         return false, errors.New("condition must return boolean")
     }
-    
+
     return result, nil
 }
 ```
@@ -2495,7 +2495,7 @@ func Stdlib() map[string]Function {
         "endsWith":   strings.HasSuffix,
         "substring":  substring,
         "length":     length,
-        
+
         // Math functions
         "abs":     math.Abs,
         "ceil":    math.Ceil,
@@ -2505,7 +2505,7 @@ func Stdlib() map[string]Function {
         "max":     max,
         "sum":     sum,
         "avg":     avg,
-        
+
         // Date functions
         "now":         time.Now,
         "parseDate":   parseDate,
@@ -2513,14 +2513,14 @@ func Stdlib() map[string]Function {
         "addDays":     addDays,
         "addHours":    addHours,
         "diffDays":    diffDays,
-        
+
         // JSON functions
         "jsonParse":    jsonParse,
         "jsonPath":     jsonPath,
         "jsonStringify": jsonStringify,
         "get":          getPath,
         "set":          setPath,
-        
+
         // Crypto functions
         "md5":          md5Hash,
         "sha256":       sha256Hash,
@@ -2528,7 +2528,7 @@ func Stdlib() map[string]Function {
         "base64Encode": base64Encode,
         "base64Decode": base64Decode,
         "uuid":         uuid,
-        
+
         // Array functions
         "first":   first,
         "last":    last,
@@ -2539,14 +2539,14 @@ func Stdlib() map[string]Function {
         "unique":  unique,
         "sort":    sortFunc,
         "reverse": reverse,
-        
+
         // Type conversion
         "toString":  toString,
         "toInt":     toInt,
         "toFloat":   toFloat,
         "toBool":    toBool,
         "toArray":   toArray,
-        
+
         // Utility
         "if":        ifFunc,
         "coalesce":  coalesce,
@@ -2566,7 +2566,7 @@ func jsonPath(data interface{}, path string) (interface{}, error) {
 func getPath(data interface{}, path string) (interface{}, error) {
     parts := strings.Split(path, ".")
     current := data
-    
+
     for _, part := range parts {
         switch v := current.(type) {
         case map[string]interface{}:
@@ -2585,7 +2585,7 @@ func getPath(data interface{}, path string) (interface{}, error) {
             return nil, nil
         }
     }
-    
+
     return current, nil
 }
 ```
@@ -2597,7 +2597,7 @@ func getPath(data interface{}, path string) (interface{}, error) {
 package postgres
 import (
     "context"
-    
+
     "github.com/jackc/pgx/v5/pgxpool"
 )
 type ExecutionStore struct {
@@ -2613,7 +2613,7 @@ func (s *ExecutionStore) CreateExecution(ctx context.Context, exec *Execution) e
             status, input, started_at, created_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `
-    
+
     _, err := s.pool.Exec(ctx, query,
         exec.ExecutionID,
         exec.WorkflowID,
@@ -2624,7 +2624,7 @@ func (s *ExecutionStore) CreateExecution(ctx context.Context, exec *Execution) e
         exec.StartedAt,
         time.Now(),
     )
-    
+
     return err
 }
 func (s *ExecutionStore) UpdateExecution(ctx context.Context, exec *Execution) error {
@@ -2637,7 +2637,7 @@ func (s *ExecutionStore) UpdateExecution(ctx context.Context, exec *Execution) e
             updated_at = NOW()
         WHERE execution_id = $1
     `
-    
+
     _, err := s.pool.Exec(ctx, query,
         exec.ExecutionID,
         exec.Status,
@@ -2645,19 +2645,19 @@ func (s *ExecutionStore) UpdateExecution(ctx context.Context, exec *Execution) e
         exec.Error,
         exec.FinishedAt,
     )
-    
+
     return err
 }
 func (s *ExecutionStore) GetExecution(ctx context.Context, executionID string) (*Execution, error) {
     query := `
-        SELECT 
+        SELECT
             execution_id, workflow_id, workspace_id, run_id,
             status, input, output, error,
             started_at, finished_at, created_at, updated_at
         FROM executions
         WHERE execution_id = $1
     `
-    
+
     var exec Execution
     err := s.pool.QueryRow(ctx, query, executionID).Scan(
         &exec.ExecutionID,
@@ -2673,14 +2673,14 @@ func (s *ExecutionStore) GetExecution(ctx context.Context, executionID string) (
         &exec.CreatedAt,
         &exec.UpdatedAt,
     )
-    
+
     if err != nil {
         if errors.Is(err, pgx.ErrNoRows) {
             return nil, ErrNotFound
         }
         return nil, err
     }
-    
+
     return &exec, nil
 }
 // internal/store/persistence/postgres/history.go
@@ -2697,14 +2697,14 @@ func (s *HistoryStore) AppendEvents(
         return err
     }
     defer tx.Rollback(ctx)
-    
+
     // Batch insert events
     batch := &pgx.Batch{}
-    
+
     for _, event := range events {
         batch.Queue(`
             INSERT INTO execution_events (
-                execution_id, event_id, event_type, 
+                execution_id, event_id, event_type,
                 node_id, data, version, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `,
@@ -2717,16 +2717,16 @@ func (s *HistoryStore) AppendEvents(
             event.Timestamp,
         )
     }
-    
+
     results := tx.SendBatch(ctx, batch)
     defer results.Close()
-    
+
     for range events {
         if _, err := results.Exec(); err != nil {
             return err
         }
     }
-    
+
     return tx.Commit(ctx)
 }
 func (s *HistoryStore) ReadEvents(
@@ -2736,8 +2736,8 @@ func (s *HistoryStore) ReadEvents(
     pageSize int,
 ) ([]*HistoryEvent, error) {
     query := `
-        SELECT 
-            event_id, event_type, node_id, 
+        SELECT
+            event_id, event_type, node_id,
             data, version, created_at
         FROM execution_events
         WHERE execution_id = $1
@@ -2746,14 +2746,14 @@ func (s *HistoryStore) ReadEvents(
         ORDER BY event_id ASC
         LIMIT $4
     `
-    
-    rows, err := s.pool.Query(ctx, query, 
+
+    rows, err := s.pool.Query(ctx, query,
         executionID, minEventID, maxEventID, pageSize)
     if err != nil {
         return nil, err
     }
     defer rows.Close()
-    
+
     var events []*HistoryEvent
     for rows.Next() {
         var event HistoryEvent
@@ -2769,7 +2769,7 @@ func (s *HistoryStore) ReadEvents(
         }
         events = append(events, &event)
     }
-    
+
     return events, nil
 }
 ```
@@ -2784,10 +2784,10 @@ import (
 type MultiLevelCache struct {
     l1 *ristretto.Cache  // In-process cache (fastest)
     l2 *redis.Client     // Distributed cache
-    
+
     l1TTL time.Duration
     l2TTL time.Duration
-    
+
     metrics *metrics.CacheMetrics
 }
 func NewMultiLevelCache(cfg *Config, redisClient *redis.Client) (*MultiLevelCache, error) {
@@ -2799,7 +2799,7 @@ func NewMultiLevelCache(cfg *Config, redisClient *redis.Client) (*MultiLevelCach
     if err != nil {
         return nil, err
     }
-    
+
     return &MultiLevelCache{
         l1:    l1,
         l2:    redisClient,
@@ -2814,7 +2814,7 @@ func (c *MultiLevelCache) Get(ctx context.Context, key string) ([]byte, error) {
         return value.([]byte), nil
     }
     c.metrics.L1Miss()
-    
+
     // Try L2
     value, err := c.l2.Get(ctx, key).Bytes()
     if err == nil {
@@ -2823,18 +2823,18 @@ func (c *MultiLevelCache) Get(ctx context.Context, key string) ([]byte, error) {
         c.l1.SetWithTTL(key, value, int64(len(value)), c.l1TTL)
         return value, nil
     }
-    
+
     if errors.Is(err, redis.Nil) {
         c.metrics.L2Miss()
         return nil, ErrNotFound
     }
-    
+
     return nil, err
 }
 func (c *MultiLevelCache) Set(ctx context.Context, key string, value []byte) error {
     // Set in both levels
     c.l1.SetWithTTL(key, value, int64(len(value)), c.l1TTL)
-    
+
     return c.l2.Set(ctx, key, value, c.l2TTL).Err()
 }
 func (c *MultiLevelCache) Delete(ctx context.Context, key string) error {
@@ -2854,16 +2854,16 @@ func (c *MultiLevelCache) GetOrSet(
     if !errors.Is(err, ErrNotFound) {
         return nil, err
     }
-    
+
     // Load from source
     value, err = loader()
     if err != nil {
         return nil, err
     }
-    
+
     // Store in cache
     c.Set(ctx, key, value)
-    
+
     return value, nil
 }
 ```
@@ -2897,7 +2897,7 @@ func NewLaravelEncryptor(key string) (*LaravelEncryptor, error) {
     if err != nil {
         return nil, fmt.Errorf("invalid key: %w", err)
     }
-    
+
     return &LaravelEncryptor{key: decoded}, nil
 }
 func (e *LaravelEncryptor) Decrypt(encrypted string) ([]byte, error) {
@@ -2906,41 +2906,41 @@ func (e *LaravelEncryptor) Decrypt(encrypted string) ([]byte, error) {
     if err != nil {
         return nil, err
     }
-    
+
     // Parse JSON payload
     var payload encryptedPayload
     if err := json.Unmarshal(payloadBytes, &payload); err != nil {
         return nil, err
     }
-    
+
     // Verify MAC
     if !e.verifyMAC(payload) {
         return nil, errors.New("invalid MAC")
     }
-    
+
     // Decode IV and value
     iv, err := base64.StdEncoding.DecodeString(payload.IV)
     if err != nil {
         return nil, err
     }
-    
+
     value, err := base64.StdEncoding.DecodeString(payload.Value)
     if err != nil {
         return nil, err
     }
-    
+
     // Decrypt using AES-256-CBC
     block, err := aes.NewCipher(e.key)
     if err != nil {
         return nil, err
     }
-    
+
     mode := cipher.NewCBCDecrypter(block, iv)
     mode.CryptBlocks(value, value)
-    
+
     // Remove PKCS7 padding
     value = e.removePadding(value)
-    
+
     // Laravel serializes with PHP serialize(), we need to unserialize
     return e.phpUnserialize(value)
 }
@@ -2949,7 +2949,7 @@ func (e *LaravelEncryptor) verifyMAC(payload encryptedPayload) bool {
     mac := hmac.New(sha256.New, e.key)
     mac.Write([]byte(payload.IV + payload.Value))
     expected := hex.EncodeToString(mac.Sum(nil))
-    
+
     return hmac.Equal([]byte(expected), []byte(payload.MAC))
 }
 func (e *LaravelEncryptor) removePadding(data []byte) []byte {
@@ -2983,7 +2983,7 @@ func (e *LaravelEncryptor) phpUnserialize(data []byte) ([]byte, error) {
 package resolver
 import (
     "context"
-    
+
     "github.com/linkflow/engine/internal/security/crypto"
     "github.com/linkflow/engine/internal/store/cache"
 )
@@ -2991,7 +2991,7 @@ type CredentialResolver struct {
     db        *pgxpool.Pool
     encryptor *crypto.LaravelEncryptor
     cache     *cache.MultiLevelCache
-    
+
     cacheTTL  time.Duration
 }
 func NewCredentialResolver(
@@ -3003,7 +3003,7 @@ func NewCredentialResolver(
     if err != nil {
         return nil, err
     }
-    
+
     return &CredentialResolver{
         db:        db,
         encryptor: encryptor,
@@ -3017,12 +3017,12 @@ func (r *CredentialResolver) Resolve(
     credentialIDs []int64,
 ) (map[int64]map[string]string, error) {
     result := make(map[int64]map[string]string)
-    
+
     // Check cache first
     var missing []int64
     for _, id := range credentialIDs {
         key := fmt.Sprintf("cred:%d:%d", workspaceID, id)
-        
+
         cached, err := r.cache.Get(ctx, key)
         if err == nil {
             var cred map[string]string
@@ -3032,51 +3032,51 @@ func (r *CredentialResolver) Resolve(
             missing = append(missing, id)
         }
     }
-    
+
     if len(missing) == 0 {
         return result, nil
     }
-    
+
     // Fetch missing from database
     query := `
         SELECT id, data
         FROM credentials
         WHERE workspace_id = $1 AND id = ANY($2) AND deleted_at IS NULL
     `
-    
+
     rows, err := r.db.Query(ctx, query, workspaceID, missing)
     if err != nil {
         return nil, err
     }
     defer rows.Close()
-    
+
     for rows.Next() {
         var id int64
         var encryptedData string
-        
+
         if err := rows.Scan(&id, &encryptedData); err != nil {
             return nil, err
         }
-        
+
         // Decrypt
         decrypted, err := r.encryptor.Decrypt(encryptedData)
         if err != nil {
             return nil, fmt.Errorf("failed to decrypt credential %d: %w", id, err)
         }
-        
+
         var data map[string]string
         if err := json.Unmarshal(decrypted, &data); err != nil {
             return nil, err
         }
-        
+
         result[id] = data
-        
+
         // Cache for next time
         key := fmt.Sprintf("cred:%d:%d", workspaceID, id)
         cached, _ := json.Marshal(data)
         r.cache.Set(ctx, key, cached)
     }
-    
+
     return result, nil
 }
 ```
@@ -3095,16 +3095,16 @@ type Collector struct {
     executionsTotal    *prometheus.CounterVec
     executionDuration  *prometheus.HistogramVec
     activeExecutions   *prometheus.GaugeVec
-    
+
     // Node metrics
     nodeExecutionsTotal   *prometheus.CounterVec
     nodeExecutionDuration *prometheus.HistogramVec
     nodeErrors            *prometheus.CounterVec
-    
+
     // Queue metrics
     queueDepth    *prometheus.GaugeVec
     queueLatency  *prometheus.HistogramVec
-    
+
     // Worker metrics
     workerUtilization *prometheus.GaugeVec
     workerErrors      *prometheus.CounterVec
@@ -3119,7 +3119,7 @@ func NewCollector(namespace string) *Collector {
             },
             []string{"workspace_id", "workflow_id", "status"},
         ),
-        
+
         executionDuration: promauto.NewHistogramVec(
             prometheus.HistogramOpts{
                 Namespace: namespace,
@@ -3129,7 +3129,7 @@ func NewCollector(namespace string) *Collector {
             },
             []string{"workspace_id", "workflow_id"},
         ),
-        
+
         activeExecutions: promauto.NewGaugeVec(
             prometheus.GaugeOpts{
                 Namespace: namespace,
@@ -3138,7 +3138,7 @@ func NewCollector(namespace string) *Collector {
             },
             []string{"workspace_id"},
         ),
-        
+
         nodeExecutionsTotal: promauto.NewCounterVec(
             prometheus.CounterOpts{
                 Namespace: namespace,
@@ -3147,7 +3147,7 @@ func NewCollector(namespace string) *Collector {
             },
             []string{"node_type", "status"},
         ),
-        
+
         nodeExecutionDuration: promauto.NewHistogramVec(
             prometheus.HistogramOpts{
                 Namespace: namespace,
@@ -3157,7 +3157,7 @@ func NewCollector(namespace string) *Collector {
             },
             []string{"node_type"},
         ),
-        
+
         queueDepth: promauto.NewGaugeVec(
             prometheus.GaugeOpts{
                 Namespace: namespace,
@@ -3166,7 +3166,7 @@ func NewCollector(namespace string) *Collector {
             },
             []string{"queue_name"},
         ),
-        
+
         queueLatency: promauto.NewHistogramVec(
             prometheus.HistogramOpts{
                 Namespace: namespace,
@@ -3187,12 +3187,12 @@ func (c *Collector) ExecutionCompleted(workspaceID, workflowID int64, status str
         fmt.Sprint(workflowID),
         status,
     ).Inc()
-    
+
     c.executionDuration.WithLabelValues(
         fmt.Sprint(workspaceID),
         fmt.Sprint(workflowID),
     ).Observe(duration.Seconds())
-    
+
     c.activeExecutions.WithLabelValues(fmt.Sprint(workspaceID)).Dec()
 }
 func (c *Collector) NodeExecuted(nodeType, status string, duration time.Duration) {
@@ -3206,7 +3206,7 @@ func (c *Collector) NodeExecuted(nodeType, status string, duration time.Duration
 package tracing
 import (
     "context"
-    
+
     "go.opentelemetry.io/otel"
     "go.opentelemetry.io/otel/attribute"
     "go.opentelemetry.io/otel/trace"
@@ -3253,7 +3253,7 @@ import (
 type Injector struct {
     enabled    bool
     scenarios  map[string]*Scenario
-    
+
     mu sync.RWMutex
 }
 type Scenario struct {
@@ -3262,7 +3262,7 @@ type Scenario struct {
     Probability float64
     Duration    time.Duration
     Config      map[string]interface{}
-    
+
     Active      bool
     ActivatedAt time.Time
 }
@@ -3289,19 +3289,19 @@ func (i *Injector) MaybeInject(ctx context.Context, point string) error {
     if !i.enabled {
         return nil
     }
-    
+
     i.mu.RLock()
     defer i.mu.RUnlock()
-    
+
     for _, scenario := range i.scenarios {
         if !scenario.Active {
             continue
         }
-        
+
         if rand.Float64() > scenario.Probability {
             continue
         }
-        
+
         switch scenario.Type {
         case ScenarioLatency:
             delay := scenario.Config["delay"].(time.Duration)
@@ -3310,42 +3310,42 @@ func (i *Injector) MaybeInject(ctx context.Context, point string) error {
             case <-ctx.Done():
                 return ctx.Err()
             }
-            
+
         case ScenarioError:
             return fmt.Errorf("chaos: injected error at %s", point)
-            
+
         case ScenarioTimeout:
             <-ctx.Done()
             return context.DeadlineExceeded
         }
     }
-    
+
     return nil
 }
 func (i *Injector) ActivateScenario(name string, duration time.Duration) error {
     i.mu.Lock()
     defer i.mu.Unlock()
-    
+
     scenario, ok := i.scenarios[name]
     if !ok {
         return fmt.Errorf("scenario not found: %s", name)
     }
-    
+
     scenario.Active = true
     scenario.ActivatedAt = time.Now()
-    
+
     // Auto-deactivate after duration
     go func() {
         time.Sleep(duration)
         i.DeactivateScenario(name)
     }()
-    
+
     return nil
 }
 func (i *Injector) DeactivateScenario(name string) {
     i.mu.Lock()
     defer i.mu.Unlock()
-    
+
     if scenario, ok := i.scenarios[name]; ok {
         scenario.Active = false
     }
@@ -3360,28 +3360,28 @@ package runtime
 import (
     "context"
     "sync"
-    
+
     "github.com/linkflow/engine/internal/nodes"
     "github.com/linkflow/engine/internal/store/cache"
 )
 type EdgeEngine struct {
     cellID      string
     location    string
-    
+
     nodeRegistry *nodes.Registry
     localCache   *cache.LocalCache
-    
+
     // Sync with control plane
     syncClient   SyncClient
     syncInterval time.Duration
-    
+
     // Offline buffer
     offlineQueue *OfflineQueue
-    
+
     // Metrics and health
     metrics      *metrics.Collector
     health       *health.Checker
-    
+
     mu sync.RWMutex
 }
 
@@ -3391,12 +3391,12 @@ func NewEdgeEngine(cfg *EdgeConfig) (*EdgeEngine, error) {
     if err != nil {
         return nil, fmt.Errorf("failed to create local cache: %w", err)
     }
-    
+
     syncClient, err := NewSyncClient(cfg.ControlPlaneURL)
     if err != nil {
         return nil, fmt.Errorf("failed to create sync client: %w", err)
     }
-    
+
     return &EdgeEngine{
         cellID:       cfg.CellID,
         location:     cfg.Location,
@@ -3412,35 +3412,35 @@ func NewEdgeEngine(cfg *EdgeConfig) (*EdgeEngine, error) {
 
 func (e *EdgeEngine) Start(ctx context.Context) error {
     g, ctx := errgroup.WithContext(ctx)
-    
+
     // Start background sync
     g.Go(func() error {
         return e.runSync(ctx)
     })
-    
+
     // Start offline queue processor
     g.Go(func() error {
         return e.processOfflineQueue(ctx)
     })
-    
+
     // Start health checks
     g.Go(func() error {
         return e.runHealthChecks(ctx)
     })
-    
+
     return g.Wait()
 }
 
 func (e *EdgeEngine) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {
     span, ctx := tracing.StartSpan(ctx, "edge.execute")
     defer span.End()
-    
+
     // Check if workflow is cached
     workflow, err := e.getWorkflow(ctx, req.WorkflowID)
     if err != nil {
         return nil, fmt.Errorf("failed to get workflow: %w", err)
     }
-    
+
     // Execute locally
     result, err := e.executeWorkflow(ctx, workflow, req.Input)
     if err != nil {
@@ -3454,20 +3454,20 @@ func (e *EdgeEngine) Execute(ctx context.Context, req *ExecuteRequest) (*Execute
         }
         return nil, err
     }
-    
+
     // Sync result to control plane
     if err := e.syncResult(ctx, result); err != nil {
         // Queue for later if sync fails
         e.offlineQueue.EnqueueResult(result)
     }
-    
+
     return result, nil
 }
 
 func (e *EdgeEngine) runSync(ctx context.Context) error {
     ticker := time.NewTicker(e.syncInterval)
     defer ticker.Stop()
-    
+
     for {
         select {
         case <-ctx.Done():
@@ -3485,18 +3485,18 @@ func (e *EdgeEngine) runSync(ctx context.Context) error {
 func (e *EdgeEngine) syncWithControlPlane(ctx context.Context) error {
     e.mu.Lock()
     defer e.mu.Unlock()
-    
+
     // Fetch updated workflows
     updates, err := e.syncClient.FetchUpdates(ctx, e.cellID)
     if err != nil {
         return err
     }
-    
+
     // Update local cache
     for _, workflow := range updates.Workflows {
         e.localCache.Set(workflow.ID, workflow)
     }
-    
+
     // Push pending results
     pending := e.offlineQueue.DrainResults()
     for _, result := range pending {
@@ -3505,7 +3505,7 @@ func (e *EdgeEngine) syncWithControlPlane(ctx context.Context) error {
             e.offlineQueue.EnqueueResult(result)
         }
     }
-    
+
     return nil
 }
 ```
@@ -3519,9 +3519,9 @@ type OfflineQueue struct {
     executions *list.List
     results    *list.List
     maxSize    int
-    
+
     persistPath string
-    
+
     mu sync.Mutex
 }
 
@@ -3543,54 +3543,54 @@ func NewOfflineQueue(maxSize int) *OfflineQueue {
         results:    list.New(),
         maxSize:    maxSize,
     }
-    
+
     // Restore from disk if persisted
     q.restore()
-    
+
     return q
 }
 
 func (q *OfflineQueue) Enqueue(exec *QueuedExecution) error {
     q.mu.Lock()
     defer q.mu.Unlock()
-    
+
     if q.executions.Len() >= q.maxSize {
         // Remove oldest
         q.executions.Remove(q.executions.Front())
     }
-    
+
     q.executions.PushBack(exec)
     q.persist()
-    
+
     return nil
 }
 
 func (q *OfflineQueue) EnqueueResult(result *ExecuteResponse) error {
     q.mu.Lock()
     defer q.mu.Unlock()
-    
+
     q.results.PushBack(&QueuedResult{
         Result:    result,
         Timestamp: time.Now(),
     })
     q.persist()
-    
+
     return nil
 }
 
 func (q *OfflineQueue) DrainResults() []*ExecuteResponse {
     q.mu.Lock()
     defer q.mu.Unlock()
-    
+
     results := make([]*ExecuteResponse, 0, q.results.Len())
     for e := q.results.Front(); e != nil; e = e.Next() {
         queued := e.Value.(*QueuedResult)
         results = append(results, queued.Result)
     }
-    
+
     q.results.Init()
     q.persist()
-    
+
     return results
 }
 
@@ -3598,7 +3598,7 @@ func (q *OfflineQueue) persist() {
     if q.persistPath == "" {
         return
     }
-    
+
     data, _ := json.Marshal(struct {
         Executions []*QueuedExecution
         Results    []*QueuedResult
@@ -3606,7 +3606,7 @@ func (q *OfflineQueue) persist() {
         Executions: q.listToSlice(q.executions),
         Results:    q.resultsToSlice(q.results),
     })
-    
+
     os.WriteFile(q.persistPath, data, 0644)
 }
 
@@ -3614,21 +3614,21 @@ func (q *OfflineQueue) restore() {
     if q.persistPath == "" {
         return
     }
-    
+
     data, err := os.ReadFile(q.persistPath)
     if err != nil {
         return
     }
-    
+
     var stored struct {
         Executions []*QueuedExecution
         Results    []*QueuedResult
     }
-    
+
     if err := json.Unmarshal(data, &stored); err != nil {
         return
     }
-    
+
     for _, exec := range stored.Executions {
         q.executions.PushBack(exec)
     }
@@ -3645,26 +3645,26 @@ package wasm
 
 import (
     "context"
-    
+
     "github.com/tetratelabs/wazero"
 )
 
 type EdgeRuntime struct {
     runtime wazero.Runtime
     modules map[string]wazero.CompiledModule
-    
+
     mu sync.RWMutex
 }
 
 func NewEdgeRuntime() (*EdgeRuntime, error) {
     ctx := context.Background()
-    
+
     runtime := wazero.NewRuntimeWithConfig(ctx,
         wazero.NewRuntimeConfig().
             WithMemoryLimitPages(64). // 4MB per module
             WithCloseOnContextDone(true),
     )
-    
+
     return &EdgeRuntime{
         runtime: runtime,
         modules: make(map[string]wazero.CompiledModule),
@@ -3674,12 +3674,12 @@ func NewEdgeRuntime() (*EdgeRuntime, error) {
 func (r *EdgeRuntime) LoadModule(ctx context.Context, name string, wasmBytes []byte) error {
     r.mu.Lock()
     defer r.mu.Unlock()
-    
+
     compiled, err := r.runtime.CompileModule(ctx, wasmBytes)
     if err != nil {
         return fmt.Errorf("failed to compile module %s: %w", name, err)
     }
-    
+
     r.modules[name] = compiled
     return nil
 }
@@ -3688,56 +3688,56 @@ func (r *EdgeRuntime) Execute(ctx context.Context, moduleName string, input []by
     r.mu.RLock()
     compiled, ok := r.modules[moduleName]
     r.mu.RUnlock()
-    
+
     if !ok {
         return nil, fmt.Errorf("module not found: %s", moduleName)
     }
-    
+
     // Instantiate with memory isolation
     module, err := r.runtime.InstantiateModule(ctx, compiled, wazero.NewModuleConfig())
     if err != nil {
         return nil, err
     }
     defer module.Close(ctx)
-    
+
     // Call execute function
     execute := module.ExportedFunction("execute")
     if execute == nil {
         return nil, errors.New("module missing execute function")
     }
-    
+
     // Allocate input in WASM memory
     malloc := module.ExportedFunction("malloc")
     if malloc == nil {
         return nil, errors.New("module missing malloc function")
     }
-    
+
     results, err := malloc.Call(ctx, uint64(len(input)))
     if err != nil {
         return nil, err
     }
     inputPtr := uint32(results[0])
-    
+
     // Write input to memory
     if !module.Memory().Write(inputPtr, input) {
         return nil, errors.New("failed to write input to memory")
     }
-    
+
     // Execute
     execResults, err := execute.Call(ctx, uint64(inputPtr), uint64(len(input)))
     if err != nil {
         return nil, err
     }
-    
+
     // Read output
     outputPtr := uint32(execResults[0])
     outputLen := uint32(execResults[1])
-    
+
     output, ok := module.Memory().Read(outputPtr, outputLen)
     if !ok {
         return nil, errors.New("failed to read output from memory")
     }
-    
+
     return output, nil
 }
 ```
@@ -3753,17 +3753,17 @@ CREATE TABLE executions (
     workflow_id     BIGINT NOT NULL,
     workspace_id    BIGINT NOT NULL,
     run_id          VARCHAR(64) NOT NULL,
-    
+
     status          VARCHAR(32) NOT NULL DEFAULT 'pending',
     input           JSONB,
     output          JSONB,
     error           TEXT,
-    
+
     started_at      TIMESTAMP WITH TIME ZONE,
     finished_at     TIMESTAMP WITH TIME ZONE,
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     -- Indexes
     CONSTRAINT fk_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id),
     CONSTRAINT fk_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
@@ -3781,13 +3781,13 @@ CREATE TABLE execution_events (
     execution_id    VARCHAR(64) NOT NULL,
     event_id        BIGINT NOT NULL,
     event_type      VARCHAR(64) NOT NULL,
-    
+
     node_id         VARCHAR(64),
     data            JSONB,
     version         BIGINT DEFAULT 1,
-    
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     CONSTRAINT fk_execution FOREIGN KEY (execution_id) REFERENCES executions(execution_id),
     CONSTRAINT unique_execution_event UNIQUE (execution_id, event_id)
 );
@@ -3800,18 +3800,18 @@ CREATE TABLE node_executions (
     id              BIGSERIAL PRIMARY KEY,
     execution_id    VARCHAR(64) NOT NULL,
     node_id         VARCHAR(64) NOT NULL,
-    
+
     status          VARCHAR(32) NOT NULL DEFAULT 'pending',
     input           JSONB,
     output          JSONB,
     error           TEXT,
     attempts        INT DEFAULT 0,
-    
+
     scheduled_at    TIMESTAMP WITH TIME ZONE,
     started_at      TIMESTAMP WITH TIME ZONE,
     finished_at     TIMESTAMP WITH TIME ZONE,
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     CONSTRAINT fk_execution FOREIGN KEY (execution_id) REFERENCES executions(execution_id),
     CONSTRAINT unique_node_execution UNIQUE (execution_id, node_id)
 );
@@ -3828,14 +3828,14 @@ CREATE TABLE task_queues (
     workspace_id    BIGINT NOT NULL,
     name            VARCHAR(255) NOT NULL,
     partition_id    INT NOT NULL DEFAULT 0,
-    
+
     task_count      BIGINT DEFAULT 0,
     poller_count    INT DEFAULT 0,
     last_poll_at    TIMESTAMP WITH TIME ZONE,
-    
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     CONSTRAINT unique_queue UNIQUE (workspace_id, name, partition_id)
 );
 
@@ -3846,20 +3846,20 @@ CREATE TABLE tasks (
     id              BIGSERIAL PRIMARY KEY,
     task_id         VARCHAR(64) NOT NULL UNIQUE,
     queue_id        BIGINT NOT NULL,
-    
+
     execution_id    VARCHAR(64) NOT NULL,
     activity_id     VARCHAR(64) NOT NULL,
     activity_type   VARCHAR(255) NOT NULL,
-    
+
     input           JSONB,
     priority        INT DEFAULT 0,
     attempt         INT DEFAULT 1,
-    
+
     scheduled_at    TIMESTAMP WITH TIME ZONE NOT NULL,
     expire_at       TIMESTAMP WITH TIME ZONE,
-    
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     CONSTRAINT fk_queue FOREIGN KEY (queue_id) REFERENCES task_queues(id)
 );
 
@@ -3874,18 +3874,18 @@ CREATE INDEX idx_tasks_priority ON tasks(queue_id, priority DESC, scheduled_at);
 CREATE TABLE timers (
     id              BIGSERIAL PRIMARY KEY,
     timer_id        VARCHAR(64) NOT NULL UNIQUE,
-    
+
     execution_id    VARCHAR(64) NOT NULL,
     node_id         VARCHAR(64),
     timer_type      VARCHAR(32) NOT NULL, -- delay, schedule, deadline
-    
+
     fire_at         TIMESTAMP WITH TIME ZONE NOT NULL,
     fired           BOOLEAN DEFAULT FALSE,
-    
+
     data            JSONB,
-    
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     CONSTRAINT fk_execution FOREIGN KEY (execution_id) REFERENCES executions(execution_id)
 );
 
@@ -3896,10 +3896,10 @@ CREATE INDEX idx_timers_execution ON timers(execution_id);
 CREATE TABLE shard_ownership (
     shard_id        INT PRIMARY KEY,
     owner_id        VARCHAR(255) NOT NULL,
-    
+
     acquired_at     TIMESTAMP WITH TIME ZONE NOT NULL,
     heartbeat_at    TIMESTAMP WITH TIME ZONE NOT NULL,
-    
+
     steal_token     VARCHAR(64)
 );
 
@@ -3913,20 +3913,20 @@ CREATE TABLE execution_visibility (
     execution_id    VARCHAR(64) PRIMARY KEY,
     workflow_id     BIGINT NOT NULL,
     workspace_id    BIGINT NOT NULL,
-    
+
     workflow_name   VARCHAR(255),
     status          VARCHAR(32) NOT NULL,
-    
+
     start_time      TIMESTAMP WITH TIME ZONE,
     close_time      TIMESTAMP WITH TIME ZONE,
     execution_time  BIGINT, -- duration in milliseconds
-    
+
     -- Searchable attributes
     search_attrs    JSONB,
-    
+
     -- Memo for user-defined data
     memo            JSONB,
-    
+
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -3955,7 +3955,7 @@ message StartWorkflowExecutionRequest {
     string execution_id = 3;
     bytes input = 4;
     string idempotency_key = 5;
-    
+
     // Optional overrides
     ExecutionOptions options = 6;
 }
@@ -3987,12 +3987,12 @@ message ExecutionInfo {
     int64 workflow_id = 2;
     int64 workspace_id = 3;
     string run_id = 4;
-    
+
     ExecutionStatus status = 5;
     bytes input = 6;
     bytes output = 7;
     string error = 8;
-    
+
     google.protobuf.Timestamp started_at = 9;
     google.protobuf.Timestamp finished_at = 10;
 }
@@ -4011,12 +4011,12 @@ message NodeExecutionInfo {
     string node_id = 1;
     string node_type = 2;
     NodeStatus status = 3;
-    
+
     bytes input = 4;
     bytes output = 5;
     string error = 6;
     int32 attempts = 7;
-    
+
     google.protobuf.Timestamp scheduled_at = 8;
     google.protobuf.Timestamp started_at = 9;
     google.protobuf.Timestamp finished_at = 10;
@@ -4050,17 +4050,17 @@ message HistoryEvent {
     EventType event_type = 3;
     int64 version = 4;
     int64 task_id = 5;
-    
+
     oneof attributes {
         WorkflowExecutionStartedEventAttributes workflow_execution_started = 10;
         WorkflowExecutionCompletedEventAttributes workflow_execution_completed = 11;
         WorkflowExecutionFailedEventAttributes workflow_execution_failed = 12;
-        
+
         ActivityTaskScheduledEventAttributes activity_task_scheduled = 20;
         ActivityTaskStartedEventAttributes activity_task_started = 21;
         ActivityTaskCompletedEventAttributes activity_task_completed = 22;
         ActivityTaskFailedEventAttributes activity_task_failed = 23;
-        
+
         TimerStartedEventAttributes timer_started = 30;
         TimerFiredEventAttributes timer_fired = 31;
         TimerCanceledEventAttributes timer_canceled = 32;
@@ -4069,21 +4069,21 @@ message HistoryEvent {
 
 enum EventType {
     EVENT_TYPE_UNSPECIFIED = 0;
-    
+
     // Workflow lifecycle
     EVENT_TYPE_WORKFLOW_EXECUTION_STARTED = 1;
     EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED = 2;
     EVENT_TYPE_WORKFLOW_EXECUTION_FAILED = 3;
     EVENT_TYPE_WORKFLOW_EXECUTION_TIMED_OUT = 4;
     EVENT_TYPE_WORKFLOW_EXECUTION_CANCELED = 5;
-    
+
     // Activity lifecycle
     EVENT_TYPE_ACTIVITY_TASK_SCHEDULED = 10;
     EVENT_TYPE_ACTIVITY_TASK_STARTED = 11;
     EVENT_TYPE_ACTIVITY_TASK_COMPLETED = 12;
     EVENT_TYPE_ACTIVITY_TASK_FAILED = 13;
     EVENT_TYPE_ACTIVITY_TASK_TIMED_OUT = 14;
-    
+
     // Timer lifecycle
     EVENT_TYPE_TIMER_STARTED = 20;
     EVENT_TYPE_TIMER_FIRED = 21;
@@ -4095,7 +4095,7 @@ message WorkflowExecutionStartedEventAttributes {
     int64 workspace_id = 2;
     bytes input = 3;
     string idempotency_key = 4;
-    
+
     int32 workflow_execution_timeout_seconds = 5;
     RetryPolicy retry_policy = 6;
 }
@@ -4105,12 +4105,12 @@ message ActivityTaskScheduledEventAttributes {
     string activity_type = 2;
     string task_queue = 3;
     bytes input = 4;
-    
+
     int32 schedule_to_close_timeout_seconds = 5;
     int32 schedule_to_start_timeout_seconds = 6;
     int32 start_to_close_timeout_seconds = 7;
     int32 heartbeat_timeout_seconds = 8;
-    
+
     RetryPolicy retry_policy = 9;
 }
 
@@ -4158,14 +4158,14 @@ message AddActivityTaskRequest {
     int64 workspace_id = 1;
     string task_queue = 2;
     string execution_id = 3;
-    
+
     string activity_id = 4;
     string activity_type = 5;
     bytes input = 6;
-    
+
     google.protobuf.Timestamp scheduled_at = 7;
     google.protobuf.Duration schedule_to_start_timeout = 8;
-    
+
     int32 attempt = 9;
 }
 
@@ -4179,15 +4179,15 @@ message PollActivityTaskRequest {
 message PollActivityTaskResponse {
     bytes task_token = 1;
     string execution_id = 2;
-    
+
     string activity_id = 3;
     string activity_type = 4;
     bytes input = 5;
-    
+
     google.protobuf.Timestamp scheduled_at = 6;
     google.protobuf.Timestamp started_at = 7;
     int32 attempt = 8;
-    
+
     google.protobuf.Duration start_to_close_timeout = 9;
     google.protobuf.Duration heartbeat_timeout = 10;
 }
@@ -4267,12 +4267,12 @@ type Client struct {
 // Send sends a callback with HMAC signature
 func (c *Client) Send(ctx context.Context, callbackURL string, payload *CallbackPayload) error {
     body, _ := json.Marshal(payload)
-    
+
     req, _ := http.NewRequestWithContext(ctx, "POST", callbackURL, bytes.NewReader(body))
     req.Header.Set("Content-Type", "application/json")
     req.Header.Set("X-LinkFlow-Event", string(payload.Event))
     req.Header.Set("X-LinkFlow-Signature", c.sign(body))
-    
+
     resp, err := c.httpClient.Do(req)
     // Handle response...
     return err
@@ -4333,10 +4333,10 @@ class LinkFlowClient
             'input' => $input,
             'callback_url' => $callbackUrl ?? route('engine.callback'),
         ]);
-        
+
         return $response->json();
     }
-    
+
     public function getExecution(string $workspaceId, string $executionId): array
     {
         return Http::get(
@@ -4355,10 +4355,10 @@ class EngineCallbackController extends Controller
     {
         // Verify HMAC signature
         $this->verifySignature($request);
-        
+
         $event = $request->header('X-LinkFlow-Event');
         $payload = $request->all();
-        
+
         match ($event) {
             'execution.started' => $this->handleStarted($payload),
             'execution.completed' => $this->handleCompleted($payload),
@@ -4366,15 +4366,15 @@ class EngineCallbackController extends Controller
             'node.completed' => $this->handleNodeCompleted($payload),
             default => null,
         };
-        
+
         return response()->json(['status' => 'ok']);
     }
-    
+
     protected function verifySignature(Request $request): void
     {
         $signature = $request->header('X-LinkFlow-Signature');
         $expected = hash_hmac('sha256', $request->getContent(), config('services.linkflow.secret'));
-        
+
         if (!hash_equals($expected, $signature ?? '')) {
             abort(401, 'Invalid callback signature');
         }
@@ -4405,25 +4405,25 @@ package linkflow.api.v1;
 service WorkflowService {
     // Start a new workflow execution
     rpc StartWorkflowExecution(StartWorkflowExecutionRequest) returns (StartWorkflowExecutionResponse);
-    
+
     // Get execution details
     rpc GetExecution(GetExecutionRequest) returns (GetExecutionResponse);
-    
+
     // List executions with filters
     rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse);
-    
+
     // Cancel a running execution
     rpc CancelExecution(CancelExecutionRequest) returns (CancelExecutionResponse);
-    
+
     // Terminate an execution immediately
     rpc TerminateExecution(TerminateExecutionRequest) returns (TerminateExecutionResponse);
-    
+
     // Get execution history
     rpc GetExecutionHistory(GetExecutionHistoryRequest) returns (GetExecutionHistoryResponse);
-    
+
     // Query execution state
     rpc QueryExecution(QueryExecutionRequest) returns (QueryExecutionResponse);
-    
+
     // Signal execution
     rpc SignalExecution(SignalExecutionRequest) returns (SignalExecutionResponse);
 }
@@ -4437,13 +4437,13 @@ message ListExecutionsRequest {
     int64 workspace_id = 1;
     int32 page_size = 2;
     string page_token = 3;
-    
+
     // Filters
     ExecutionStatus status = 4;
     int64 workflow_id = 5;
     google.protobuf.Timestamp start_time_min = 6;
     google.protobuf.Timestamp start_time_max = 7;
-    
+
     // Query for search attributes
     string query = 8;
 }
@@ -4511,7 +4511,7 @@ paths:
                 $ref: '#/components/schemas/ExecutionResponse'
         '409':
           description: Execution already exists (idempotent)
-          
+
     get:
       summary: List executions
       operationId: listExecutions
@@ -4561,7 +4561,7 @@ paths:
                 $ref: '#/components/schemas/ExecutionDetails'
         '404':
           description: Execution not found
-          
+
     delete:
       summary: Cancel execution
       operationId: cancelExecution
@@ -4639,7 +4639,7 @@ components:
           type: string
         options:
           $ref: '#/components/schemas/ExecutionOptions'
-          
+
     ExecutionOptions:
       type: object
       properties:
@@ -4647,7 +4647,7 @@ components:
           type: integer
         retry_policy:
           $ref: '#/components/schemas/RetryPolicy'
-          
+
     RetryPolicy:
       type: object
       properties:
@@ -4663,7 +4663,7 @@ components:
         max_interval_ms:
           type: integer
           default: 60000
-          
+
     ExecutionStatus:
       type: string
       enum:
@@ -4673,7 +4673,7 @@ components:
         - failed
         - cancelled
         - timed_out
-        
+
     ExecutionResponse:
       type: object
       properties:
