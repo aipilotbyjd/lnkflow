@@ -75,7 +75,7 @@ class ExecutionNode extends Model
         $this->update([
             'status' => ExecutionNodeStatus::Completed,
             'finished_at' => now(),
-            'duration_ms' => $this->started_at?->diffInMilliseconds(now()),
+            'duration_ms' => (int) $this->started_at?->diffInMilliseconds(now()),
             'output_data' => $outputData,
         ]);
     }
@@ -85,7 +85,7 @@ class ExecutionNode extends Model
         $this->update([
             'status' => ExecutionNodeStatus::Failed,
             'finished_at' => now(),
-            'duration_ms' => $this->started_at?->diffInMilliseconds(now()),
+            'duration_ms' => (int) $this->started_at?->diffInMilliseconds(now()),
             'error' => $error,
         ]);
     }

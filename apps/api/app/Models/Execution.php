@@ -141,7 +141,7 @@ class Execution extends Model
         $this->update([
             'status' => ExecutionStatus::Completed,
             'finished_at' => now(),
-            'duration_ms' => $this->started_at?->diffInMilliseconds(now()),
+            'duration_ms' => (int) $this->started_at?->diffInMilliseconds(now()),
             'result_data' => $resultData,
         ]);
     }
@@ -151,7 +151,7 @@ class Execution extends Model
         $this->update([
             'status' => ExecutionStatus::Failed,
             'finished_at' => now(),
-            'duration_ms' => $this->started_at?->diffInMilliseconds(now()),
+            'duration_ms' => (int) $this->started_at?->diffInMilliseconds(now()),
             'error' => $error,
         ]);
     }
@@ -161,7 +161,7 @@ class Execution extends Model
         $this->update([
             'status' => ExecutionStatus::Cancelled,
             'finished_at' => now(),
-            'duration_ms' => $this->started_at?->diffInMilliseconds(now()),
+            'duration_ms' => (int) $this->started_at?->diffInMilliseconds(now()),
         ]);
     }
 
