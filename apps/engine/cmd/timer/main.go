@@ -18,7 +18,7 @@ func main() {
 	var (
 		port        = flag.Int("port", 7237, "Timer service port")
 		httpPort    = flag.Int("http-port", 8080, "HTTP server port")
-		historyAddr = flag.String("history-addr", "localhost:7234", "History service address")
+		historyAddr = flag.String("history-addr", getEnv("HISTORY_ADDR", "localhost:7234"), "History service address")
 	)
 	flag.Parse()
 
@@ -88,4 +88,11 @@ func printBanner(service string, logger *slog.Logger) {
 		slog.String("commit", version.GitCommit),
 		slog.String("build_time", version.BuildTime),
 	)
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }

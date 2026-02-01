@@ -20,6 +20,7 @@ import (
 
 	"github.com/linkflow/engine/internal/frontend"
 	"github.com/linkflow/engine/internal/frontend/adapter"
+	"github.com/linkflow/engine/internal/frontend/handler"
 	"github.com/linkflow/engine/internal/frontend/interceptor"
 	"github.com/linkflow/engine/internal/version"
 )
@@ -28,8 +29,8 @@ func main() {
 	var (
 		port         = flag.Int("port", 7233, "gRPC server port")
 		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
-		historyAddr  = flag.String("history-addr", "localhost:7234", "History service address")
-		matchingAddr = flag.String("matching-addr", "localhost:7235", "Matching service address")
+		historyAddr  = flag.String("history-addr", getEnv("HISTORY_ADDR", "localhost:7234"), "History service address")
+		matchingAddr = flag.String("matching-addr", getEnv("MATCHING_ADDR", "localhost:7235"), "Matching service address")
 	)
 	flag.Parse()
 
@@ -128,13 +129,13 @@ func main() {
 		}
 	}()
 
-	// Start HTTP Server for Health Checks
+	// Start HTTP Server for Health Checks and Engine API
 	go func() {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("OK"))
-		})
+
+		// Register Engine API routes
+		fromtendHandler := handler.NewHTTPHandler(svc, logger)
+		fromtendHandler.RegisterRoutes(mux)
 
 		httpServer := &http.Server{
 			Addr:              fmt.Sprintf(":%d", *httpPort),
@@ -162,4 +163,11 @@ func printBanner(service string, logger *slog.Logger) {
 		slog.String("commit", version.GitCommit),
 		slog.String("build_time", version.BuildTime),
 	)
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }

@@ -60,7 +60,7 @@ services:
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
     volumes:
       - .:/var/www/html
-    command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 --verbose
+    command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --verbose
     depends_on:
       api:
         condition: service_started

@@ -27,7 +27,7 @@ func run() error {
 	var (
 		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
 		taskQueue    = flag.String("task-queue", "default", "Task queue name")
-		matchingAddr = flag.String("matching-addr", "localhost:7235", "Matching service address")
+		matchingAddr = flag.String("matching-addr", getEnv("MATCHING_ADDR", "localhost:7235"), "Matching service address")
 		numWorkers   = flag.Int("num-workers", 4, "Number of worker goroutines")
 	)
 	flag.Parse()
@@ -107,4 +107,11 @@ func printBanner(service string, logger *slog.Logger) {
 		slog.String("commit", version.GitCommit),
 		slog.String("build_time", version.BuildTime),
 	)
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }
