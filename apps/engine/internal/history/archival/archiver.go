@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 var (
@@ -73,7 +73,7 @@ type ArchiveRequest struct {
 	NamespaceID string
 	ExecutionID string
 	WorkflowID  string
-	Events      []*history.HistoryEvent
+	Events      []*types.HistoryEvent
 	ClosedAt    time.Time
 }
 
@@ -120,13 +120,13 @@ func (a *Archiver) Archive(ctx context.Context, req *ArchiveRequest) error {
 
 // Archive represents an archived execution.
 type Archive struct {
-	ExecutionID string                  `json:"execution_id"`
-	WorkflowID  string                  `json:"workflow_id"`
-	NamespaceID string                  `json:"namespace_id"`
-	Events      []*history.HistoryEvent `json:"events"`
-	ArchivedAt  time.Time               `json:"archived_at"`
-	ClosedAt    time.Time               `json:"closed_at"`
-	Version     int                     `json:"version"`
+	ExecutionID string                `json:"execution_id"`
+	WorkflowID  string                `json:"workflow_id"`
+	NamespaceID string                `json:"namespace_id"`
+	Events      []*types.HistoryEvent `json:"events"`
+	ArchivedAt  time.Time             `json:"archived_at"`
+	ClosedAt    time.Time             `json:"closed_at"`
+	Version     int                   `json:"version"`
 }
 
 // Retrieve retrieves an archived execution.

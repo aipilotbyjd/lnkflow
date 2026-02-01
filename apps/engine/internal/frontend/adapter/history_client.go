@@ -3,9 +3,11 @@ package adapter
 import (
 	"context"
 
+	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	"github.com/linkflow/engine/internal/frontend"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type HistoryClient struct {
@@ -19,19 +21,126 @@ func NewHistoryClient(conn *grpc.ClientConn) *HistoryClient {
 }
 
 func (c *HistoryClient) RecordEvent(ctx context.Context, req *frontend.RecordEventRequest) error {
-	// Stub implementation calling real gRPC (but fields might mismatch)
-	// For now, simpler mapping or just return nil if we can't map
-	return nil
+	protoReq := &historyv1.RecordEventRequest{
+		Namespace: req.NamespaceID,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: req.WorkflowID,
+			RunId:      req.RunID,
+		},
+		Event: &historyv1.HistoryEvent{
+			EventId:   1,
+			EventTime: timestamppb.Now(),
+			EventType: mapEventType(req.EventType),
+		},
+	}
+
+	_, err := c.client.RecordEvent(ctx, protoReq)
+	return err
 }
 
 func (c *HistoryClient) GetHistory(ctx context.Context, req *frontend.GetHistoryRequest) (*frontend.GetHistoryResponse, error) {
-	return &frontend.GetHistoryResponse{}, nil
+	protoReq := &historyv1.GetHistoryRequest{
+		Namespace: req.NamespaceID,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: req.WorkflowID,
+			RunId:      req.RunID,
+		},
+		FirstEventId: req.FirstEventID,
+		NextEventId:  req.NextEventID,
+		PageSize:     req.PageSize,
+	}
+
+	resp, err := c.client.GetHistory(ctx, protoReq)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []*frontend.HistoryEvent
+	if resp.History != nil {
+		events = make([]*frontend.HistoryEvent, 0, len(resp.History.Events))
+		for _, e := range resp.History.Events {
+			events = append(events, &frontend.HistoryEvent{
+				EventID:   e.EventId,
+				EventType: e.EventType.String(),
+				Timestamp: e.EventTime.AsTime(),
+				Data:      nil,
+			})
+		}
+	}
+
+	return &frontend.GetHistoryResponse{
+		Events:        events,
+		NextPageToken: resp.NextPageToken,
+	}, nil
 }
 
 func (c *HistoryClient) GetMutableState(ctx context.Context, key frontend.ExecutionKey) (*frontend.MutableState, error) {
+	protoReq := &historyv1.GetMutableStateRequest{
+		Namespace: key.NamespaceID,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: key.WorkflowID,
+			RunId:      key.RunID,
+		},
+	}
+
+	resp, err := c.client.GetMutableState(ctx, protoReq)
+	if err != nil {
+		return nil, err
+	}
+
 	return &frontend.MutableState{
 		ExecutionInfo: &frontend.WorkflowExecution{
-			Status: frontend.ExecutionStatusRunning,
+			WorkflowID:   resp.WorkflowExecution.GetWorkflowId(),
+			RunID:        resp.WorkflowExecution.GetRunId(),
+			Status:       mapExecutionStatus(resp.WorkflowStatus),
+			WorkflowType: resp.WorkflowType,
+			TaskQueue:    resp.TaskQueue,
 		},
+		ActivityInfos:   make(map[int64]*frontend.ActivityInfo),
+		ChildExecutions: make(map[int64]*frontend.ChildExecutionInfo),
 	}, nil
+}
+
+func mapEventType(eventType string) commonv1.EventType {
+	switch eventType {
+	case "WorkflowExecutionStarted":
+		return commonv1.EventType_EVENT_TYPE_EXECUTION_STARTED
+	case "WorkflowExecutionCompleted":
+		return commonv1.EventType_EVENT_TYPE_EXECUTION_COMPLETED
+	case "WorkflowExecutionFailed":
+		return commonv1.EventType_EVENT_TYPE_EXECUTION_FAILED
+	case "WorkflowExecutionSignaled":
+		return commonv1.EventType_EVENT_TYPE_SIGNAL_RECEIVED
+	case "WorkflowExecutionTerminated":
+		return commonv1.EventType_EVENT_TYPE_EXECUTION_TERMINATED
+	case "ActivityTaskScheduled", "NodeScheduled":
+		return commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED
+	case "ActivityTaskStarted", "NodeStarted":
+		return commonv1.EventType_EVENT_TYPE_NODE_STARTED
+	case "ActivityTaskCompleted", "NodeCompleted":
+		return commonv1.EventType_EVENT_TYPE_NODE_COMPLETED
+	case "ActivityTaskFailed", "NodeFailed":
+		return commonv1.EventType_EVENT_TYPE_NODE_FAILED
+	default:
+		return commonv1.EventType_EVENT_TYPE_UNSPECIFIED
+	}
+}
+
+func mapExecutionStatus(status commonv1.ExecutionStatus) frontend.ExecutionStatus {
+	switch status {
+	case commonv1.ExecutionStatus_EXECUTION_STATUS_RUNNING:
+		return frontend.ExecutionStatusRunning
+	case commonv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED:
+		return frontend.ExecutionStatusCompleted
+	case commonv1.ExecutionStatus_EXECUTION_STATUS_FAILED:
+		return frontend.ExecutionStatusFailed
+	case commonv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED:
+		return frontend.ExecutionStatusCanceled
+	case commonv1.ExecutionStatus_EXECUTION_STATUS_TERMINATED:
+		return frontend.ExecutionStatusTerminated
+	case commonv1.ExecutionStatus_EXECUTION_STATUS_TIMED_OUT:
+		return frontend.ExecutionStatusTimedOut
+	default:
+		return frontend.ExecutionStatusRunning
+	}
 }

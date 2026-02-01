@@ -48,6 +48,9 @@ func (s *GRPCServer) PollTask(ctx context.Context, req *matchingv1.PollTaskReque
 		queueName = "default"
 	}
 
+	// Auto-create task queue if it doesn't exist (workers poll before tasks arrive)
+	s.service.GetOrCreateTaskQueue(queueName, engine.TaskQueueKindNormal)
+
 	task, err := s.service.PollTask(ctx, queueName, req.Identity)
 	if err != nil {
 		return nil, err

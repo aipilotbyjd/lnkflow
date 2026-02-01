@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 var (
@@ -30,7 +30,7 @@ type Replicator struct {
 // ReplicationClient is the interface for remote cluster communication.
 type ReplicationClient interface {
 	SendReplicationTask(ctx context.Context, task *ReplicationTask) error
-	FetchMissingEvents(ctx context.Context, executionID string, fromEventID int64) ([]*history.HistoryEvent, error)
+	FetchMissingEvents(ctx context.Context, executionID string, fromEventID int64) ([]*types.HistoryEvent, error)
 	GetClusterInfo(ctx context.Context) (*ClusterInfo, error)
 }
 
@@ -49,7 +49,7 @@ type ReplicationTask struct {
 	SourceCluster string
 	TargetCluster string
 	ExecutionID   string
-	Events        []*history.HistoryEvent
+	Events        []*types.HistoryEvent
 	Version       int64
 	CreatedAt     time.Time
 }
@@ -106,7 +106,7 @@ func (r *Replicator) RemoveRemoteCluster(clusterID string) {
 }
 
 // ReplicateEvents replicates events to remote clusters.
-func (r *Replicator) ReplicateEvents(ctx context.Context, executionID string, events []*history.HistoryEvent) error {
+func (r *Replicator) ReplicateEvents(ctx context.Context, executionID string, events []*types.HistoryEvent) error {
 	r.mu.RLock()
 	clients := make(map[string]ReplicationClient)
 	for id, client := range r.remoteClients {
@@ -171,7 +171,7 @@ func (r *Replicator) ReplicateEvents(ctx context.Context, executionID string, ev
 }
 
 // ApplyReplicationTask applies incoming replication events.
-func (r *Replicator) ApplyReplicationTask(ctx context.Context, task *ReplicationTask, localEvents []*history.HistoryEvent) ([]*history.HistoryEvent, error) {
+func (r *Replicator) ApplyReplicationTask(ctx context.Context, task *ReplicationTask, localEvents []*types.HistoryEvent) ([]*types.HistoryEvent, error) {
 	// Check for conflicts
 	conflicts := r.detectConflicts(localEvents, task.Events)
 
@@ -197,8 +197,8 @@ func (r *Replicator) ApplyReplicationTask(ctx context.Context, task *Replication
 
 // Conflict represents a conflict between local and remote events.
 type Conflict struct {
-	LocalEvent  *history.HistoryEvent
-	RemoteEvent *history.HistoryEvent
+	LocalEvent  *types.HistoryEvent
+	RemoteEvent *types.HistoryEvent
 	Type        ConflictType
 }
 
@@ -211,10 +211,10 @@ const (
 	ConflictTypeVersion
 )
 
-func (r *Replicator) detectConflicts(local, remote []*history.HistoryEvent) []Conflict {
+func (r *Replicator) detectConflicts(local, remote []*types.HistoryEvent) []Conflict {
 	var conflicts []Conflict
 
-	localByID := make(map[int64]*history.HistoryEvent)
+	localByID := make(map[int64]*types.HistoryEvent)
 	for _, e := range local {
 		localByID[e.EventID] = e
 	}
@@ -235,8 +235,8 @@ func (r *Replicator) detectConflicts(local, remote []*history.HistoryEvent) []Co
 	return conflicts
 }
 
-func (r *Replicator) mergeEvents(local, remote []*history.HistoryEvent) []*history.HistoryEvent {
-	eventMap := make(map[int64]*history.HistoryEvent)
+func (r *Replicator) mergeEvents(local, remote []*types.HistoryEvent) []*types.HistoryEvent {
+	eventMap := make(map[int64]*types.HistoryEvent)
 
 	// Add local events
 	for _, e := range local {
@@ -255,7 +255,7 @@ func (r *Replicator) mergeEvents(local, remote []*history.HistoryEvent) []*histo
 	}
 
 	// Convert back to slice and sort by event ID
-	result := make([]*history.HistoryEvent, 0, len(eventMap))
+	result := make([]*types.HistoryEvent, 0, len(eventMap))
 	for _, e := range eventMap {
 		result = append(result, e)
 	}
@@ -272,14 +272,14 @@ func (r *Replicator) mergeEvents(local, remote []*history.HistoryEvent) []*histo
 
 // ConflictHandler resolves conflicts between events.
 type ConflictHandler interface {
-	Resolve(ctx context.Context, conflicts []Conflict) ([]*history.HistoryEvent, error)
+	Resolve(ctx context.Context, conflicts []Conflict) ([]*types.HistoryEvent, error)
 }
 
 // LastWriterWinsHandler resolves conflicts using last-writer-wins.
 type LastWriterWinsHandler struct{}
 
-func (h *LastWriterWinsHandler) Resolve(ctx context.Context, conflicts []Conflict) ([]*history.HistoryEvent, error) {
-	result := make([]*history.HistoryEvent, 0, len(conflicts))
+func (h *LastWriterWinsHandler) Resolve(ctx context.Context, conflicts []Conflict) ([]*types.HistoryEvent, error) {
+	result := make([]*types.HistoryEvent, 0, len(conflicts))
 
 	for _, c := range conflicts {
 		// Choose the event with the later timestamp

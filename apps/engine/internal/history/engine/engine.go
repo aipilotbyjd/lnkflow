@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 var (
@@ -31,14 +31,14 @@ func NewEngine(logger *slog.Logger) *Engine {
 	}
 }
 
-func (e *Engine) ProcessEvent(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) ProcessEvent(state *MutableState, event *types.HistoryEvent) error {
 	if err := e.ValidateEvent(state, event); err != nil {
 		return err
 	}
 	return state.ApplyEvent(event)
 }
 
-func (e *Engine) ValidateEvent(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) ValidateEvent(state *MutableState, event *types.HistoryEvent) error {
 	if event == nil {
 		return ErrInvalidEvent
 	}
@@ -48,26 +48,26 @@ func (e *Engine) ValidateEvent(state *MutableState, event *history.HistoryEvent)
 	}
 
 	switch event.EventType {
-	case history.EventTypeExecutionStarted:
+	case types.EventTypeExecutionStarted:
 		return e.validateExecutionStarted(state, event)
-	case history.EventTypeExecutionCompleted, history.EventTypeExecutionFailed, history.EventTypeExecutionTerminated:
+	case types.EventTypeExecutionCompleted, types.EventTypeExecutionFailed, types.EventTypeExecutionTerminated:
 		return e.validateExecutionClose(state)
-	case history.EventTypeTimerStarted:
+	case types.EventTypeTimerStarted:
 		return e.validateTimerStarted(state, event)
-	case history.EventTypeTimerFired, history.EventTypeTimerCanceled:
+	case types.EventTypeTimerFired, types.EventTypeTimerCanceled:
 		return e.validateTimerOperation(state, event)
-	case history.EventTypeActivityScheduled:
+	case types.EventTypeActivityScheduled:
 		return e.validateActivityScheduled(state)
-	case history.EventTypeActivityStarted:
+	case types.EventTypeActivityStarted:
 		return e.validateActivityStarted(state, event)
-	case history.EventTypeActivityCompleted, history.EventTypeActivityFailed, history.EventTypeActivityTimedOut:
+	case types.EventTypeActivityCompleted, types.EventTypeActivityFailed, types.EventTypeActivityTimedOut:
 		return e.validateActivityClose(state, event)
 	}
 
 	return nil
 }
 
-func (e *Engine) validateExecutionStarted(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) validateExecutionStarted(state *MutableState, event *types.HistoryEvent) error {
 	if event.EventID != 1 {
 		return ErrEventOutOfOrder
 	}
@@ -81,11 +81,11 @@ func (e *Engine) validateExecutionClose(state *MutableState) error {
 	return nil
 }
 
-func (e *Engine) validateTimerStarted(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) validateTimerStarted(state *MutableState, event *types.HistoryEvent) error {
 	if !state.IsWorkflowExecutionRunning() {
 		return ErrWorkflowNotRunning
 	}
-	attrs, ok := event.Attributes.(*history.TimerStartedAttributes)
+	attrs, ok := event.Attributes.(*types.TimerStartedAttributes)
 	if !ok {
 		return ErrInvalidEventType
 	}
@@ -95,15 +95,15 @@ func (e *Engine) validateTimerStarted(state *MutableState, event *history.Histor
 	return nil
 }
 
-func (e *Engine) validateTimerOperation(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) validateTimerOperation(state *MutableState, event *types.HistoryEvent) error {
 	if !state.IsWorkflowExecutionRunning() {
 		return ErrWorkflowNotRunning
 	}
 	var timerID string
 	switch attrs := event.Attributes.(type) {
-	case *history.TimerFiredAttributes:
+	case *types.TimerFiredAttributes:
 		timerID = attrs.TimerID
-	case *history.TimerCanceledAttributes:
+	case *types.TimerCanceledAttributes:
 		timerID = attrs.TimerID
 	default:
 		return ErrInvalidEventType
@@ -121,11 +121,11 @@ func (e *Engine) validateActivityScheduled(state *MutableState) error {
 	return nil
 }
 
-func (e *Engine) validateActivityStarted(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) validateActivityStarted(state *MutableState, event *types.HistoryEvent) error {
 	if !state.IsWorkflowExecutionRunning() {
 		return ErrWorkflowNotRunning
 	}
-	attrs, ok := event.Attributes.(*history.ActivityStartedAttributes)
+	attrs, ok := event.Attributes.(*types.ActivityStartedAttributes)
 	if !ok {
 		return ErrInvalidEventType
 	}
@@ -135,15 +135,15 @@ func (e *Engine) validateActivityStarted(state *MutableState, event *history.His
 	return nil
 }
 
-func (e *Engine) validateActivityClose(state *MutableState, event *history.HistoryEvent) error {
+func (e *Engine) validateActivityClose(state *MutableState, event *types.HistoryEvent) error {
 	if !state.IsWorkflowExecutionRunning() {
 		return ErrWorkflowNotRunning
 	}
 	var scheduledEventID int64
 	switch attrs := event.Attributes.(type) {
-	case *history.ActivityCompletedAttributes:
+	case *types.ActivityCompletedAttributes:
 		scheduledEventID = attrs.ScheduledEventID
-	case *history.ActivityFailedAttributes:
+	case *types.ActivityFailedAttributes:
 		scheduledEventID = attrs.ScheduledEventID
 	default:
 		return ErrInvalidEventType
@@ -154,17 +154,17 @@ func (e *Engine) validateActivityClose(state *MutableState, event *history.Histo
 	return nil
 }
 
-func (e *Engine) ScheduleNode(state *MutableState, nodeID, nodeType string, input []byte, taskQueue string) (*history.HistoryEvent, error) {
+func (e *Engine) ScheduleNode(state *MutableState, nodeID, nodeType string, input []byte, taskQueue string) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeNodeScheduled,
+		EventType: types.EventTypeNodeScheduled,
 		Timestamp: time.Now(),
-		Attributes: &history.NodeScheduledAttributes{
+		Attributes: &types.NodeScheduledAttributes{
 			NodeID:    nodeID,
 			NodeType:  nodeType,
 			Input:     input,
@@ -175,17 +175,17 @@ func (e *Engine) ScheduleNode(state *MutableState, nodeID, nodeType string, inpu
 	return event, nil
 }
 
-func (e *Engine) CompleteNode(state *MutableState, nodeID string, scheduledEventID, startedEventID int64, result []byte) (*history.HistoryEvent, error) {
+func (e *Engine) CompleteNode(state *MutableState, nodeID string, scheduledEventID, startedEventID int64, result []byte) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeNodeCompleted,
+		EventType: types.EventTypeNodeCompleted,
 		Timestamp: time.Now(),
-		Attributes: &history.NodeCompletedAttributes{
+		Attributes: &types.NodeCompletedAttributes{
 			NodeID:           nodeID,
 			ScheduledEventID: scheduledEventID,
 			StartedEventID:   startedEventID,
@@ -193,7 +193,7 @@ func (e *Engine) CompleteNode(state *MutableState, nodeID string, scheduledEvent
 		},
 	}
 
-	state.AddCompletedNode(nodeID, &history.NodeResult{
+	state.AddCompletedNode(nodeID, &types.NodeResult{
 		NodeID:        nodeID,
 		CompletedTime: event.Timestamp,
 		Output:        result,
@@ -202,17 +202,17 @@ func (e *Engine) CompleteNode(state *MutableState, nodeID string, scheduledEvent
 	return event, nil
 }
 
-func (e *Engine) FailNode(state *MutableState, nodeID string, scheduledEventID, startedEventID int64, reason string, details []byte) (*history.HistoryEvent, error) {
+func (e *Engine) FailNode(state *MutableState, nodeID string, scheduledEventID, startedEventID int64, reason string, details []byte) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeNodeFailed,
+		EventType: types.EventTypeNodeFailed,
 		Timestamp: time.Now(),
-		Attributes: &history.NodeFailedAttributes{
+		Attributes: &types.NodeFailedAttributes{
 			NodeID:           nodeID,
 			ScheduledEventID: scheduledEventID,
 			StartedEventID:   startedEventID,
@@ -221,7 +221,7 @@ func (e *Engine) FailNode(state *MutableState, nodeID string, scheduledEventID, 
 		},
 	}
 
-	state.AddCompletedNode(nodeID, &history.NodeResult{
+	state.AddCompletedNode(nodeID, &types.NodeResult{
 		NodeID:         nodeID,
 		CompletedTime:  event.Timestamp,
 		FailureReason:  reason,
@@ -231,7 +231,7 @@ func (e *Engine) FailNode(state *MutableState, nodeID string, scheduledEventID, 
 	return event, nil
 }
 
-func (e *Engine) StartTimer(state *MutableState, timerID string, duration time.Duration) (*history.HistoryEvent, error) {
+func (e *Engine) StartTimer(state *MutableState, timerID string, duration time.Duration) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
@@ -242,17 +242,17 @@ func (e *Engine) StartTimer(state *MutableState, timerID string, duration time.D
 
 	eventID := state.IncrementNextEventID()
 	now := time.Now()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeTimerStarted,
+		EventType: types.EventTypeTimerStarted,
 		Timestamp: now,
-		Attributes: &history.TimerStartedAttributes{
+		Attributes: &types.TimerStartedAttributes{
 			TimerID:     timerID,
 			StartToFire: duration,
 		},
 	}
 
-	state.AddPendingTimer(timerID, &history.TimerInfo{
+	state.AddPendingTimer(timerID, &types.TimerInfo{
 		TimerID:        timerID,
 		StartedEventID: eventID,
 		FireTime:       now.Add(duration),
@@ -262,7 +262,7 @@ func (e *Engine) StartTimer(state *MutableState, timerID string, duration time.D
 	return event, nil
 }
 
-func (e *Engine) FireTimer(state *MutableState, timerID string) (*history.HistoryEvent, error) {
+func (e *Engine) FireTimer(state *MutableState, timerID string) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
@@ -273,11 +273,11 @@ func (e *Engine) FireTimer(state *MutableState, timerID string) (*history.Histor
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeTimerFired,
+		EventType: types.EventTypeTimerFired,
 		Timestamp: time.Now(),
-		Attributes: &history.TimerFiredAttributes{
+		Attributes: &types.TimerFiredAttributes{
 			TimerID:        timerID,
 			StartedEventID: timerInfo.StartedEventID,
 		},
@@ -288,7 +288,7 @@ func (e *Engine) FireTimer(state *MutableState, timerID string) (*history.Histor
 	return event, nil
 }
 
-func (e *Engine) CancelTimer(state *MutableState, timerID, identity string) (*history.HistoryEvent, error) {
+func (e *Engine) CancelTimer(state *MutableState, timerID, identity string) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
@@ -299,11 +299,11 @@ func (e *Engine) CancelTimer(state *MutableState, timerID, identity string) (*hi
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeTimerCanceled,
+		EventType: types.EventTypeTimerCanceled,
 		Timestamp: time.Now(),
-		Attributes: &history.TimerCanceledAttributes{
+		Attributes: &types.TimerCanceledAttributes{
 			TimerID:        timerID,
 			StartedEventID: timerInfo.StartedEventID,
 			Identity:       identity,
@@ -315,21 +315,21 @@ func (e *Engine) CancelTimer(state *MutableState, timerID, identity string) (*hi
 	return event, nil
 }
 
-func (e *Engine) ScheduleActivity(state *MutableState, attrs *history.ActivityScheduledAttributes) (*history.HistoryEvent, error) {
+func (e *Engine) ScheduleActivity(state *MutableState, attrs *types.ActivityScheduledAttributes) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
 
 	eventID := state.IncrementNextEventID()
 	now := time.Now()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:    eventID,
-		EventType:  history.EventTypeActivityScheduled,
+		EventType:  types.EventTypeActivityScheduled,
 		Timestamp:  now,
 		Attributes: attrs,
 	}
 
-	state.AddPendingActivity(eventID, &history.ActivityInfo{
+	state.AddPendingActivity(eventID, &types.ActivityInfo{
 		ScheduledEventID: eventID,
 		ActivityID:       attrs.ActivityID,
 		ActivityType:     attrs.ActivityType,
@@ -344,7 +344,7 @@ func (e *Engine) ScheduleActivity(state *MutableState, attrs *history.ActivitySc
 	return event, nil
 }
 
-func (e *Engine) CompleteActivity(state *MutableState, scheduledEventID, startedEventID int64, result []byte) (*history.HistoryEvent, error) {
+func (e *Engine) CompleteActivity(state *MutableState, scheduledEventID, startedEventID int64, result []byte) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
@@ -354,11 +354,11 @@ func (e *Engine) CompleteActivity(state *MutableState, scheduledEventID, started
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeActivityCompleted,
+		EventType: types.EventTypeActivityCompleted,
 		Timestamp: time.Now(),
-		Attributes: &history.ActivityCompletedAttributes{
+		Attributes: &types.ActivityCompletedAttributes{
 			ScheduledEventID: scheduledEventID,
 			StartedEventID:   startedEventID,
 			Result:           result,
@@ -370,7 +370,7 @@ func (e *Engine) CompleteActivity(state *MutableState, scheduledEventID, started
 	return event, nil
 }
 
-func (e *Engine) FailActivity(state *MutableState, scheduledEventID, startedEventID int64, reason string, details []byte) (*history.HistoryEvent, error) {
+func (e *Engine) FailActivity(state *MutableState, scheduledEventID, startedEventID int64, reason string, details []byte) (*types.HistoryEvent, error) {
 	if !state.IsWorkflowExecutionRunning() {
 		return nil, ErrWorkflowNotRunning
 	}
@@ -380,11 +380,11 @@ func (e *Engine) FailActivity(state *MutableState, scheduledEventID, startedEven
 	}
 
 	eventID := state.IncrementNextEventID()
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   eventID,
-		EventType: history.EventTypeActivityFailed,
+		EventType: types.EventTypeActivityFailed,
 		Timestamp: time.Now(),
-		Attributes: &history.ActivityFailedAttributes{
+		Attributes: &types.ActivityFailedAttributes{
 			ScheduledEventID: scheduledEventID,
 			StartedEventID:   startedEventID,
 			Reason:           reason,

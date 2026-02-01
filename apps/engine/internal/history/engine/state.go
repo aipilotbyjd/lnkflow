@@ -3,27 +3,27 @@ package engine
 import (
 	"time"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 type MutableState struct {
-	ExecutionInfo     *history.ExecutionInfo
+	ExecutionInfo     *types.ExecutionInfo
 	NextEventID       int64
-	PendingActivities map[int64]*history.ActivityInfo
-	PendingTimers     map[string]*history.TimerInfo
-	CompletedNodes    map[string]*history.NodeResult
-	BufferedEvents    []*history.HistoryEvent
+	PendingActivities map[int64]*types.ActivityInfo
+	PendingTimers     map[string]*types.TimerInfo
+	CompletedNodes    map[string]*types.NodeResult
+	BufferedEvents    []*types.HistoryEvent
 	DBVersion         int64
 }
 
-func NewMutableState(info *history.ExecutionInfo) *MutableState {
+func NewMutableState(info *types.ExecutionInfo) *MutableState {
 	return &MutableState{
 		ExecutionInfo:     info,
 		NextEventID:       1,
-		PendingActivities: make(map[int64]*history.ActivityInfo),
-		PendingTimers:     make(map[string]*history.TimerInfo),
-		CompletedNodes:    make(map[string]*history.NodeResult),
-		BufferedEvents:    make([]*history.HistoryEvent, 0),
+		PendingActivities: make(map[int64]*types.ActivityInfo),
+		PendingTimers:     make(map[string]*types.TimerInfo),
+		CompletedNodes:    make(map[string]*types.NodeResult),
+		BufferedEvents:    make([]*types.HistoryEvent, 0),
 		DBVersion:         0,
 	}
 }
@@ -32,10 +32,10 @@ func (ms *MutableState) Clone() *MutableState {
 	clone := &MutableState{
 		ExecutionInfo:     ms.cloneExecutionInfo(),
 		NextEventID:       ms.NextEventID,
-		PendingActivities: make(map[int64]*history.ActivityInfo, len(ms.PendingActivities)),
-		PendingTimers:     make(map[string]*history.TimerInfo, len(ms.PendingTimers)),
-		CompletedNodes:    make(map[string]*history.NodeResult, len(ms.CompletedNodes)),
-		BufferedEvents:    make([]*history.HistoryEvent, len(ms.BufferedEvents)),
+		PendingActivities: make(map[int64]*types.ActivityInfo, len(ms.PendingActivities)),
+		PendingTimers:     make(map[string]*types.TimerInfo, len(ms.PendingTimers)),
+		CompletedNodes:    make(map[string]*types.NodeResult, len(ms.CompletedNodes)),
+		BufferedEvents:    make([]*types.HistoryEvent, len(ms.BufferedEvents)),
 		DBVersion:         ms.DBVersion,
 	}
 
@@ -53,7 +53,7 @@ func (ms *MutableState) Clone() *MutableState {
 	return clone
 }
 
-func (ms *MutableState) cloneExecutionInfo() *history.ExecutionInfo {
+func (ms *MutableState) cloneExecutionInfo() *types.ExecutionInfo {
 	if ms.ExecutionInfo == nil {
 		return nil
 	}
@@ -65,7 +65,7 @@ func (ms *MutableState) cloneExecutionInfo() *history.ExecutionInfo {
 	return &info
 }
 
-func (ms *MutableState) cloneActivityInfo(ai *history.ActivityInfo) *history.ActivityInfo {
+func (ms *MutableState) cloneActivityInfo(ai *types.ActivityInfo) *types.ActivityInfo {
 	if ai == nil {
 		return nil
 	}
@@ -81,7 +81,7 @@ func (ms *MutableState) cloneActivityInfo(ai *history.ActivityInfo) *history.Act
 	return &clone
 }
 
-func (ms *MutableState) cloneTimerInfo(ti *history.TimerInfo) *history.TimerInfo {
+func (ms *MutableState) cloneTimerInfo(ti *types.TimerInfo) *types.TimerInfo {
 	if ti == nil {
 		return nil
 	}
@@ -89,7 +89,7 @@ func (ms *MutableState) cloneTimerInfo(ti *history.TimerInfo) *history.TimerInfo
 	return &clone
 }
 
-func (ms *MutableState) cloneNodeResult(nr *history.NodeResult) *history.NodeResult {
+func (ms *MutableState) cloneNodeResult(nr *types.NodeResult) *types.NodeResult {
 	if nr == nil {
 		return nil
 	}
@@ -105,35 +105,35 @@ func (ms *MutableState) cloneNodeResult(nr *history.NodeResult) *history.NodeRes
 	return &clone
 }
 
-func (ms *MutableState) ApplyEvent(event *history.HistoryEvent) error {
+func (ms *MutableState) ApplyEvent(event *types.HistoryEvent) error {
 	switch event.EventType {
-	case history.EventTypeExecutionStarted:
+	case types.EventTypeExecutionStarted:
 		return ms.applyExecutionStarted(event)
-	case history.EventTypeExecutionCompleted:
+	case types.EventTypeExecutionCompleted:
 		return ms.applyExecutionCompleted(event)
-	case history.EventTypeExecutionFailed:
+	case types.EventTypeExecutionFailed:
 		return ms.applyExecutionFailed(event)
-	case history.EventTypeExecutionTerminated:
+	case types.EventTypeExecutionTerminated:
 		return ms.applyExecutionTerminated(event)
-	case history.EventTypeNodeScheduled:
+	case types.EventTypeNodeScheduled:
 		return ms.applyNodeScheduled(event)
-	case history.EventTypeNodeCompleted:
+	case types.EventTypeNodeCompleted:
 		return ms.applyNodeCompleted(event)
-	case history.EventTypeNodeFailed:
+	case types.EventTypeNodeFailed:
 		return ms.applyNodeFailed(event)
-	case history.EventTypeTimerStarted:
+	case types.EventTypeTimerStarted:
 		return ms.applyTimerStarted(event)
-	case history.EventTypeTimerFired:
+	case types.EventTypeTimerFired:
 		return ms.applyTimerFired(event)
-	case history.EventTypeTimerCanceled:
+	case types.EventTypeTimerCanceled:
 		return ms.applyTimerCanceled(event)
-	case history.EventTypeActivityScheduled:
+	case types.EventTypeActivityScheduled:
 		return ms.applyActivityScheduled(event)
-	case history.EventTypeActivityStarted:
+	case types.EventTypeActivityStarted:
 		return ms.applyActivityStarted(event)
-	case history.EventTypeActivityCompleted:
+	case types.EventTypeActivityCompleted:
 		return ms.applyActivityCompleted(event)
-	case history.EventTypeActivityFailed:
+	case types.EventTypeActivityFailed:
 		return ms.applyActivityFailed(event)
 	}
 
@@ -141,8 +141,8 @@ func (ms *MutableState) ApplyEvent(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) applyExecutionStarted(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.ExecutionStartedAttributes)
+func (ms *MutableState) applyExecutionStarted(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.ExecutionStartedAttributes)
 	if !ok {
 		return nil
 	}
@@ -152,44 +152,44 @@ func (ms *MutableState) applyExecutionStarted(event *history.HistoryEvent) error
 	ms.ExecutionInfo.ExecutionTimeout = attrs.ExecutionTimeout
 	ms.ExecutionInfo.RunTimeout = attrs.RunTimeout
 	ms.ExecutionInfo.TaskTimeout = attrs.TaskTimeout
-	ms.ExecutionInfo.Status = history.ExecutionStatusRunning
+	ms.ExecutionInfo.Status = types.ExecutionStatusRunning
 	ms.ExecutionInfo.StartTime = event.Timestamp
 	ms.NextEventID = event.EventID + 1
 	return nil
 }
 
-func (ms *MutableState) applyExecutionCompleted(event *history.HistoryEvent) error {
-	ms.ExecutionInfo.Status = history.ExecutionStatusCompleted
+func (ms *MutableState) applyExecutionCompleted(event *types.HistoryEvent) error {
+	ms.ExecutionInfo.Status = types.ExecutionStatusCompleted
 	ms.ExecutionInfo.CloseTime = event.Timestamp
 	ms.NextEventID = event.EventID + 1
 	return nil
 }
 
-func (ms *MutableState) applyExecutionFailed(event *history.HistoryEvent) error {
-	ms.ExecutionInfo.Status = history.ExecutionStatusFailed
+func (ms *MutableState) applyExecutionFailed(event *types.HistoryEvent) error {
+	ms.ExecutionInfo.Status = types.ExecutionStatusFailed
 	ms.ExecutionInfo.CloseTime = event.Timestamp
 	ms.NextEventID = event.EventID + 1
 	return nil
 }
 
-func (ms *MutableState) applyExecutionTerminated(event *history.HistoryEvent) error {
-	ms.ExecutionInfo.Status = history.ExecutionStatusTerminated
+func (ms *MutableState) applyExecutionTerminated(event *types.HistoryEvent) error {
+	ms.ExecutionInfo.Status = types.ExecutionStatusTerminated
 	ms.ExecutionInfo.CloseTime = event.Timestamp
 	ms.NextEventID = event.EventID + 1
 	return nil
 }
 
-func (ms *MutableState) applyNodeScheduled(event *history.HistoryEvent) error {
+func (ms *MutableState) applyNodeScheduled(event *types.HistoryEvent) error {
 	ms.NextEventID = event.EventID + 1
 	return nil
 }
 
-func (ms *MutableState) applyNodeCompleted(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.NodeCompletedAttributes)
+func (ms *MutableState) applyNodeCompleted(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.NodeCompletedAttributes)
 	if !ok {
 		return nil
 	}
-	ms.CompletedNodes[attrs.NodeID] = &history.NodeResult{
+	ms.CompletedNodes[attrs.NodeID] = &types.NodeResult{
 		NodeID:        attrs.NodeID,
 		CompletedTime: event.Timestamp,
 		Output:        attrs.Result,
@@ -198,12 +198,12 @@ func (ms *MutableState) applyNodeCompleted(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) applyNodeFailed(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.NodeFailedAttributes)
+func (ms *MutableState) applyNodeFailed(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.NodeFailedAttributes)
 	if !ok {
 		return nil
 	}
-	ms.CompletedNodes[attrs.NodeID] = &history.NodeResult{
+	ms.CompletedNodes[attrs.NodeID] = &types.NodeResult{
 		NodeID:         attrs.NodeID,
 		CompletedTime:  event.Timestamp,
 		FailureReason:  attrs.Reason,
@@ -213,12 +213,12 @@ func (ms *MutableState) applyNodeFailed(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) applyTimerStarted(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.TimerStartedAttributes)
+func (ms *MutableState) applyTimerStarted(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.TimerStartedAttributes)
 	if !ok {
 		return nil
 	}
-	ms.PendingTimers[attrs.TimerID] = &history.TimerInfo{
+	ms.PendingTimers[attrs.TimerID] = &types.TimerInfo{
 		TimerID:        attrs.TimerID,
 		StartedEventID: event.EventID,
 		FireTime:       event.Timestamp.Add(attrs.StartToFire),
@@ -228,8 +228,8 @@ func (ms *MutableState) applyTimerStarted(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) applyTimerFired(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.TimerFiredAttributes)
+func (ms *MutableState) applyTimerFired(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.TimerFiredAttributes)
 	if !ok {
 		return nil
 	}
@@ -238,8 +238,8 @@ func (ms *MutableState) applyTimerFired(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) applyTimerCanceled(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.TimerCanceledAttributes)
+func (ms *MutableState) applyTimerCanceled(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.TimerCanceledAttributes)
 	if !ok {
 		return nil
 	}
@@ -248,12 +248,12 @@ func (ms *MutableState) applyTimerCanceled(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) applyActivityScheduled(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.ActivityScheduledAttributes)
+func (ms *MutableState) applyActivityScheduled(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.ActivityScheduledAttributes)
 	if !ok {
 		return nil
 	}
-	ms.PendingActivities[event.EventID] = &history.ActivityInfo{
+	ms.PendingActivities[event.EventID] = &types.ActivityInfo{
 		ScheduledEventID: event.EventID,
 		ActivityID:       attrs.ActivityID,
 		ActivityType:     attrs.ActivityType,
@@ -268,8 +268,8 @@ func (ms *MutableState) applyActivityScheduled(event *history.HistoryEvent) erro
 	return nil
 }
 
-func (ms *MutableState) applyActivityStarted(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.ActivityStartedAttributes)
+func (ms *MutableState) applyActivityStarted(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.ActivityStartedAttributes)
 	if !ok {
 		return nil
 	}
@@ -282,8 +282,8 @@ func (ms *MutableState) applyActivityStarted(event *history.HistoryEvent) error 
 	return nil
 }
 
-func (ms *MutableState) applyActivityCompleted(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.ActivityCompletedAttributes)
+func (ms *MutableState) applyActivityCompleted(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.ActivityCompletedAttributes)
 	if !ok {
 		return nil
 	}
@@ -292,8 +292,8 @@ func (ms *MutableState) applyActivityCompleted(event *history.HistoryEvent) erro
 	return nil
 }
 
-func (ms *MutableState) applyActivityFailed(event *history.HistoryEvent) error {
-	attrs, ok := event.Attributes.(*history.ActivityFailedAttributes)
+func (ms *MutableState) applyActivityFailed(event *types.HistoryEvent) error {
+	attrs, ok := event.Attributes.(*types.ActivityFailedAttributes)
 	if !ok {
 		return nil
 	}
@@ -302,11 +302,11 @@ func (ms *MutableState) applyActivityFailed(event *history.HistoryEvent) error {
 	return nil
 }
 
-func (ms *MutableState) AddPendingActivity(scheduledEventID int64, info *history.ActivityInfo) {
+func (ms *MutableState) AddPendingActivity(scheduledEventID int64, info *types.ActivityInfo) {
 	ms.PendingActivities[scheduledEventID] = info
 }
 
-func (ms *MutableState) GetPendingActivity(scheduledEventID int64) (*history.ActivityInfo, bool) {
+func (ms *MutableState) GetPendingActivity(scheduledEventID int64) (*types.ActivityInfo, bool) {
 	info, ok := ms.PendingActivities[scheduledEventID]
 	return info, ok
 }
@@ -315,11 +315,11 @@ func (ms *MutableState) DeletePendingActivity(scheduledEventID int64) {
 	delete(ms.PendingActivities, scheduledEventID)
 }
 
-func (ms *MutableState) AddPendingTimer(timerID string, info *history.TimerInfo) {
+func (ms *MutableState) AddPendingTimer(timerID string, info *types.TimerInfo) {
 	ms.PendingTimers[timerID] = info
 }
 
-func (ms *MutableState) GetPendingTimer(timerID string) (*history.TimerInfo, bool) {
+func (ms *MutableState) GetPendingTimer(timerID string) (*types.TimerInfo, bool) {
 	info, ok := ms.PendingTimers[timerID]
 	return info, ok
 }
@@ -328,16 +328,16 @@ func (ms *MutableState) DeletePendingTimer(timerID string) {
 	delete(ms.PendingTimers, timerID)
 }
 
-func (ms *MutableState) AddCompletedNode(nodeID string, result *history.NodeResult) {
+func (ms *MutableState) AddCompletedNode(nodeID string, result *types.NodeResult) {
 	ms.CompletedNodes[nodeID] = result
 }
 
-func (ms *MutableState) GetCompletedNode(nodeID string) (*history.NodeResult, bool) {
+func (ms *MutableState) GetCompletedNode(nodeID string) (*types.NodeResult, bool) {
 	result, ok := ms.CompletedNodes[nodeID]
 	return result, ok
 }
 
-func (ms *MutableState) AddBufferedEvent(event *history.HistoryEvent) {
+func (ms *MutableState) AddBufferedEvent(event *types.HistoryEvent) {
 	ms.BufferedEvents = append(ms.BufferedEvents, event)
 }
 
@@ -356,7 +356,7 @@ func (ms *MutableState) IncrementNextEventID() int64 {
 }
 
 func (ms *MutableState) IsWorkflowExecutionRunning() bool {
-	return ms.ExecutionInfo != nil && ms.ExecutionInfo.Status == history.ExecutionStatusRunning
+	return ms.ExecutionInfo != nil && ms.ExecutionInfo.Status == types.ExecutionStatusRunning
 }
 
 func (ms *MutableState) GetStartTime() time.Time {

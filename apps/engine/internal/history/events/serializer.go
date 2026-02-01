@@ -6,30 +6,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 func init() {
-	gob.Register(&history.ExecutionStartedAttributes{})
-	gob.Register(&history.ExecutionCompletedAttributes{})
-	gob.Register(&history.ExecutionFailedAttributes{})
-	gob.Register(&history.ExecutionTerminatedAttributes{})
-	gob.Register(&history.NodeScheduledAttributes{})
-	gob.Register(&history.NodeStartedAttributes{})
-	gob.Register(&history.NodeCompletedAttributes{})
-	gob.Register(&history.NodeFailedAttributes{})
-	gob.Register(&history.TimerStartedAttributes{})
-	gob.Register(&history.TimerFiredAttributes{})
-	gob.Register(&history.TimerCanceledAttributes{})
-	gob.Register(&history.ActivityScheduledAttributes{})
-	gob.Register(&history.ActivityStartedAttributes{})
-	gob.Register(&history.ActivityCompletedAttributes{})
-	gob.Register(&history.ActivityFailedAttributes{})
-	gob.Register(&history.SignalReceivedAttributes{})
-	gob.Register(&history.MarkerRecordedAttributes{})
-	gob.Register(&history.ExecutionKey{})
-	gob.Register(&history.RetryPolicy{})
+	gob.Register(&types.ExecutionStartedAttributes{})
+	gob.Register(&types.ExecutionCompletedAttributes{})
+	gob.Register(&types.ExecutionFailedAttributes{})
+	gob.Register(&types.ExecutionTerminatedAttributes{})
+	gob.Register(&types.NodeScheduledAttributes{})
+	gob.Register(&types.NodeStartedAttributes{})
+	gob.Register(&types.NodeCompletedAttributes{})
+	gob.Register(&types.NodeFailedAttributes{})
+	gob.Register(&types.TimerStartedAttributes{})
+	gob.Register(&types.TimerFiredAttributes{})
+	gob.Register(&types.TimerCanceledAttributes{})
+	gob.Register(&types.ActivityScheduledAttributes{})
+	gob.Register(&types.ActivityStartedAttributes{})
+	gob.Register(&types.ActivityCompletedAttributes{})
+	gob.Register(&types.ActivityFailedAttributes{})
+	gob.Register(&types.SignalReceivedAttributes{})
+	gob.Register(&types.MarkerRecordedAttributes{})
+	gob.Register(&types.ExecutionKey{})
+	gob.Register(&types.RetryPolicy{})
 }
 
 type EncodingType int
@@ -69,7 +70,7 @@ type serializedEvent struct {
 	Attributes map[string]interface{} `json:"attributes,omitempty"`
 }
 
-func (s *Serializer) Serialize(event *history.HistoryEvent) ([]byte, error) {
+func (s *Serializer) Serialize(event *types.HistoryEvent) ([]byte, error) {
 	if event == nil {
 		return nil, errors.New("cannot serialize nil event")
 	}
@@ -84,7 +85,7 @@ func (s *Serializer) Serialize(event *history.HistoryEvent) ([]byte, error) {
 	}
 }
 
-func (s *Serializer) serializeJSON(event *history.HistoryEvent) ([]byte, error) {
+func (s *Serializer) serializeJSON(event *types.HistoryEvent) ([]byte, error) {
 	se := serializedEvent{
 		Version:    currentSerializerVersion,
 		EventID:    event.EventID,
@@ -109,7 +110,7 @@ func (s *Serializer) serializeJSON(event *history.HistoryEvent) ([]byte, error) 
 	return json.Marshal(se)
 }
 
-func (s *Serializer) serializeGob(event *history.HistoryEvent) ([]byte, error) {
+func (s *Serializer) serializeGob(event *types.HistoryEvent) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteByte(byte(currentSerializerVersion))
 	enc := gob.NewEncoder(&buf)
@@ -119,7 +120,7 @@ func (s *Serializer) serializeGob(event *history.HistoryEvent) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (s *Serializer) Deserialize(data []byte) (*history.HistoryEvent, error) {
+func (s *Serializer) Deserialize(data []byte) (*types.HistoryEvent, error) {
 	if len(data) == 0 {
 		return nil, errors.New("cannot deserialize empty data")
 	}
@@ -134,22 +135,22 @@ func (s *Serializer) Deserialize(data []byte) (*history.HistoryEvent, error) {
 	}
 }
 
-func (s *Serializer) deserializeJSON(data []byte) (*history.HistoryEvent, error) {
+func (s *Serializer) deserializeJSON(data []byte) (*types.HistoryEvent, error) {
 	var se serializedEvent
 	if err := json.Unmarshal(data, &se); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	event := &history.HistoryEvent{
+	event := &types.HistoryEvent{
 		EventID:   se.EventID,
-		EventType: history.EventType(se.EventType),
+		EventType: types.EventType(se.EventType),
 		Version:   se.EvtVersion,
 		TaskID:    se.TaskID,
 	}
-	event.Timestamp = event.Timestamp.Add(0)
+	event.Timestamp = time.Unix(0, se.Timestamp).UTC()
 
 	if se.Attributes != nil {
-		attrs, err := s.deserializeAttributes(history.EventType(se.EventType), se.Attributes)
+		attrs, err := s.deserializeAttributes(types.EventType(se.EventType), se.Attributes)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +160,7 @@ func (s *Serializer) deserializeJSON(data []byte) (*history.HistoryEvent, error)
 	return event, nil
 }
 
-func (s *Serializer) deserializeAttributes(eventType history.EventType, attrMap map[string]interface{}) (any, error) {
+func (s *Serializer) deserializeAttributes(eventType types.EventType, attrMap map[string]interface{}) (any, error) {
 	attrBytes, err := json.Marshal(attrMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal attribute map: %w", err)
@@ -167,40 +168,40 @@ func (s *Serializer) deserializeAttributes(eventType history.EventType, attrMap 
 
 	var attrs any
 	switch eventType {
-	case history.EventTypeExecutionStarted:
-		attrs = &history.ExecutionStartedAttributes{}
-	case history.EventTypeExecutionCompleted:
-		attrs = &history.ExecutionCompletedAttributes{}
-	case history.EventTypeExecutionFailed:
-		attrs = &history.ExecutionFailedAttributes{}
-	case history.EventTypeExecutionTerminated:
-		attrs = &history.ExecutionTerminatedAttributes{}
-	case history.EventTypeNodeScheduled:
-		attrs = &history.NodeScheduledAttributes{}
-	case history.EventTypeNodeStarted:
-		attrs = &history.NodeStartedAttributes{}
-	case history.EventTypeNodeCompleted:
-		attrs = &history.NodeCompletedAttributes{}
-	case history.EventTypeNodeFailed:
-		attrs = &history.NodeFailedAttributes{}
-	case history.EventTypeTimerStarted:
-		attrs = &history.TimerStartedAttributes{}
-	case history.EventTypeTimerFired:
-		attrs = &history.TimerFiredAttributes{}
-	case history.EventTypeTimerCanceled:
-		attrs = &history.TimerCanceledAttributes{}
-	case history.EventTypeActivityScheduled:
-		attrs = &history.ActivityScheduledAttributes{}
-	case history.EventTypeActivityStarted:
-		attrs = &history.ActivityStartedAttributes{}
-	case history.EventTypeActivityCompleted:
-		attrs = &history.ActivityCompletedAttributes{}
-	case history.EventTypeActivityFailed:
-		attrs = &history.ActivityFailedAttributes{}
-	case history.EventTypeSignalReceived:
-		attrs = &history.SignalReceivedAttributes{}
-	case history.EventTypeMarkerRecorded:
-		attrs = &history.MarkerRecordedAttributes{}
+	case types.EventTypeExecutionStarted:
+		attrs = &types.ExecutionStartedAttributes{}
+	case types.EventTypeExecutionCompleted:
+		attrs = &types.ExecutionCompletedAttributes{}
+	case types.EventTypeExecutionFailed:
+		attrs = &types.ExecutionFailedAttributes{}
+	case types.EventTypeExecutionTerminated:
+		attrs = &types.ExecutionTerminatedAttributes{}
+	case types.EventTypeNodeScheduled:
+		attrs = &types.NodeScheduledAttributes{}
+	case types.EventTypeNodeStarted:
+		attrs = &types.NodeStartedAttributes{}
+	case types.EventTypeNodeCompleted:
+		attrs = &types.NodeCompletedAttributes{}
+	case types.EventTypeNodeFailed:
+		attrs = &types.NodeFailedAttributes{}
+	case types.EventTypeTimerStarted:
+		attrs = &types.TimerStartedAttributes{}
+	case types.EventTypeTimerFired:
+		attrs = &types.TimerFiredAttributes{}
+	case types.EventTypeTimerCanceled:
+		attrs = &types.TimerCanceledAttributes{}
+	case types.EventTypeActivityScheduled:
+		attrs = &types.ActivityScheduledAttributes{}
+	case types.EventTypeActivityStarted:
+		attrs = &types.ActivityStartedAttributes{}
+	case types.EventTypeActivityCompleted:
+		attrs = &types.ActivityCompletedAttributes{}
+	case types.EventTypeActivityFailed:
+		attrs = &types.ActivityFailedAttributes{}
+	case types.EventTypeSignalReceived:
+		attrs = &types.SignalReceivedAttributes{}
+	case types.EventTypeMarkerRecorded:
+		attrs = &types.MarkerRecordedAttributes{}
 	default:
 		return attrMap, nil
 	}
@@ -212,7 +213,7 @@ func (s *Serializer) deserializeAttributes(eventType history.EventType, attrMap 
 	return attrs, nil
 }
 
-func (s *Serializer) deserializeGob(data []byte) (*history.HistoryEvent, error) {
+func (s *Serializer) deserializeGob(data []byte) (*types.HistoryEvent, error) {
 	if len(data) < 2 {
 		return nil, errors.New("gob data too short")
 	}
@@ -220,7 +221,7 @@ func (s *Serializer) deserializeGob(data []byte) (*history.HistoryEvent, error) 
 	buf := bytes.NewBuffer(data[1:])
 	dec := gob.NewDecoder(buf)
 
-	var event history.HistoryEvent
+	var event types.HistoryEvent
 	if err := dec.Decode(&event); err != nil {
 		return nil, fmt.Errorf("failed to gob decode event: %w", err)
 	}
@@ -228,7 +229,7 @@ func (s *Serializer) deserializeGob(data []byte) (*history.HistoryEvent, error) 
 	return &event, nil
 }
 
-func (s *Serializer) SerializeEvents(events []*history.HistoryEvent) ([][]byte, error) {
+func (s *Serializer) SerializeEvents(events []*types.HistoryEvent) ([][]byte, error) {
 	result := make([][]byte, len(events))
 	for i, event := range events {
 		data, err := s.Serialize(event)
@@ -240,8 +241,8 @@ func (s *Serializer) SerializeEvents(events []*history.HistoryEvent) ([][]byte, 
 	return result, nil
 }
 
-func (s *Serializer) DeserializeEvents(dataList [][]byte) ([]*history.HistoryEvent, error) {
-	result := make([]*history.HistoryEvent, len(dataList))
+func (s *Serializer) DeserializeEvents(dataList [][]byte) ([]*types.HistoryEvent, error) {
+	result := make([]*types.HistoryEvent, len(dataList))
 	for i, data := range dataList {
 		event, err := s.Deserialize(data)
 		if err != nil {

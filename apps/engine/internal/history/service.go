@@ -5,67 +5,107 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
+
+	"github.com/linkflow/engine/internal/history/engine"
+	"github.com/linkflow/engine/internal/history/shard"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 var (
 	ErrServiceNotRunning     = errors.New("history service is not running")
 	ErrServiceAlreadyRunning = errors.New("history service is already running")
+	ErrExecutionNotFound     = errors.New("execution not found")
+	ErrEventNotFound         = errors.New("event not found")
+	ErrOptimisticLock        = errors.New("optimistic lock failure")
 )
 
+// EventStore defines the interface for storing and retrieving history events.
 type EventStore interface {
-	AppendEvents(ctx context.Context, key ExecutionKey, events []*HistoryEvent, expectedVersion int64) error
-	GetEvents(ctx context.Context, key ExecutionKey, firstEventID, lastEventID int64) ([]*HistoryEvent, error)
+	AppendEvents(ctx context.Context, key types.ExecutionKey, events []*types.HistoryEvent, expectedVersion int64) error
+	GetEvents(ctx context.Context, key types.ExecutionKey, firstEventID, lastEventID int64) ([]*types.HistoryEvent, error)
 }
 
-type MutableState struct {
-	ExecutionInfo     *ExecutionInfo
-	NextEventID       int64
-	PendingActivities map[int64]*ActivityInfo
-	PendingTimers     map[string]*TimerInfo
-	CompletedNodes    map[string]*NodeResult
-	BufferedEvents    []*HistoryEvent
-	DBVersion         int64
-}
-
+// MutableStateStore defines the interface for storing workflow mutable state.
 type MutableStateStore interface {
-	GetMutableState(ctx context.Context, key ExecutionKey) (*MutableState, error)
-	UpdateMutableState(ctx context.Context, key ExecutionKey, state *MutableState, expectedVersion int64) error
+	GetMutableState(ctx context.Context, key types.ExecutionKey) (*engine.MutableState, error)
+	UpdateMutableState(ctx context.Context, key types.ExecutionKey, state *engine.MutableState, expectedVersion int64) error
 }
 
+// ShardController manages shard ownership and distribution.
 type ShardController interface {
-	GetShardForExecution(key ExecutionKey) (Shard, error)
-	GetShardIDForExecution(key ExecutionKey) int32
+	GetShardForExecution(key types.ExecutionKey) (shard.Shard, error)
+	GetShardIDForExecution(key types.ExecutionKey) int32
 	Stop()
 }
 
-type Shard interface {
-	GetID() int32
+// Metrics provides hooks for observability.
+type Metrics interface {
+	RecordEventRecorded(eventType types.EventType)
+	RecordEventRetrieved(count int)
+	RecordServiceLatency(operation string, duration time.Duration)
 }
 
+// noopMetrics is a no-op implementation of Metrics.
+type noopMetrics struct{}
+
+func (noopMetrics) RecordEventRecorded(types.EventType)        {}
+func (noopMetrics) RecordEventRetrieved(int)                   {}
+func (noopMetrics) RecordServiceLatency(string, time.Duration) {}
+
+// Service provides workflow history management capabilities.
 type Service struct {
 	shardController ShardController
 	eventStore      EventStore
 	stateStore      MutableStateStore
+	historyEngine   *engine.Engine
+	metrics         Metrics
 	logger          *slog.Logger
 
 	running bool
 	mu      sync.RWMutex
 }
 
+// Config holds configuration for the history service.
+type Config struct {
+	ShardController ShardController
+	EventStore      EventStore
+	StateStore      MutableStateStore
+	Logger          *slog.Logger
+	Metrics         Metrics
+}
+
+// NewService creates a new history service with default config.
 func NewService(
 	shardController ShardController,
 	eventStore EventStore,
 	stateStore MutableStateStore,
 	logger *slog.Logger,
 ) *Service {
-	if logger == nil {
-		logger = slog.Default()
+	return NewServiceWithConfig(Config{
+		ShardController: shardController,
+		EventStore:      eventStore,
+		StateStore:      stateStore,
+		Logger:          logger,
+	})
+}
+
+// NewServiceWithConfig creates a new history service with full configuration.
+func NewServiceWithConfig(cfg Config) *Service {
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
+	metrics := cfg.Metrics
+	if metrics == nil {
+		metrics = noopMetrics{}
 	}
 	return &Service{
-		shardController: shardController,
-		eventStore:      eventStore,
-		stateStore:      stateStore,
-		logger:          logger,
+		shardController: cfg.ShardController,
+		eventStore:      cfg.EventStore,
+		stateStore:      cfg.StateStore,
+		historyEngine:   engine.NewEngine(cfg.Logger),
+		metrics:         metrics,
+		logger:          cfg.Logger,
 		running:         false,
 	}
 }
@@ -107,7 +147,12 @@ func (s *Service) IsRunning() bool {
 	return s.running
 }
 
-func (s *Service) RecordEvent(ctx context.Context, key ExecutionKey, event *HistoryEvent) error {
+func (s *Service) RecordEvent(ctx context.Context, key types.ExecutionKey, event *types.HistoryEvent) error {
+	start := time.Now()
+	defer func() {
+		s.metrics.RecordServiceLatency("RecordEvent", time.Since(start))
+	}()
+
 	s.mu.RLock()
 	running := s.running
 	s.mu.RUnlock()
@@ -132,28 +177,29 @@ func (s *Service) RecordEvent(ctx context.Context, key ExecutionKey, event *Hist
 
 	state, err := s.stateStore.GetMutableState(ctx, key)
 	if err != nil {
-		state = &MutableState{
-			ExecutionInfo: &ExecutionInfo{
+		if errors.Is(err, ErrExecutionNotFound) {
+			// Create new mutable state if it doesn't exist
+			state = engine.NewMutableState(&types.ExecutionInfo{
 				NamespaceID: key.NamespaceID,
 				WorkflowID:  key.WorkflowID,
 				RunID:       key.RunID,
-			},
-			NextEventID:       1,
-			PendingActivities: make(map[int64]*ActivityInfo),
-			PendingTimers:     make(map[string]*TimerInfo),
-			CompletedNodes:    make(map[string]*NodeResult),
-			BufferedEvents:    make([]*HistoryEvent, 0),
-			DBVersion:         0,
+			})
+		} else {
+			return err
 		}
 	}
 
 	expectedVersion := state.DBVersion
 
-	if err := s.eventStore.AppendEvents(ctx, key, []*HistoryEvent{event}, expectedVersion); err != nil {
+	// Use the engine logic to validate and apply the event to the state
+	if err := s.historyEngine.ProcessEvent(state, event); err != nil {
 		return err
 	}
 
-	state.NextEventID = event.EventID + 1
+	if err := s.eventStore.AppendEvents(ctx, key, []*types.HistoryEvent{event}, expectedVersion); err != nil {
+		return err
+	}
+
 	state.DBVersion++
 
 	if err := s.stateStore.UpdateMutableState(ctx, key, state, expectedVersion); err != nil {
@@ -161,12 +207,14 @@ func (s *Service) RecordEvent(ctx context.Context, key ExecutionKey, event *Hist
 			"error", err,
 			"workflow_id", key.WorkflowID,
 		)
+		return err
 	}
 
+	s.metrics.RecordEventRecorded(event.EventType)
 	return nil
 }
 
-func (s *Service) RecordEvents(ctx context.Context, key ExecutionKey, events []*HistoryEvent) error {
+func (s *Service) RecordEvents(ctx context.Context, key types.ExecutionKey, events []*types.HistoryEvent) error {
 	s.mu.RLock()
 	running := s.running
 	s.mu.RUnlock()
@@ -179,57 +227,48 @@ func (s *Service) RecordEvents(ctx context.Context, key ExecutionKey, events []*
 		return nil
 	}
 
-	shard, err := s.shardController.GetShardForExecution(key)
+	_, err := s.shardController.GetShardForExecution(key)
 	if err != nil {
 		return err
 	}
 
-	s.logger.Debug("recording events",
-		"shard_id", shard.GetID(),
-		"namespace_id", key.NamespaceID,
-		"workflow_id", key.WorkflowID,
-		"run_id", key.RunID,
-		"event_count", len(events),
-	)
-
 	state, err := s.stateStore.GetMutableState(ctx, key)
 	if err != nil {
-		state = &MutableState{
-			ExecutionInfo: &ExecutionInfo{
+		if errors.Is(err, ErrExecutionNotFound) {
+			state = engine.NewMutableState(&types.ExecutionInfo{
 				NamespaceID: key.NamespaceID,
 				WorkflowID:  key.WorkflowID,
 				RunID:       key.RunID,
-			},
-			NextEventID:       1,
-			PendingActivities: make(map[int64]*ActivityInfo),
-			PendingTimers:     make(map[string]*TimerInfo),
-			CompletedNodes:    make(map[string]*NodeResult),
-			BufferedEvents:    make([]*HistoryEvent, 0),
-			DBVersion:         0,
+			})
+		} else {
+			return err
 		}
 	}
 
 	expectedVersion := state.DBVersion
 
+	// Apply all events
+	for _, event := range events {
+		if err := s.historyEngine.ProcessEvent(state, event); err != nil {
+			return err
+		}
+	}
+
 	if err := s.eventStore.AppendEvents(ctx, key, events, expectedVersion); err != nil {
 		return err
 	}
 
-	lastEvent := events[len(events)-1]
-	state.NextEventID = lastEvent.EventID + 1
 	state.DBVersion++
 
 	if err := s.stateStore.UpdateMutableState(ctx, key, state, expectedVersion); err != nil {
-		s.logger.Warn("failed to update mutable state after recording events",
-			"error", err,
-			"workflow_id", key.WorkflowID,
-		)
+		s.logger.Warn("failed to update mutable state", "error", err)
+		return err
 	}
 
 	return nil
 }
 
-func (s *Service) GetHistory(ctx context.Context, key ExecutionKey, firstEventID, lastEventID int64) ([]*HistoryEvent, error) {
+func (s *Service) GetHistory(ctx context.Context, key types.ExecutionKey, firstEventID, lastEventID int64) ([]*types.HistoryEvent, error) {
 	s.mu.RLock()
 	running := s.running
 	s.mu.RUnlock()
@@ -245,10 +284,15 @@ func (s *Service) GetHistory(ctx context.Context, key ExecutionKey, firstEventID
 		lastEventID = int64(^uint64(0) >> 1)
 	}
 
-	return s.eventStore.GetEvents(ctx, key, firstEventID, lastEventID)
+	events, err := s.eventStore.GetEvents(ctx, key, firstEventID, lastEventID)
+	if err != nil {
+		return nil, err
+	}
+	s.metrics.RecordEventRetrieved(len(events))
+	return events, nil
 }
 
-func (s *Service) GetMutableState(ctx context.Context, key ExecutionKey) (*MutableState, error) {
+func (s *Service) GetMutableState(ctx context.Context, key types.ExecutionKey) (*engine.MutableState, error) {
 	s.mu.RLock()
 	running := s.running
 	s.mu.RUnlock()
@@ -260,10 +304,15 @@ func (s *Service) GetMutableState(ctx context.Context, key ExecutionKey) (*Mutab
 	return s.stateStore.GetMutableState(ctx, key)
 }
 
-func (s *Service) GetShardForExecution(key ExecutionKey) (Shard, error) {
+func (s *Service) GetShardForExecution(key types.ExecutionKey) (shard.Shard, error) {
 	return s.shardController.GetShardForExecution(key)
 }
 
-func (s *Service) GetShardIDForExecution(key ExecutionKey) int32 {
+func (s *Service) GetShardIDForExecution(key types.ExecutionKey) int32 {
 	return s.shardController.GetShardIDForExecution(key)
+}
+
+func (s *Service) ResetExecution(ctx context.Context, key types.ExecutionKey, reason string, resetEventID int64) (string, error) {
+	// TODO: Implement reset logic (replay history, branch execution, etc.)
+	return "", errors.New("reset execution not implemented")
 }

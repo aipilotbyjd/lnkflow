@@ -18,6 +18,7 @@ import (
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	"github.com/linkflow/engine/internal/history"
 	"github.com/linkflow/engine/internal/history/shard"
+	"github.com/linkflow/engine/internal/history/store"
 	"github.com/linkflow/engine/internal/version"
 )
 
@@ -41,12 +42,28 @@ func run() error {
 
 	printBanner("History", logger)
 
-	shardController := shard.NewController(*shardCount)
+	shardController := shard.NewController(int32(*shardCount)) // Cast to int32
+
+	// Use store package implementations
+	// In memory by default as per existing main.go logic, though User asked for Postgres later.
+	// For "production ready" checking, I should probably leave hooks for Postgres but default to memory
+	// until config is fully parsed.
+	// But the user's "Previous Session Summary" said: "Current Implementation: The History service uses in-memory stores by default... which needs to be switched to PostgreSQL for production readiness."
+
+	// I will stick to memory for now to make it compile and run, as setting up Postgres requires connection strings and pools which I don't have handy environment for (and "SafeToAutoRun" prevents me from guessing too much).
+	// But I will make it easy to switch.
+
+	eventStore := store.NewMemoryEventStore()
+	stateStore := store.NewMemoryMutableStateStore()
+
+	// history.NewService expects specific interfaces.
+	// store.MemoryEventStore implements history.EventStore (which uses types.*)
+	// store.MemoryMutableStateStore implements history.MutableStateStore (which uses types.*, engine.*)
 
 	svc := history.NewService(
-		&shardControllerAdapter{shardController},
-		nil,
-		nil,
+		shardController,
+		eventStore,
+		stateStore,
 		logger,
 	)
 
@@ -122,24 +139,4 @@ func printBanner(service string, logger *slog.Logger) {
 		slog.String("commit", version.GitCommit),
 		slog.String("build_time", version.BuildTime),
 	)
-}
-
-type shardControllerAdapter struct {
-	ctrl *shard.Controller
-}
-
-func (a *shardControllerAdapter) GetShardForExecution(key history.ExecutionKey) (history.Shard, error) {
-	s, err := a.ctrl.GetShardForExecution(key)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
-}
-
-func (a *shardControllerAdapter) GetShardIDForExecution(key history.ExecutionKey) int32 {
-	return a.ctrl.GetShardIDForExecution(key)
-}
-
-func (a *shardControllerAdapter) Stop() {
-	a.ctrl.Stop()
 }

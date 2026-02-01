@@ -3,18 +3,27 @@
 use App\Enums\ExecutionMode;
 use App\Enums\ExecutionStatus;
 use App\Enums\WebhookAuthType;
+use App\Jobs\ExecuteWorkflowJob;
 use App\Models\Execution;
 use App\Models\Webhook;
 use App\Models\Workflow;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    Queue::fake();
+
     $this->workspace = Workspace::factory()->create();
     $this->workflow = Workflow::factory()->create([
         'workspace_id' => $this->workspace->id,
+        'is_active' => true,
+        'nodes' => [
+            ['id' => 't1', 'type' => 'trigger_webhook', 'position' => ['x' => 0, 'y' => 0], 'data' => ['label' => 'Webhook']],
+        ],
+        'edges' => [],
     ]);
 });
 
@@ -38,6 +47,8 @@ describe('handle', function () {
             'mode' => ExecutionMode::Webhook->value,
             'status' => ExecutionStatus::Pending->value,
         ]);
+
+        Queue::assertPushed(ExecuteWorkflowJob::class);
 
         $webhook->refresh();
         expect($webhook->call_count)->toBe(1);

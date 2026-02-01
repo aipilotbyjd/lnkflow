@@ -2,18 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\ExecutionMode;
-use App\Enums\ExecutionStatus;
 use App\Enums\WebhookAuthType;
 use App\Http\Controllers\Controller;
-use App\Models\Execution;
 use App\Models\Webhook;
+use App\Services\WorkflowDispatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 class WebhookReceiverController extends Controller
 {
+    public function __construct(
+        private WorkflowDispatchService $dispatchService
+    ) {}
+
     public function handle(Request $request, string $uuid, ?string $path = null): JsonResponse
     {
         $webhook = Webhook::query()
@@ -55,22 +57,22 @@ class WebhookReceiverController extends Controller
             'path' => $path,
         ];
 
-        $execution = Execution::create([
-            'workflow_id' => $webhook->workflow_id,
-            'workspace_id' => $webhook->workspace_id,
-            'status' => ExecutionStatus::Pending,
-            'mode' => ExecutionMode::Webhook,
-            'trigger_data' => $triggerData,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        try {
+            $result = $this->dispatchService->dispatchHighPriority(
+                workflow: $webhook->workflow,
+                mode: 'webhook',
+                triggerData: $triggerData,
+            );
 
-        $webhook->incrementCallCount();
+            $webhook->incrementCallCount();
 
-        return response()->json(
-            $webhook->response_body ?? ['success' => true, 'execution_id' => $execution->id],
-            $webhook->response_status
-        );
+            return response()->json(
+                $webhook->response_body ?? ['success' => true, 'execution_id' => $result['execution']->id],
+                $webhook->response_status
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
     }
 
     private function validateAuth(Request $request, Webhook $webhook): bool

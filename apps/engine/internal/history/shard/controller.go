@@ -1,159 +1,113 @@
 package shard
 
 import (
-	"hash/fnv"
+	"errors"
 	"sync"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
-type ShardStatus int
-
-const (
-	ShardStatusUnknown ShardStatus = iota
-	ShardStatusOwned
-	ShardStatusTransferring
-	ShardStatusStopped
+var (
+	ErrShardNotOwned = errors.New("shard not owned by this host")
+	ErrShardNotFound = errors.New("shard not found")
 )
 
-type Shard struct {
-	ShardID int32
-	Status  ShardStatus
-	mu      sync.RWMutex
+type Shard interface {
+	GetID() int32
 }
 
-func NewShard(shardID int32) *Shard {
-	return &Shard{
-		ShardID: shardID,
-		Status:  ShardStatusOwned,
-	}
+type ShardImpl struct {
+	id int32
+	// Add other shard-specific fields here, e.g., locking, status
 }
 
-func (s *Shard) GetID() int32 {
-	return s.ShardID
-}
-
-func (s *Shard) GetStatus() ShardStatus {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.Status
-}
-
-func (s *Shard) SetStatus(status ShardStatus) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Status = status
+func (s *ShardImpl) GetID() int32 {
+	return s.id
 }
 
 type Controller struct {
-	numShards int
-	shards    map[int32]*Shard
+	numShards int32
+	shards    map[int32]Shard
 	mu        sync.RWMutex
+	status    int32 // 0: stopped, 1: starting, 2: running, 3: stopping
 }
 
-func NewController(numShards int) *Controller {
+const (
+	statusStopped  = 0
+	statusStarting = 1
+	statusRunning  = 2
+	statusStopping = 3
+)
+
+func NewController(numShards int32) *Controller {
 	if numShards <= 0 {
-		numShards = 16
+		numShards = 16 // Default
 	}
 	return &Controller{
 		numShards: numShards,
-		shards:    make(map[int32]*Shard),
+		shards:    make(map[int32]Shard),
+		status:    statusStopped,
 	}
 }
 
-func (c *Controller) GetShard(shardID int32) (*Shard, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	shard, exists := c.shards[shardID]
-	return shard, exists
-}
-
-func (c *Controller) GetShardForExecution(key history.ExecutionKey) (*Shard, error) {
-	shardID := c.GetShardIDForExecution(key)
-
+func (c *Controller) Start() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	shard, exists := c.shards[shardID]
-	if !exists {
-		shard = NewShard(shardID)
-		c.shards[shardID] = shard
-	}
-
-	return shard, nil
-}
-
-func (c *Controller) GetShardIDForExecution(key history.ExecutionKey) int32 {
-	h := fnv.New32a()
-	h.Write([]byte(key.NamespaceID))
-	h.Write([]byte(key.WorkflowID))
-	hashValue := h.Sum32()
-	return int32(hashValue % uint32(c.numShards))
-}
-
-func (c *Controller) AcquireShard(shardID int32) (*Shard, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	shard, exists := c.shards[shardID]
-	if exists {
-		return shard, nil
-	}
-
-	shard = NewShard(shardID)
-	c.shards[shardID] = shard
-	return shard, nil
-}
-
-func (c *Controller) ReleaseShard(shardID int32) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	shard, exists := c.shards[shardID]
-	if !exists {
+	if c.status == statusRunning {
 		return nil
 	}
 
-	shard.SetStatus(ShardStatusStopped)
-	delete(c.shards, shardID)
+	c.status = statusStarting
+	// Initialize shards
+	for i := int32(0); i < c.numShards; i++ {
+		c.shards[i] = &ShardImpl{id: i}
+	}
+	c.status = statusRunning
 	return nil
-}
-
-func (c *Controller) GetAllShards() []*Shard {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	shards := make([]*Shard, 0, len(c.shards))
-	for _, shard := range c.shards {
-		shards = append(shards, shard)
-	}
-	return shards
-}
-
-func (c *Controller) GetNumShards() int {
-	return c.numShards
-}
-
-func (c *Controller) GetOwnedShardCount() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	count := 0
-	for _, shard := range c.shards {
-		if shard.GetStatus() == ShardStatusOwned {
-			count++
-		}
-	}
-	return count
 }
 
 func (c *Controller) Stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for shardID, shard := range c.shards {
-		shard.SetStatus(ShardStatusStopped)
-		delete(c.shards, shardID)
+	if c.status == statusStopped {
+		return
 	}
+	c.status = statusStopping
+	// Cleanup logic
+	c.status = statusStopped
+}
+
+func (c *Controller) GetShardForExecution(key types.ExecutionKey) (Shard, error) {
+	shardID := c.GetShardIDForExecution(key)
+
+	c.mu.RLock()
+	shard, ok := c.shards[shardID]
+	c.mu.RUnlock()
+
+	if !ok {
+		// In a real system, we might try to acquire ownership here.
+		// For now, assuming static assignment or initialization in Start()
+		return nil, ErrShardNotFound
+	}
+
+	return shard, nil
+}
+
+func (c *Controller) GetShardIDForExecution(key types.ExecutionKey) int32 {
+	// Simple hash-based sharding
+	data := key.NamespaceID + "/" + key.WorkflowID
+	var hash uint32
+	for i := 0; i < len(data); i++ {
+		hash = 31*hash + uint32(data[i])
+	}
+	return int32(hash % uint32(c.numShards))
+}
+
+func (c *Controller) isShardOwned(shardID int32) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.shards[shardID]
+	return ok
 }

@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/linkflow/engine/internal/history"
 	"github.com/linkflow/engine/internal/history/engine"
 	"github.com/linkflow/engine/internal/history/store"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 var (
@@ -53,7 +53,7 @@ type ReplayError struct {
 }
 
 // Replay replays an execution from its event history.
-func (r *Replayer) Replay(ctx context.Context, key history.ExecutionKey, targetEventID int64) (*ReplayResult, error) {
+func (r *Replayer) Replay(ctx context.Context, key types.ExecutionKey, targetEventID int64) (*ReplayResult, error) {
 	start := time.Now()
 
 	r.logger.Info("starting replay",
@@ -74,12 +74,12 @@ func (r *Replayer) Replay(ctx context.Context, key history.ExecutionKey, targetE
 
 	// Get initial state from first event
 	firstEvent := events[0]
-	if firstEvent.EventType != history.EventTypeExecutionStarted {
+	if firstEvent.EventType != types.EventTypeExecutionStarted {
 		return nil, errors.New("first event must be ExecutionStarted")
 	}
 
 	// Initialize mutable state
-	execInfo := &history.ExecutionInfo{
+	execInfo := &types.ExecutionInfo{
 		NamespaceID: key.NamespaceID,
 		WorkflowID:  key.WorkflowID,
 		RunID:       key.RunID,
@@ -120,7 +120,7 @@ func (r *Replayer) Replay(ctx context.Context, key history.ExecutionKey, targetE
 }
 
 // ReplayToPoint replays to a specific point in time.
-func (r *Replayer) ReplayToPoint(ctx context.Context, key history.ExecutionKey, timestamp time.Time) (*ReplayResult, error) {
+func (r *Replayer) ReplayToPoint(ctx context.Context, key types.ExecutionKey, timestamp time.Time) (*ReplayResult, error) {
 	// Fetch all events
 	events, err := r.eventStore.GetEvents(ctx, key, 0, 10000)
 	if err != nil {
@@ -145,7 +145,7 @@ func (r *Replayer) ReplayToPoint(ctx context.Context, key history.ExecutionKey, 
 }
 
 // Compare compares the replay result with stored mutable state.
-func (r *Replayer) Compare(ctx context.Context, key history.ExecutionKey) (*ComparisonResult, error) {
+func (r *Replayer) Compare(ctx context.Context, key types.ExecutionKey) (*ComparisonResult, error) {
 	// Get stored state
 	stored, err := r.stateStore.GetMutableState(ctx, key)
 	if err != nil {
@@ -214,7 +214,7 @@ type Difference struct {
 }
 
 // ValidateHistoryIntegrity validates the integrity of execution history.
-func (r *Replayer) ValidateHistoryIntegrity(ctx context.Context, key history.ExecutionKey) error {
+func (r *Replayer) ValidateHistoryIntegrity(ctx context.Context, key types.ExecutionKey) error {
 	// Fetch all events
 	events, err := r.eventStore.GetEvents(ctx, key, 0, 100000)
 	if err != nil {
@@ -231,7 +231,7 @@ func (r *Replayer) ValidateHistoryIntegrity(ctx context.Context, key history.Exe
 	}
 
 	// Validate first event is execution started
-	if len(events) > 0 && events[0].EventType != history.EventTypeExecutionStarted {
+	if len(events) > 0 && events[0].EventType != types.EventTypeExecutionStarted {
 		return errors.New("first event must be ExecutionStarted")
 	}
 
@@ -239,17 +239,17 @@ func (r *Replayer) ValidateHistoryIntegrity(ctx context.Context, key history.Exe
 	if len(events) > 0 {
 		lastEvent := events[len(events)-1]
 		switch lastEvent.EventType {
-		case history.EventTypeExecutionCompleted,
-			history.EventTypeExecutionFailed,
-			history.EventTypeExecutionTerminated:
+		case types.EventTypeExecutionCompleted,
+			types.EventTypeExecutionFailed,
+			types.EventTypeExecutionTerminated:
 			// Valid terminal state
 		default:
 			// Execution still in progress - validate no terminal state in middle
 			for i := 0; i < len(events)-1; i++ {
 				switch events[i].EventType {
-				case history.EventTypeExecutionCompleted,
-					history.EventTypeExecutionFailed,
-					history.EventTypeExecutionTerminated:
+				case types.EventTypeExecutionCompleted,
+					types.EventTypeExecutionFailed,
+					types.EventTypeExecutionTerminated:
 					return fmt.Errorf("terminal event found at position %d, not at end", i)
 				}
 			}

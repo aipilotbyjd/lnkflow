@@ -3,7 +3,7 @@ package events
 import (
 	"time"
 
-	"github.com/linkflow/engine/internal/history"
+	"github.com/linkflow/engine/internal/history/types"
 )
 
 type EventBuilder struct {
@@ -34,8 +34,8 @@ func (b *EventBuilder) WithTaskID(taskID int64) *EventBuilder {
 	return b
 }
 
-func (b *EventBuilder) newEvent(eventID int64, eventType history.EventType, attrs any) *history.HistoryEvent {
-	return &history.HistoryEvent{
+func (b *EventBuilder) newEvent(eventID int64, eventType types.EventType, attrs any) *types.HistoryEvent {
+	return &types.HistoryEvent{
 		EventID:    eventID,
 		EventType:  eventType,
 		Timestamp:  time.Now(),
@@ -50,10 +50,10 @@ func (b *EventBuilder) BuildExecutionStarted(
 	workflowType, taskQueue string,
 	input []byte,
 	executionTimeout, runTimeout, taskTimeout time.Duration,
-	parentExecution *history.ExecutionKey,
+	parentExecution *types.ExecutionKey,
 	initiator string,
-) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeExecutionStarted, &history.ExecutionStartedAttributes{
+) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeExecutionStarted, &types.ExecutionStartedAttributes{
 		WorkflowType:     workflowType,
 		TaskQueue:        taskQueue,
 		Input:            input,
@@ -65,28 +65,28 @@ func (b *EventBuilder) BuildExecutionStarted(
 	})
 }
 
-func (b *EventBuilder) BuildExecutionCompleted(eventID int64, result []byte) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeExecutionCompleted, &history.ExecutionCompletedAttributes{
+func (b *EventBuilder) BuildExecutionCompleted(eventID int64, result []byte) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeExecutionCompleted, &types.ExecutionCompletedAttributes{
 		Result: result,
 	})
 }
 
-func (b *EventBuilder) BuildExecutionFailed(eventID int64, reason string, details []byte) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeExecutionFailed, &history.ExecutionFailedAttributes{
+func (b *EventBuilder) BuildExecutionFailed(eventID int64, reason string, details []byte) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeExecutionFailed, &types.ExecutionFailedAttributes{
 		Reason:  reason,
 		Details: details,
 	})
 }
 
-func (b *EventBuilder) BuildExecutionTerminated(eventID int64, reason, identity string) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeExecutionTerminated, &history.ExecutionTerminatedAttributes{
+func (b *EventBuilder) BuildExecutionTerminated(eventID int64, reason, identity string) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeExecutionTerminated, &types.ExecutionTerminatedAttributes{
 		Reason:   reason,
 		Identity: identity,
 	})
 }
 
-func (b *EventBuilder) BuildNodeScheduled(eventID int64, nodeID, nodeType string, input []byte, taskQueue string) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeNodeScheduled, &history.NodeScheduledAttributes{
+func (b *EventBuilder) BuildNodeScheduled(eventID int64, nodeID, nodeType string, input []byte, taskQueue string) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeNodeScheduled, &types.NodeScheduledAttributes{
 		NodeID:    nodeID,
 		NodeType:  nodeType,
 		Input:     input,
@@ -94,16 +94,16 @@ func (b *EventBuilder) BuildNodeScheduled(eventID int64, nodeID, nodeType string
 	})
 }
 
-func (b *EventBuilder) BuildNodeStarted(eventID int64, nodeID string, scheduledEventID int64, identity string) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeNodeStarted, &history.NodeStartedAttributes{
+func (b *EventBuilder) BuildNodeStarted(eventID int64, nodeID string, scheduledEventID int64, identity string) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeNodeStarted, &types.NodeStartedAttributes{
 		NodeID:           nodeID,
 		ScheduledEventID: scheduledEventID,
 		Identity:         identity,
 	})
 }
 
-func (b *EventBuilder) BuildNodeCompleted(eventID int64, nodeID string, scheduledEventID, startedEventID int64, result []byte) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeNodeCompleted, &history.NodeCompletedAttributes{
+func (b *EventBuilder) BuildNodeCompleted(eventID int64, nodeID string, scheduledEventID, startedEventID int64, result []byte) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeNodeCompleted, &types.NodeCompletedAttributes{
 		NodeID:           nodeID,
 		ScheduledEventID: scheduledEventID,
 		StartedEventID:   startedEventID,
@@ -111,8 +111,8 @@ func (b *EventBuilder) BuildNodeCompleted(eventID int64, nodeID string, schedule
 	})
 }
 
-func (b *EventBuilder) BuildNodeFailed(eventID int64, nodeID string, scheduledEventID, startedEventID int64, reason string, details []byte, retryState int32) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeNodeFailed, &history.NodeFailedAttributes{
+func (b *EventBuilder) BuildNodeFailed(eventID int64, nodeID string, scheduledEventID, startedEventID int64, reason string, details []byte, retryState int32) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeNodeFailed, &types.NodeFailedAttributes{
 		NodeID:           nodeID,
 		ScheduledEventID: scheduledEventID,
 		StartedEventID:   startedEventID,
@@ -122,22 +122,22 @@ func (b *EventBuilder) BuildNodeFailed(eventID int64, nodeID string, scheduledEv
 	})
 }
 
-func (b *EventBuilder) BuildTimerStarted(eventID int64, timerID string, startToFire time.Duration) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeTimerStarted, &history.TimerStartedAttributes{
+func (b *EventBuilder) BuildTimerStarted(eventID int64, timerID string, startToFire time.Duration) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeTimerStarted, &types.TimerStartedAttributes{
 		TimerID:     timerID,
 		StartToFire: startToFire,
 	})
 }
 
-func (b *EventBuilder) BuildTimerFired(eventID int64, timerID string, startedEventID int64) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeTimerFired, &history.TimerFiredAttributes{
+func (b *EventBuilder) BuildTimerFired(eventID int64, timerID string, startedEventID int64) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeTimerFired, &types.TimerFiredAttributes{
 		TimerID:        timerID,
 		StartedEventID: startedEventID,
 	})
 }
 
-func (b *EventBuilder) BuildTimerCanceled(eventID int64, timerID string, startedEventID int64, identity string) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeTimerCanceled, &history.TimerCanceledAttributes{
+func (b *EventBuilder) BuildTimerCanceled(eventID int64, timerID string, startedEventID int64, identity string) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeTimerCanceled, &types.TimerCanceledAttributes{
 		TimerID:        timerID,
 		StartedEventID: startedEventID,
 		Identity:       identity,
@@ -149,9 +149,9 @@ func (b *EventBuilder) BuildActivityScheduled(
 	activityID, activityType, taskQueue string,
 	input []byte,
 	scheduleToClose, scheduleToStart, startToClose, heartbeatTimeout time.Duration,
-	retryPolicy *history.RetryPolicy,
-) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeActivityScheduled, &history.ActivityScheduledAttributes{
+	retryPolicy *types.RetryPolicy,
+) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeActivityScheduled, &types.ActivityScheduledAttributes{
 		ActivityID:       activityID,
 		ActivityType:     activityType,
 		TaskQueue:        taskQueue,
@@ -164,24 +164,24 @@ func (b *EventBuilder) BuildActivityScheduled(
 	})
 }
 
-func (b *EventBuilder) BuildActivityStarted(eventID int64, scheduledEventID int64, identity string, attempt int32) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeActivityStarted, &history.ActivityStartedAttributes{
+func (b *EventBuilder) BuildActivityStarted(eventID int64, scheduledEventID int64, identity string, attempt int32) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeActivityStarted, &types.ActivityStartedAttributes{
 		ScheduledEventID: scheduledEventID,
 		Identity:         identity,
 		Attempt:          attempt,
 	})
 }
 
-func (b *EventBuilder) BuildActivityCompleted(eventID int64, scheduledEventID, startedEventID int64, result []byte) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeActivityCompleted, &history.ActivityCompletedAttributes{
+func (b *EventBuilder) BuildActivityCompleted(eventID int64, scheduledEventID, startedEventID int64, result []byte) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeActivityCompleted, &types.ActivityCompletedAttributes{
 		ScheduledEventID: scheduledEventID,
 		StartedEventID:   startedEventID,
 		Result:           result,
 	})
 }
 
-func (b *EventBuilder) BuildActivityFailed(eventID int64, scheduledEventID, startedEventID int64, reason string, details []byte, retryState int32) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeActivityFailed, &history.ActivityFailedAttributes{
+func (b *EventBuilder) BuildActivityFailed(eventID int64, scheduledEventID, startedEventID int64, reason string, details []byte, retryState int32) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeActivityFailed, &types.ActivityFailedAttributes{
 		ScheduledEventID: scheduledEventID,
 		StartedEventID:   startedEventID,
 		Reason:           reason,
@@ -190,16 +190,16 @@ func (b *EventBuilder) BuildActivityFailed(eventID int64, scheduledEventID, star
 	})
 }
 
-func (b *EventBuilder) BuildSignalReceived(eventID int64, signalName string, input []byte, identity string) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeSignalReceived, &history.SignalReceivedAttributes{
+func (b *EventBuilder) BuildSignalReceived(eventID int64, signalName string, input []byte, identity string) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeSignalReceived, &types.SignalReceivedAttributes{
 		SignalName: signalName,
 		Input:      input,
 		Identity:   identity,
 	})
 }
 
-func (b *EventBuilder) BuildMarkerRecorded(eventID int64, markerName string, details map[string][]byte) *history.HistoryEvent {
-	return b.newEvent(eventID, history.EventTypeMarkerRecorded, &history.MarkerRecordedAttributes{
+func (b *EventBuilder) BuildMarkerRecorded(eventID int64, markerName string, details map[string][]byte) *types.HistoryEvent {
+	return b.newEvent(eventID, types.EventTypeMarkerRecorded, &types.MarkerRecordedAttributes{
 		MarkerName: markerName,
 		Details:    details,
 	})
