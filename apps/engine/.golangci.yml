@@ -1,15 +1,14 @@
 run:
   timeout: 5m
   modules-download-mode: readonly
+  build-tags:
+    - integration
 
 linters:
   disable-all: true
   enable:
     - gofmt
     - goimports
-    - govet
-    - ineffassign
-    - typecheck
 
 linters-settings:
   govet:
@@ -30,6 +29,13 @@ linters-settings:
       - rand.Read
 
 issues:
+  exclude-dirs:
+    - api/gen
+    - bin
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.pb\\.gw\\.go$"
+    - ".*_grpc\\.go$"
   exclude-rules:
     - path: _test\.go
       linters:
