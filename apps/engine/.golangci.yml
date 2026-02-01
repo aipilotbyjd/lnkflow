@@ -9,6 +9,8 @@ linters:
   enable:
     - gofmt
     - goimports
+    - govet
+    - ineffassign
 
 linters-settings:
   govet:

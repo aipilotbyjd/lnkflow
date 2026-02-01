@@ -179,8 +179,12 @@ Route::prefix('v1')->as('v1.')->group(function () {
 */
 
 Route::prefix('webhooks')->as('webhooks.')->group(function () {
-    Route::any('{uuid}', [WebhookReceiverController::class, 'handle'])->name('receive');
-    Route::any('{uuid}/{path}', [WebhookReceiverController::class, 'handle'])->name('receive.path');
+    Route::any('{uuid}', [WebhookReceiverController::class, 'handle'])
+        ->name('receive')
+        ->whereUuid('uuid');
+    Route::any('{uuid}/{path}', [WebhookReceiverController::class, 'handle'])
+        ->name('receive.path')
+        ->whereUuid('uuid');
 });
 
 /*
