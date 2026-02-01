@@ -31,6 +31,7 @@ services:
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      REDIS_QUEUE: workflows-default
     volumes:
       - .:/var/www/html
     networks:
