@@ -139,7 +139,7 @@ func (c *Client) GetExecution(ctx context.Context, workspaceID, executionID stri
 // --- Execution Control ---
 
 // CancelExecution cancels a running execution.
-func (c *Client) CancelExecution(ctx context.Context, workspaceID, executionID string, reason string) error {
+func (c *Client) CancelExecution(ctx context.Context, workspaceID, executionID, reason string) error {
 	url := fmt.Sprintf("/api/v1/workspaces/%s/executions/%s/cancel", workspaceID, executionID)
 	return c.post(ctx, url, map[string]string{"reason": reason}, nil)
 }
@@ -173,7 +173,7 @@ func (c *Client) get(ctx context.Context, path string, result interface{}) error
 	return c.do(req, result)
 }
 
-func (c *Client) post(ctx context.Context, path string, body interface{}, result interface{}) error {
+func (c *Client) post(ctx context.Context, path string, body, result interface{}) error {
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -204,8 +204,8 @@ func (c *Client) do(req *http.Request, result interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		errBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(errBody))
 	}
 
 	if result != nil {

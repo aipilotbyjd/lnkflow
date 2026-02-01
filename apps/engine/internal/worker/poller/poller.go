@@ -153,11 +153,6 @@ func (p *Poller) pollLoop(ctx context.Context) {
 }
 
 func (p *Poller) Poll(ctx context.Context) (*Task, error) {
-	/*
-		p.logger.Debug("polling for tasks",
-			slog.String("task_queue", p.taskQueue),
-		)
-	*/
 	return p.client.PollTask(ctx, p.taskQueue, p.identity)
 }
 

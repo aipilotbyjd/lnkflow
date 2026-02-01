@@ -1,22 +1,48 @@
 version: 2
 updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+
   - package-ecosystem: "composer"
     directory: "/apps/api"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      laravel:
+        patterns:
+          - "laravel/*"
+      dev-dependencies:
+        dependency-type: "development"
+        patterns:
+          - "*"
 
   - package-ecosystem: "gomod"
     directory: "/apps/engine"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      all-go-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/apps/api"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    groups:
+      npm-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/apps/api"

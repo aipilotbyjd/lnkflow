@@ -26,7 +26,7 @@ func NewProcessSandbox(workDir string) (*ProcessSandbox, error) {
 		}
 	}
 
-	if err := os.MkdirAll(workDir, 0750); err != nil {
+	if err := os.MkdirAll(workDir, 0o750); err != nil {
 		return nil, err
 	}
 
@@ -58,7 +58,7 @@ func (s *ProcessSandbox) WorkDir() string {
 
 func (s *ProcessSandbox) CreateWorkFile(name string, content []byte) (string, error) {
 	path := filepath.Join(s.workDir, name)
-	if err := os.WriteFile(path, content, 0600); err != nil {
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		return "", err
 	}
 	return path, nil

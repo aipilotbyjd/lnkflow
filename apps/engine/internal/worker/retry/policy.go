@@ -27,7 +27,7 @@ func (p *Policy) NextRetryDelay(attempt int32) time.Duration {
 	return CalculateBackoff(p, attempt)
 }
 
-func (p *Policy) ShouldRetry(attempt int32, errorType string, errorMessage string) bool {
+func (p *Policy) ShouldRetry(attempt int32, errorType, errorMessage string) bool {
 	if attempt >= p.MaximumAttempts {
 		return false
 	}
