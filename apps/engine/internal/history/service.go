@@ -254,8 +254,19 @@ func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, eve
 		if !ok {
 			return nil
 		}
-		taskType = commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK
+		taskType = commonv1.TaskType_TASK_TYPE_ACTIVITY_TASK
 		taskQueue = attrs.TaskQueue
+		s.logger.Info("dispatching activity task", "task_queue", taskQueue, "event_id", event.EventID)
+
+	case types.EventTypeNodeCompleted, types.EventTypeNodeFailed:
+		taskType = commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK
+		// Use the workflow's task queue
+		if state.ExecutionInfo != nil {
+			taskQueue = state.ExecutionInfo.TaskQueue
+		} else {
+			// Should not happen if state is valid
+			return nil
+		}
 
 	case types.EventTypeActivityScheduled:
 		attrs, ok := event.Attributes.(*types.ActivityScheduledAttributes)

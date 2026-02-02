@@ -32,7 +32,11 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	)
 
 	// 1. Fetch History
-	resp, err := e.historyClient.GetHistory(ctx, "default", req.WorkflowID, req.RunID)
+	namespace := req.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+	resp, err := e.historyClient.GetHistory(ctx, namespace, req.WorkflowID, req.RunID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch history: %w", err)
 	}
@@ -47,8 +51,12 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	nodeOutputs := make(map[string][]byte)
 	var payload JobPayload
 	var payloadFound bool
+	var lastEventID int64
 
 	for _, event := range events {
+		if event.GetEventId() > lastEventID {
+			lastEventID = event.GetEventId()
+		}
 		switch event.GetEventType() {
 		case commonv1.EventType_EVENT_TYPE_EXECUTION_STARTED:
 			attr := event.GetExecutionStartedAttributes()
@@ -180,6 +188,8 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 
 	// 4. Schedule Nodes
 	logs := []LogEntry{}
+	nextEventID := lastEventID + 1
+
 	for _, node := range nodesToSchedule {
 		inputData := inputs[node.ID]
 		if inputData == nil {
@@ -187,6 +197,7 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 		}
 
 		event := &historyv1.HistoryEvent{
+			EventId:   nextEventID,
 			EventType: commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED,
 			Attributes: &historyv1.HistoryEvent_NodeScheduledAttributes{
 				NodeScheduledAttributes: &historyv1.NodeScheduledEventAttributes{
@@ -202,7 +213,7 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 			},
 		}
 
-		err := e.historyClient.RecordEvent(ctx, "default", req.WorkflowID, req.RunID, event)
+		err := e.historyClient.RecordEvent(ctx, namespace, req.WorkflowID, req.RunID, event)
 		if err != nil {
 			e.logger.Error("failed to schedule node",
 				slog.String("node_id", node.ID),
@@ -210,6 +221,8 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 			)
 			continue
 		}
+
+		nextEventID++
 
 		logs = append(logs, LogEntry{
 			Timestamp: time.Now(),

@@ -43,14 +43,6 @@ func run() error {
 
 	printBanner("Worker", logger)
 
-	svc := worker.NewService(worker.Config{
-		TaskQueues:   strings.Split(*taskQueue, ","),
-		Identity:     fmt.Sprintf("worker-%d", os.Getpid()),
-		MatchingAddr: *matchingAddr,
-		PollInterval: time.Second,
-		Logger:       logger,
-	})
-
 	// Connect to History Service
 	historyConn, err := grpc.NewClient(*historyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -58,6 +50,15 @@ func run() error {
 		os.Exit(1)
 	}
 	historyClient := adapter.NewHistoryClient(historyConn)
+
+	svc := worker.NewService(worker.Config{
+		TaskQueues:    strings.Split(*taskQueue, ","),
+		Identity:      fmt.Sprintf("worker-%d", os.Getpid()),
+		MatchingAddr:  *matchingAddr,
+		PollInterval:  time.Second,
+		Logger:        logger,
+		HistoryClient: historyClient,
+	})
 
 	// Register Workflow Executor
 	workflowExecutor := executor.NewWorkflowExecutor(historyClient, logger)

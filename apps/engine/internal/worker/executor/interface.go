@@ -16,6 +16,7 @@ type ExecuteRequest struct {
 	NodeID     string
 	WorkflowID string
 	RunID      string
+	Namespace  string
 	Config     json.RawMessage
 	Input      json.RawMessage
 	Attempt    int32

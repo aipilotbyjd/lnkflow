@@ -21,10 +21,13 @@ func NewGRPCServer(service *Service) *GRPCServer {
 
 func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest) (*matchingv1.AddTaskResponse, error) {
 	// Map proto request to internal engine.Task
+	fmt.Printf("matching: AddTask received for queue %s type %v\n", req.TaskQueue.GetName(), req.TaskType)
 	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+	// Encode Namespace in Token so worker can extract it (since PollTaskResponse lacks Namespace field)
+	token := fmt.Sprintf("%s|%s", req.Namespace, taskID)
 	task := &engine.Task{
 		ID:               taskID,
-		Token:            []byte(taskID),
+		Token:            []byte(token),
 		WorkflowID:       req.WorkflowExecution.GetWorkflowId(),
 		RunID:            req.WorkflowExecution.GetRunId(),
 		ScheduledTime:    req.ScheduleTime.AsTime(),

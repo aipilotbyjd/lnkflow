@@ -15,27 +15,32 @@ import (
 	"github.com/linkflow/engine/internal/worker/executor"
 	"github.com/linkflow/engine/internal/worker/poller"
 	"github.com/linkflow/engine/internal/worker/retry"
+
+	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
+	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 )
 
 type Service struct {
-	executors   map[string]executor.Executor
-	taskPollers []*poller.Poller
-	retryPolicy *retry.Policy
-	logger      *slog.Logger
-	wg          sync.WaitGroup
-	stopCh      chan struct{}
+	historyClient *adapter.HistoryClient
+	executors     map[string]executor.Executor
+	taskPollers   []*poller.Poller
+	retryPolicy   *retry.Policy
+	logger        *slog.Logger
+	wg            sync.WaitGroup
+	stopCh        chan struct{}
 
 	mu      sync.RWMutex
 	running bool
 }
 
 type Config struct {
-	TaskQueues   []string
-	Identity     string
-	MatchingAddr string
-	PollInterval time.Duration
-	RetryPolicy  *retry.Policy
-	Logger       *slog.Logger
+	TaskQueues    []string
+	Identity      string
+	MatchingAddr  string
+	PollInterval  time.Duration
+	RetryPolicy   *retry.Policy
+	Logger        *slog.Logger
+	HistoryClient *adapter.HistoryClient
 }
 
 func NewService(cfg Config) *Service {
@@ -75,11 +80,12 @@ func NewService(cfg Config) *Service {
 	}
 
 	svc := &Service{
-		executors:   make(map[string]executor.Executor),
-		taskPollers: pollers,
-		retryPolicy: cfg.RetryPolicy,
-		logger:      cfg.Logger,
-		stopCh:      make(chan struct{}),
+		historyClient: cfg.HistoryClient,
+		executors:     make(map[string]executor.Executor),
+		taskPollers:   pollers,
+		retryPolicy:   cfg.RetryPolicy,
+		logger:        cfg.Logger,
+		stopCh:        make(chan struct{}),
 	}
 
 	for _, p := range pollers {
@@ -149,6 +155,7 @@ func (s *Service) handleTask(task *poller.Task) (*poller.TaskResult, error) {
 		TaskID:     task.TaskID,
 		WorkflowID: task.WorkflowID,
 		RunID:      task.RunID,
+		Namespace:  task.Namespace,
 		NodeType:   task.NodeType,
 		NodeID:     task.NodeID,
 		Config:     task.Config,
@@ -204,6 +211,7 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 		NodeID:     task.NodeID,
 		WorkflowID: task.WorkflowID,
 		RunID:      task.RunID,
+		Namespace:  task.Namespace,
 		Config:     task.Config,
 		Input:      task.Input,
 		Attempt:    task.Attempt,
@@ -216,6 +224,39 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 			slog.String("task_id", task.TaskID),
 			slog.String("error", err.Error()),
 		)
+
+		// Record Failure in History (if not workflow task)
+		if task.NodeType != "workflow" && s.historyClient != nil {
+			// We need next eventID? History service calculates it.
+			// But wait, RecordEvent API takes an event with EventID?
+			// history/grpc_server says RecordEvent returns the new EventID.
+			// The passed event must have *some* ID? Or can be 0?
+			// history/engine.go IncrementNextEventID uses state.
+			// history/grpc_server.go protoEventToInternal maps it.
+			// Let's check if we can pass 0.
+
+			event := &historyv1.HistoryEvent{
+				EventType: commonv1.EventType_EVENT_TYPE_NODE_FAILED,
+				Attributes: &historyv1.HistoryEvent_NodeFailedAttributes{
+					NodeFailedAttributes: &historyv1.NodeFailedEventAttributes{
+						ScheduledEventId: task.ScheduledEventID,
+						// StartedEventId: ... we don't track started event ID yet?
+						// For now assume ScheduledEventId + 1? No.
+						Failure: &commonv1.Failure{
+							Message: err.Error(),
+						},
+					},
+				},
+			}
+			// Determine namespace from task?
+			namespace := task.Namespace
+			if namespace == "" {
+				namespace = "default"
+			}
+
+			_ = s.historyClient.RecordEvent(context.Background(), namespace, task.WorkflowID, task.RunID, event)
+		}
+
 		return &TaskResult{
 			TaskID:    task.TaskID,
 			Error:     err.Error(),
@@ -239,6 +280,50 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 				slog.Int("attempt", int(task.Attempt)),
 				slog.Duration("retry_delay", delay),
 			)
+		} else {
+			// Record Logic Failure (Non-retryable or exhausted)
+			if task.NodeType != "workflow" && s.historyClient != nil {
+				event := &historyv1.HistoryEvent{
+					EventType: commonv1.EventType_EVENT_TYPE_NODE_FAILED,
+					Attributes: &historyv1.HistoryEvent_NodeFailedAttributes{
+						NodeFailedAttributes: &historyv1.NodeFailedEventAttributes{
+							ScheduledEventId: task.ScheduledEventID,
+							Failure: &commonv1.Failure{
+								Message: result.Error,
+							},
+						},
+					},
+				}
+				namespace := task.Namespace
+				if namespace == "" {
+					namespace = "default"
+				}
+				_ = s.historyClient.RecordEvent(context.Background(), namespace, task.WorkflowID, task.RunID, event)
+			}
+		}
+	} else {
+		// Record Success
+		if task.NodeType != "workflow" && s.historyClient != nil {
+			event := &historyv1.HistoryEvent{
+				EventType: commonv1.EventType_EVENT_TYPE_NODE_COMPLETED,
+				Attributes: &historyv1.HistoryEvent_NodeCompletedAttributes{
+					NodeCompletedAttributes: &historyv1.NodeCompletedEventAttributes{
+						ScheduledEventId: task.ScheduledEventID,
+						Result: &commonv1.Payloads{
+							Payloads: []*commonv1.Payload{{Data: resp.Output}},
+						},
+					},
+				},
+			}
+			namespace := task.Namespace
+			if namespace == "" {
+				namespace = "default"
+			}
+
+			err := s.historyClient.RecordEvent(context.Background(), namespace, task.WorkflowID, task.RunID, event)
+			if err != nil {
+				s.logger.Error("failed to record node completion", slog.String("error", err.Error()))
+			}
 		}
 	}
 

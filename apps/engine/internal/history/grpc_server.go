@@ -151,6 +151,47 @@ func protoEventToInternal(pe *historyv1.HistoryEvent) *types.HistoryEvent {
 			}
 			event.Attributes = internalAttr
 		}
+	case types.EventTypeNodeScheduled:
+		if attr := pe.GetNodeScheduledAttributes(); attr != nil {
+			internalAttr := &types.NodeScheduledAttributes{
+				NodeID:    attr.GetNodeId(),
+				NodeType:  attr.GetNodeType(),
+				TaskQueue: attr.GetTaskQueue().GetName(),
+			}
+			if input := attr.GetInput(); input != nil && len(input.GetPayloads()) > 0 {
+				internalAttr.Input = input.GetPayloads()[0].GetData()
+			}
+			event.Attributes = internalAttr
+		}
+	case types.EventTypeNodeStarted:
+		if attr := pe.GetNodeStartedAttributes(); attr != nil {
+			event.Attributes = &types.NodeStartedAttributes{
+				ScheduledEventID: attr.GetScheduledEventId(),
+				Identity:         attr.GetIdentity(),
+			}
+		}
+	case types.EventTypeNodeCompleted:
+		if attr := pe.GetNodeCompletedAttributes(); attr != nil {
+			internalAttr := &types.NodeCompletedAttributes{
+				ScheduledEventID: attr.GetScheduledEventId(),
+				StartedEventID:   attr.GetStartedEventId(),
+			}
+			if result := attr.GetResult(); result != nil && len(result.GetPayloads()) > 0 {
+				internalAttr.Result = result.GetPayloads()[0].GetData()
+			}
+			event.Attributes = internalAttr
+		}
+	case types.EventTypeNodeFailed:
+		if attr := pe.GetNodeFailedAttributes(); attr != nil {
+			event.Attributes = &types.NodeFailedAttributes{
+				ScheduledEventID: attr.GetScheduledEventId(),
+				StartedEventID:   attr.GetStartedEventId(),
+				Reason:           attr.GetFailure().GetMessage(),
+				Details:          []byte(attr.GetFailure().GetStackTrace()),
+			}
+		}
+	// TODO: Add Timer and Activity mappings if needed for future tasks
+	// For now, Node events are critical for workflow progress.
 	}
 
 	return event

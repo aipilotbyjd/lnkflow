@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
@@ -41,14 +42,24 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 
 	var task *poller.Task
 
+	// Extract namespace from TaskToken (format: namespace|taskID)
+	token := string(resp.TaskToken)
+	parts := strings.Split(token, "|")
+	namespace := "default"
+	if len(parts) >= 2 {
+		namespace = parts[0]
+	}
+
 	if resp.ActivityTaskInfo != nil {
 		task = &poller.Task{
 			TaskID:     resp.ActivityTaskInfo.ActivityId,
 			WorkflowID: resp.WorkflowExecution.GetWorkflowId(),
 			RunID:      resp.WorkflowExecution.GetRunId(),
-			NodeType:   resp.ActivityTaskInfo.ActivityType,
-			Attempt:    resp.Attempt,
-			TimeoutSec: 60, // Default timeout
+			Namespace:        namespace,
+			NodeType:         resp.ActivityTaskInfo.ActivityType,
+			Attempt:          resp.Attempt,
+			TimeoutSec:       60, // Default timeout
+			ScheduledEventID: resp.ActivityTaskInfo.ScheduledEventId,
 		}
 
 		if resp.ActivityTaskInfo.Input != nil && len(resp.ActivityTaskInfo.Input.Payloads) > 0 {
@@ -59,9 +70,11 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 			TaskID:     fmt.Sprintf("%d", resp.WorkflowTaskInfo.ScheduledEventId),
 			WorkflowID: resp.WorkflowExecution.GetWorkflowId(),
 			RunID:      resp.WorkflowExecution.GetRunId(),
-			NodeType:   "workflow",
-			Attempt:    resp.Attempt,
-			TimeoutSec: 60,
+			Namespace:        namespace,
+			NodeType:         "workflow",
+			Attempt:          resp.Attempt,
+			TimeoutSec:       60,
+			ScheduledEventID: resp.WorkflowTaskInfo.ScheduledEventId,
 		}
 	} else {
 		return nil, nil
