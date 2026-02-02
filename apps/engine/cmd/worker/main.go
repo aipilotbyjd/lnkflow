@@ -30,8 +30,8 @@ func main() {
 
 func run() error {
 	var (
-		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
-		taskQueue    = flag.String("task-queue", getEnv("TASK_QUEUE", "default"), "Task queue name")
+		httpPort  = flag.Int("http-port", 8080, "HTTP server port")
+		taskQueue = flag.String("task-queue", getEnv("TASK_QUEUE", "default"), "Task queue name")
 
 		matchingAddr = flag.String("matching-addr", getEnv("MATCHING_ADDR", "localhost:7235"), "Matching service address")
 		historyAddr  = flag.String("history-addr", getEnv("HISTORY_ADDR", "localhost:7234"), "History service address")
@@ -51,7 +51,7 @@ func run() error {
 	}
 	historyClient := adapter.NewHistoryClient(historyConn)
 
-	svc := worker.NewService(worker.Config{
+	svc, err := worker.NewService(worker.Config{
 		TaskQueues:    strings.Split(*taskQueue, ","),
 		Identity:      fmt.Sprintf("worker-%d", os.Getpid()),
 		MatchingAddr:  *matchingAddr,
@@ -59,6 +59,9 @@ func run() error {
 		Logger:        logger,
 		HistoryClient: historyClient,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to create worker service: %w", err)
+	}
 
 	// Register Workflow Executor
 	workflowExecutor := executor.NewWorkflowExecutor(historyClient, logger)

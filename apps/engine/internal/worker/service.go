@@ -22,12 +22,14 @@ import (
 
 type Service struct {
 	historyClient *adapter.HistoryClient
+	matchingConn  *grpc.ClientConn
 	executors     map[string]executor.Executor
 	taskPollers   []*poller.Poller
 	retryPolicy   *retry.Policy
 	logger        *slog.Logger
 	wg            sync.WaitGroup
 	stopCh        chan struct{}
+	shutdownOnce  sync.Once
 
 	mu      sync.RWMutex
 	running bool
@@ -43,7 +45,9 @@ type Config struct {
 	HistoryClient *adapter.HistoryClient
 }
 
-func NewService(cfg Config) *Service {
+// NewService creates a new worker service. Returns an error if configuration is invalid
+// or if the connection to the matching service fails.
+func NewService(cfg Config) (*Service, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
@@ -53,16 +57,18 @@ func NewService(cfg Config) *Service {
 	if cfg.PollInterval == 0 {
 		cfg.PollInterval = time.Second
 	}
+	if cfg.MatchingAddr == "" {
+		return nil, fmt.Errorf("matching service address is required")
+	}
 
-	// Establish gRPC connection
-	// Note: In a real app we might want to manage this connection lifecycle better (Close on Stop)
-	// For now we just dial in NewService.
-	// Error handling is skipped for brevity but should be handled.
-	conn, err := grpc.NewClient(cfg.MatchingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Establish gRPC connection with proper options
+	conn, err := grpc.NewClient(
+		cfg.MatchingAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		cfg.Logger.Error("failed to connect to matching service", slog.String("error", err.Error()))
-		// Panic or handle better. For now we panic as worker cannot function without matching.
-		panic(err)
+		return nil, fmt.Errorf("failed to connect to matching service: %w", err)
 	}
 
 	client := adapter.NewMatchingClient(conn)
@@ -81,6 +87,7 @@ func NewService(cfg Config) *Service {
 
 	svc := &Service{
 		historyClient: cfg.HistoryClient,
+		matchingConn:  conn,
 		executors:     make(map[string]executor.Executor),
 		taskPollers:   pollers,
 		retryPolicy:   cfg.RetryPolicy,
@@ -92,7 +99,7 @@ func NewService(cfg Config) *Service {
 		p.SetHandler(svc.handleTask)
 	}
 
-	return svc
+	return svc, nil
 }
 
 func (s *Service) RegisterExecutor(exec executor.Executor) {
@@ -123,22 +130,36 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) Stop() error {
-	s.mu.Lock()
-	if !s.running {
+	var stopErr error
+	s.shutdownOnce.Do(func() {
+		s.mu.Lock()
+		if !s.running {
+			s.mu.Unlock()
+			stopErr = ErrServiceNotRunning
+			return
+		}
+		s.running = false
+		close(s.stopCh)
 		s.mu.Unlock()
-		return ErrServiceNotRunning
-	}
-	s.running = false
-	close(s.stopCh)
-	s.mu.Unlock()
 
-	for _, p := range s.taskPollers {
-		p.Stop()
-	}
-	s.wg.Wait()
+		// Stop all pollers
+		for _, p := range s.taskPollers {
+			p.Stop()
+		}
 
-	s.logger.Info("worker service stopped")
-	return nil
+		// Wait for in-flight tasks to complete
+		s.wg.Wait()
+
+		// Close the gRPC connection to matching service
+		if s.matchingConn != nil {
+			if err := s.matchingConn.Close(); err != nil {
+				s.logger.Warn("failed to close matching connection", slog.String("error", err.Error()))
+			}
+		}
+
+		s.logger.Info("worker service stopped")
+	})
+	return stopErr
 }
 
 func (s *Service) IsRunning() bool {
@@ -147,24 +168,25 @@ func (s *Service) IsRunning() bool {
 	return s.running
 }
 
-func (s *Service) handleTask(task *poller.Task) (*poller.TaskResult, error) {
+func (s *Service) handleTask(ctx context.Context, task *poller.Task) (*poller.TaskResult, error) {
 	s.wg.Add(1)
 	defer s.wg.Done()
 
 	workerTask := &Task{
-		TaskID:     task.TaskID,
-		WorkflowID: task.WorkflowID,
-		RunID:      task.RunID,
-		Namespace:  task.Namespace,
-		NodeType:   task.NodeType,
-		NodeID:     task.NodeID,
-		Config:     task.Config,
-		Input:      task.Input,
-		Attempt:    task.Attempt,
-		TimeoutSec: task.TimeoutSec,
+		TaskID:           task.TaskID,
+		WorkflowID:       task.WorkflowID,
+		RunID:            task.RunID,
+		Namespace:        task.Namespace,
+		NodeType:         task.NodeType,
+		NodeID:           task.NodeID,
+		Config:           task.Config,
+		Input:            task.Input,
+		Attempt:          task.Attempt,
+		TimeoutSec:       task.TimeoutSec,
+		ScheduledEventID: task.ScheduledEventID,
 	}
 
-	result, err := s.ProcessTask(context.Background(), workerTask)
+	result, err := s.ProcessTask(ctx, workerTask)
 	if err != nil {
 		return nil, err
 	}

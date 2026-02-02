@@ -75,9 +75,13 @@ func main() {
 	matchingClient := adapter.NewMatchingClient(matchingConn)
 
 	loggingInterceptor := interceptor.NewLoggingInterceptor(logger)
-	authInterceptor := interceptor.NewAuthInterceptor(interceptor.AuthConfig{
+	authInterceptor, err := interceptor.NewAuthInterceptor(interceptor.AuthConfig{
 		SkipMethods: []string{"/grpc.health.v1.Health/Check"},
 	})
+	if err != nil {
+		logger.Error("failed to create auth interceptor", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
 	svc := frontend.NewService(historyClient, matchingClient, logger, frontend.DefaultServiceConfig())
 

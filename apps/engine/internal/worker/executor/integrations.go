@@ -253,10 +253,10 @@ func (e *DiscordExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 
 // TwilioExecutor handles Twilio SMS messages.
 type TwilioExecutor struct {
-	client       *http.Client
-	accountSid   string
-	authToken    string
-	defaultFrom  string
+	client      *http.Client
+	accountSid  string
+	authToken   string
+	defaultFrom string
 }
 
 // TwilioConfig represents the configuration for a Twilio node.

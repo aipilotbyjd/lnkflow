@@ -52,9 +52,9 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 
 	if resp.ActivityTaskInfo != nil {
 		task = &poller.Task{
-			TaskID:     resp.ActivityTaskInfo.ActivityId,
-			WorkflowID: resp.WorkflowExecution.GetWorkflowId(),
-			RunID:      resp.WorkflowExecution.GetRunId(),
+			TaskID:           resp.ActivityTaskInfo.ActivityId,
+			WorkflowID:       resp.WorkflowExecution.GetWorkflowId(),
+			RunID:            resp.WorkflowExecution.GetRunId(),
 			Namespace:        namespace,
 			NodeType:         resp.ActivityTaskInfo.ActivityType,
 			Attempt:          resp.Attempt,
@@ -67,9 +67,9 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 		}
 	} else if resp.WorkflowTaskInfo != nil {
 		task = &poller.Task{
-			TaskID:     fmt.Sprintf("%d", resp.WorkflowTaskInfo.ScheduledEventId),
-			WorkflowID: resp.WorkflowExecution.GetWorkflowId(),
-			RunID:      resp.WorkflowExecution.GetRunId(),
+			TaskID:           fmt.Sprintf("%d", resp.WorkflowTaskInfo.ScheduledEventId),
+			WorkflowID:       resp.WorkflowExecution.GetWorkflowId(),
+			RunID:            resp.WorkflowExecution.GetRunId(),
 			Namespace:        namespace,
 			NodeType:         "workflow",
 			Attempt:          resp.Attempt,

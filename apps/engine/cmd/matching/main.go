@@ -57,50 +57,71 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Setup HTTP Server for Health Checks
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	httpServer := &http.Server{
+		Addr:              fmt.Sprintf(":%d", *httpPort),
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// Start gRPC server
+	go func() {
+		logger.Info("starting gRPC server", slog.Int("port", *port), slog.Int("partition_count", *partitionCount))
+		if err := server.Serve(lis); err != nil {
+			logger.Error("gRPC server failed", slog.String("error", err.Error()))
+			cancel()
+		}
+	}()
+
+	// Start HTTP server
+	go func() {
+		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTP server failed", slog.String("error", err.Error()))
+			cancel()
+		}
+	}()
+
+	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
-		sig := <-sigCh
-		logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
-		cancel()
-		server.GracefulStop()
-	}()
+	select {
+	case sig := <-sigCh:
+		logger.Info("received signal, initiating graceful shutdown", slog.String("signal", sig.String()))
+	case <-ctx.Done():
+		logger.Info("context cancelled, initiating shutdown")
+	}
 
-	logger.Info("starting gRPC server", slog.Int("port", *port), slog.Int("partition_count", *partitionCount))
+	// Graceful shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
 
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			logger.Error("server failed", slog.String("error", err.Error()))
-			cancel()
-		}
-	}()
+	// Stop accepting new connections
+	server.GracefulStop()
+	logger.Info("gRPC server stopped")
 
-	// Start HTTP Server for Health Checks
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("OK"))
-		})
+	// Shutdown HTTP server
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("HTTP server shutdown error", slog.String("error", err.Error()))
+	} else {
+		logger.Info("HTTP server stopped")
+	}
 
-		httpServer := &http.Server{
-			Addr:              fmt.Sprintf(":%d", *httpPort),
-			Handler:           mux,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-
-		logger.Info("starting HTTP server", slog.Int("port", *httpPort))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("http server failed", slog.String("error", err.Error()))
-			cancel()
-		}
-	}()
-
-	<-ctx.Done()
+	cancel()
 	logger.Info("matching service stopped")
 }
 

@@ -14,6 +14,7 @@ type Task struct {
 	Token            []byte
 	WorkflowID       string
 	RunID            string
+	Namespace        string
 	ActivityID       string
 	ActivityType     string
 	Input            []byte

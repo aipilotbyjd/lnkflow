@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -35,7 +36,12 @@ type AuthConfig struct {
 	Audience    string // Expected token audience
 }
 
-func NewAuthInterceptor(cfg AuthConfig) *AuthInterceptor {
+// ErrInvalidSecretKey is returned when the JWT secret key is invalid.
+var ErrInvalidSecretKey = errors.New("JWT_SECRET must be at least 32 characters for security")
+
+// NewAuthInterceptor creates a new authentication interceptor.
+// Returns an error if the secret key is too short (minimum 32 characters required).
+func NewAuthInterceptor(cfg AuthConfig) (*AuthInterceptor, error) {
 	skipMethods := make(map[string]bool)
 	for _, method := range cfg.SkipMethods {
 		skipMethods[method] = true
@@ -49,7 +55,7 @@ func NewAuthInterceptor(cfg AuthConfig) *AuthInterceptor {
 
 	// Validate secret key length (min 32 chars for security)
 	if len(secretKey) < 32 {
-		panic("JWT_SECRET must be at least 32 characters for security")
+		return nil, ErrInvalidSecretKey
 	}
 
 	return &AuthInterceptor{
@@ -57,7 +63,7 @@ func NewAuthInterceptor(cfg AuthConfig) *AuthInterceptor {
 		secretKey:   []byte(secretKey),
 		issuer:      cfg.Issuer,
 		audience:    cfg.Audience,
-	}
+	}, nil
 }
 
 func (a *AuthInterceptor) UnaryInterceptor(

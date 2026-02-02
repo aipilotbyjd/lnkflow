@@ -2,8 +2,9 @@ package matching
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"time"
 
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
@@ -19,21 +20,54 @@ func NewGRPCServer(service *Service) *GRPCServer {
 	return &GRPCServer{service: service}
 }
 
+// generateTaskID creates a deterministic task ID from workflow identity and event.
+// This ensures uniqueness and idempotency for task scheduling.
+func generateTaskID(namespace, workflowID, runID string, taskType int32, scheduledEventID int64) string {
+	return fmt.Sprintf("%s:%s:%s:%d:%d", namespace, workflowID, runID, taskType, scheduledEventID)
+}
+
+// generateSecureToken creates a cryptographically secure random token.
+func generateSecureToken() ([]byte, error) {
+	token := make([]byte, 32)
+	if _, err := rand.Read(token); err != nil {
+		return nil, fmt.Errorf("failed to generate secure token: %w", err)
+	}
+	return []byte(hex.EncodeToString(token)), nil
+}
+
 func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest) (*matchingv1.AddTaskResponse, error) {
-	// Map proto request to internal engine.Task
-	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
-	// Encode Namespace in Token so worker can extract it (since PollTaskResponse lacks Namespace field)
-	token := fmt.Sprintf("%s|%s", req.Namespace, taskID)
+	// Validate required fields
+	if req.WorkflowExecution == nil {
+		return nil, fmt.Errorf("workflow_execution is required")
+	}
+	if req.WorkflowExecution.GetWorkflowId() == "" {
+		return nil, fmt.Errorf("workflow_id is required")
+	}
+
+	// Generate deterministic task ID from workflow identity for idempotency
+	taskID := generateTaskID(
+		req.Namespace,
+		req.WorkflowExecution.GetWorkflowId(),
+		req.WorkflowExecution.GetRunId(),
+		int32(req.TaskType),
+		req.ScheduledEventId,
+	)
+
+	// Generate secure random token for task authentication
+	token, err := generateSecureToken()
+	if err != nil {
+		return nil, err
+	}
 	task := &engine.Task{
 		ID:               taskID,
-		Token:            []byte(token),
+		Token:            token,
 		WorkflowID:       req.WorkflowExecution.GetWorkflowId(),
 		RunID:            req.WorkflowExecution.GetRunId(),
+		Namespace:        req.Namespace,
 		ScheduledTime:    req.ScheduleTime.AsTime(),
 		TaskType:         int32(req.TaskType),
 		ScheduledEventID: req.ScheduledEventId,
-		ActivityID:       fmt.Sprintf("%d", req.ScheduledEventId), // Using event ID as activity ID for now if not provided
-		// We map what we can. Internal Task struct seems simplified.
+		ActivityID:       fmt.Sprintf("%d", req.ScheduledEventId),
 	}
 
 	queueName := req.TaskQueue.GetName()
@@ -41,8 +75,7 @@ func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest
 		queueName = "default"
 	}
 
-	err := s.service.AddTask(ctx, queueName, task)
-	if err != nil {
+	if err = s.service.AddTask(ctx, queueName, task); err != nil {
 		return nil, err
 	}
 

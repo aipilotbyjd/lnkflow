@@ -72,9 +72,9 @@ func NewEmailExecutor() *EmailExecutor {
 	defaultFrom := os.Getenv("SMTP_FROM")
 
 	return &EmailExecutor{
-		defaultHost:  defaultHost,
-		defaultPort:  defaultPort,
-		defaultFrom:  defaultFrom,
+		defaultHost: defaultHost,
+		defaultPort: defaultPort,
+		defaultFrom: defaultFrom,
 	}
 }
 

@@ -190,8 +190,8 @@ func protoEventToInternal(pe *historyv1.HistoryEvent) *types.HistoryEvent {
 				Details:          []byte(attr.GetFailure().GetStackTrace()),
 			}
 		}
-	// TODO: Add Timer and Activity mappings if needed for future tasks
-	// For now, Node events are critical for workflow progress.
+		// TODO: Add Timer and Activity mappings if needed for future tasks
+		// For now, Node events are critical for workflow progress.
 	}
 
 	return event

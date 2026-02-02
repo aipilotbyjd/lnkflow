@@ -88,8 +88,8 @@ func NewAIExecutor() *AIExecutor {
 			Timeout:   120 * time.Second, // AI calls can be slow
 			Transport: transport,
 		},
-		defaultOpenAI:  defaultOpenAI,
-		defaultClaude:  defaultClaude,
+		defaultOpenAI: defaultOpenAI,
+		defaultClaude: defaultClaude,
 	}
 }
 

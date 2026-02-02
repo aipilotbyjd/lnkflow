@@ -8,13 +8,13 @@ import (
 )
 
 type Task struct {
-	TaskID     string `json:"task_id"`
-	WorkflowID string `json:"workflow_id"`
-	RunID      string `json:"run_id"`
-	Namespace  string `json:"namespace"`
-	NodeType   string `json:"node_type"`
-	NodeID     string `json:"node_id"`
-	Config     []byte `json:"config"`
+	TaskID           string `json:"task_id"`
+	WorkflowID       string `json:"workflow_id"`
+	RunID            string `json:"run_id"`
+	Namespace        string `json:"namespace"`
+	NodeType         string `json:"node_type"`
+	NodeID           string `json:"node_id"`
+	Config           []byte `json:"config"`
 	Input            []byte `json:"input"`
 	Attempt          int32  `json:"attempt"`
 	TimeoutSec       int32  `json:"timeout_sec"`
@@ -29,7 +29,7 @@ type TaskResult struct {
 	Logs      []byte `json:"logs"`
 }
 
-type TaskHandler func(task *Task) (*TaskResult, error)
+type TaskHandler func(ctx context.Context, task *Task) (*TaskResult, error)
 
 type MatchingClient interface {
 	PollTask(ctx context.Context, taskQueue string, identity string) (*Task, error)
@@ -137,7 +137,7 @@ func (p *Poller) pollLoop(ctx context.Context) {
 			}
 
 			if p.handler != nil {
-				result, err := p.handler(task)
+				result, err := p.handler(ctx, task)
 				if err != nil {
 					p.logger.Error("task handler failed",
 						slog.String("task_id", task.TaskID),

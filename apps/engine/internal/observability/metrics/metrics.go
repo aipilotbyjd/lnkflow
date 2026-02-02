@@ -1,7 +1,9 @@
 package metrics
 
 import (
+	"math"
 	"net/http"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,7 +62,7 @@ func (c *Counter) Add(delta int64) {
 type Gauge struct {
 	name   string
 	labels Labels
-	value  int64 // Stored as int64, but represents float64 bits
+	value  uint64 // Stored as uint64, represents float64 bits
 }
 
 // NewGauge creates a new gauge.
@@ -74,26 +76,32 @@ func NewGauge(name string, labels Labels) *Gauge {
 func (g *Gauge) Name() string     { return g.name }
 func (g *Gauge) Type() MetricType { return MetricTypeGauge }
 func (g *Gauge) Labels() Labels   { return g.labels }
-func (g *Gauge) Value() float64   { return float64(atomic.LoadInt64(&g.value)) }
+func (g *Gauge) Value() float64   { return math.Float64frombits(atomic.LoadUint64(&g.value)) }
 
 // Set sets the gauge to the given value.
 func (g *Gauge) Set(value float64) {
-	atomic.StoreInt64(&g.value, int64(value))
+	atomic.StoreUint64(&g.value, math.Float64bits(value))
 }
 
 // Inc increments the gauge by 1.
 func (g *Gauge) Inc() {
-	atomic.AddInt64(&g.value, 1)
+	g.Add(1)
 }
 
 // Dec decrements the gauge by 1.
 func (g *Gauge) Dec() {
-	atomic.AddInt64(&g.value, -1)
+	g.Add(-1)
 }
 
-// Add adds the given value to the gauge.
+// Add adds the given value to the gauge using atomic compare-and-swap.
 func (g *Gauge) Add(delta float64) {
-	atomic.AddInt64(&g.value, int64(delta))
+	for {
+		old := atomic.LoadUint64(&g.value)
+		newVal := math.Float64frombits(old) + delta
+		if atomic.CompareAndSwapUint64(&g.value, old, math.Float64bits(newVal)) {
+			return
+		}
+	}
 }
 
 // Histogram tracks the distribution of values.
@@ -268,9 +276,20 @@ func (r *Registry) Handler() http.Handler {
 }
 
 func makeKey(name string, labels Labels) string {
+	if len(labels) == 0 {
+		return name
+	}
+
+	// Sort label keys for consistent key generation
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	key := name
-	for k, v := range labels {
-		key += "," + k + "=" + v
+	for _, k := range keys {
+		key += "," + k + "=" + labels[k]
 	}
 	return key
 }

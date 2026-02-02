@@ -257,7 +257,6 @@ func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, eve
 		taskType = commonv1.TaskType_TASK_TYPE_ACTIVITY_TASK
 		taskQueue = attrs.TaskQueue
 
-
 	case types.EventTypeNodeCompleted, types.EventTypeNodeFailed:
 		taskType = commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK
 		// Use the workflow's task queue

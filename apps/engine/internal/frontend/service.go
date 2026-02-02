@@ -2,7 +2,10 @@ package frontend
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/linkflow/engine/internal/frontend/namespace"
 	"github.com/linkflow/engine/internal/frontend/ratelimit"
@@ -217,14 +220,18 @@ func (s *Service) DescribeExecution(ctx context.Context, req *DescribeExecutionR
 }
 
 func generateRunID() string {
-	return "run-" + randomString(32)
+	return "run-" + secureRandomString(32)
 }
 
-func randomString(n int) string {
+func secureRandomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to a UUID-like format if crypto/rand fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
 	for i := range b {
-		b[i] = letters[i%len(letters)]
+		b[i] = letters[int(b[i])%len(letters)]
 	}
 	return string(b)
 }
