@@ -21,11 +21,16 @@ func NewGRPCServer(service *Service) *GRPCServer {
 
 func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest) (*matchingv1.AddTaskResponse, error) {
 	// Map proto request to internal engine.Task
+	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
 	task := &engine.Task{
-		ID:            fmt.Sprintf("task-%d", time.Now().UnixNano()), // Simple ID generation
-		WorkflowID:    req.WorkflowExecution.GetWorkflowId(),
-		RunID:         req.WorkflowExecution.GetRunId(),
-		ScheduledTime: req.ScheduleTime.AsTime(),
+		ID:               taskID,
+		Token:            []byte(taskID),
+		WorkflowID:       req.WorkflowExecution.GetWorkflowId(),
+		RunID:            req.WorkflowExecution.GetRunId(),
+		ScheduledTime:    req.ScheduleTime.AsTime(),
+		TaskType:         int32(req.TaskType),
+		ScheduledEventID: req.ScheduledEventId,
+		ActivityID:       fmt.Sprintf("%d", req.ScheduledEventId), // Using event ID as activity ID for now if not provided
 		// We map what we can. Internal Task struct seems simplified.
 	}
 
@@ -57,7 +62,7 @@ func (s *GRPCServer) PollTask(ctx context.Context, req *matchingv1.PollTaskReque
 	}
 
 	// Map internal engine.Task to proto PollTaskResponse
-	return &matchingv1.PollTaskResponse{
+	resp := &matchingv1.PollTaskResponse{
 		TaskToken: task.Token,
 		WorkflowExecution: &commonv1.WorkflowExecution{
 			WorkflowId: task.WorkflowID,
@@ -65,6 +70,24 @@ func (s *GRPCServer) PollTask(ctx context.Context, req *matchingv1.PollTaskReque
 		},
 		Attempt:        task.Attempt,
 		StartedEventId: 1, // Placeholder
-		// Logic to map other fields would go here
-	}, nil
+	}
+
+	if commonv1.TaskType(task.TaskType) == commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK {
+		resp.WorkflowTaskInfo = &matchingv1.WorkflowTaskInfo{
+			ScheduledEventId: task.ScheduledEventID,
+		}
+	} else {
+		resp.ActivityTaskInfo = &matchingv1.ActivityTaskInfo{
+			ActivityId:       task.ActivityID,
+			ActivityType:     task.ActivityType,
+			ScheduledEventId: task.ScheduledEventID,
+		}
+		if len(task.Input) > 0 {
+			resp.ActivityTaskInfo.Input = &commonv1.Payloads{
+				Payloads: []*commonv1.Payload{{Data: task.Input}},
+			}
+		}
+	}
+
+	return resp, nil
 }

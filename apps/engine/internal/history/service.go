@@ -17,9 +17,7 @@ import (
 var (
 	ErrServiceNotRunning     = errors.New("history service is not running")
 	ErrServiceAlreadyRunning = errors.New("history service is already running")
-	ErrExecutionNotFound     = errors.New("execution not found")
 	ErrEventNotFound         = errors.New("event not found")
-	ErrOptimisticLock        = errors.New("optimistic lock failure")
 )
 
 // EventStore defines the interface for storing and retrieving history events.
@@ -36,6 +34,7 @@ type MutableStateStore interface {
 
 // ShardController manages shard ownership and distribution.
 type ShardController interface {
+	Start() error
 	GetShardForExecution(key types.ExecutionKey) (shard.Shard, error)
 	GetShardIDForExecution(key types.ExecutionKey) int32
 	Stop()
@@ -125,6 +124,13 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 
 	s.logger.Info("starting history service")
+
+	if s.shardController != nil {
+		if err := s.shardController.Start(); err != nil {
+			return err
+		}
+	}
+
 	s.running = true
 	return nil
 }
@@ -183,7 +189,7 @@ func (s *Service) RecordEvent(ctx context.Context, key types.ExecutionKey, event
 
 	state, err := s.stateStore.GetMutableState(ctx, key)
 	if err != nil {
-		if errors.Is(err, ErrExecutionNotFound) {
+		if errors.Is(err, types.ErrExecutionNotFound) {
 			// Create new mutable state if it doesn't exist
 			state = engine.NewMutableState(&types.ExecutionInfo{
 				NamespaceID: key.NamespaceID,
@@ -235,6 +241,14 @@ func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, eve
 	var taskQueue string
 
 	switch event.EventType {
+	case types.EventTypeExecutionStarted:
+		attrs, ok := event.Attributes.(*types.ExecutionStartedAttributes)
+		if !ok {
+			return nil
+		}
+		taskType = commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK
+		taskQueue = attrs.TaskQueue
+
 	case types.EventTypeNodeScheduled:
 		attrs, ok := event.Attributes.(*types.NodeScheduledAttributes)
 		if !ok {
@@ -294,7 +308,7 @@ func (s *Service) RecordEvents(ctx context.Context, key types.ExecutionKey, even
 
 	state, err := s.stateStore.GetMutableState(ctx, key)
 	if err != nil {
-		if errors.Is(err, ErrExecutionNotFound) {
+		if errors.Is(err, types.ErrExecutionNotFound) {
 			state = engine.NewMutableState(&types.ExecutionInfo{
 				NamespaceID: key.NamespaceID,
 				WorkflowID:  key.WorkflowID,

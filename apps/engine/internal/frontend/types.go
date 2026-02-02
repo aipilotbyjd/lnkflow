@@ -164,7 +164,13 @@ type RecordEventRequest struct {
 	WorkflowID  string
 	RunID       string
 	EventType   string
-	EventData   []byte
+	Attributes  any
+}
+
+type ExecutionStartedAttributes struct {
+	WorkflowType string
+	TaskQueue    string
+	Input        []byte
 }
 
 type GetHistoryRequest struct {
@@ -233,10 +239,13 @@ type SignalInfo struct {
 }
 
 type AddTaskRequest struct {
-	NamespaceID string
-	TaskQueue   string
-	TaskType    TaskType
-	TaskInfo    []byte
+	NamespaceID      string
+	WorkflowID       string
+	RunID            string
+	TaskQueue        string
+	TaskType         TaskType
+	TaskInfo         []byte
+	ScheduledEventID int64
 }
 
 type TaskType int32

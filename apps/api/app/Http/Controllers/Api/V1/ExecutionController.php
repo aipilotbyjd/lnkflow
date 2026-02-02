@@ -46,6 +46,37 @@ class ExecutionController extends Controller
         return ExecutionResource::collection($executions);
     }
 
+    public function store(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
+    {
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.execute');
+
+        if ($workflow->workspace_id !== $workspace->id) {
+            abort(404, 'Workflow not found.');
+        }
+
+        // Create execution record
+        $execution = Execution::create([
+            'workflow_id' => $workflow->id,
+            'workspace_id' => $workspace->id,
+            'status' => \App\Enums\ExecutionStatus::Pending,
+            'mode' => \App\Enums\ExecutionMode::Manual,
+            'triggered_by' => $request->user()->id,
+            'trigger_data' => $request->input('input', []),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        // Dispatch job to Go Engine (via Queue)
+        \App\Jobs\ExecuteWorkflowJob::dispatch($workflow, $execution, 'default', $request->input('input', []));
+
+        $execution->load(['workflow', 'triggeredBy']);
+
+        return response()->json([
+            'message' => 'Execution started successfully.',
+            'execution' => new ExecutionResource($execution),
+        ], 201);
+    }
+
     public function show(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
         $this->permissionService->authorize($request->user(), $workspace, 'execution.view');

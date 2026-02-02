@@ -73,24 +73,35 @@ func (s *Service) Logger() *slog.Logger {
 }
 
 func (s *Service) StartWorkflowExecution(ctx context.Context, req *StartWorkflowExecutionRequest) (*StartWorkflowExecutionResponse, error) {
-	runID := generateRunID()
+	runID := req.RequestID
+	if runID == "" {
+		// Fallback to nil UUID if not provided (should be provided by consumer)
+		runID = "00000000-0000-0000-0000-000000000000"
+	}
 
 	eventReq := &RecordEventRequest{
 		NamespaceID: req.Namespace,
 		WorkflowID:  req.WorkflowID,
 		RunID:       runID,
 		EventType:   "WorkflowExecutionStarted",
-		EventData:   req.Input,
+		Attributes: &ExecutionStartedAttributes{
+			WorkflowType: req.WorkflowType,
+			TaskQueue:    req.TaskQueue,
+			Input:        req.Input,
+		},
 	}
 	if err := s.historyClient.RecordEvent(ctx, eventReq); err != nil {
 		return nil, err
 	}
 
 	taskReq := &AddTaskRequest{
-		NamespaceID: req.Namespace,
-		TaskQueue:   req.TaskQueue,
-		TaskType:    TaskTypeWorkflow,
-		TaskInfo:    nil,
+		NamespaceID:      req.Namespace,
+		WorkflowID:       req.WorkflowID,
+		RunID:            runID,
+		TaskQueue:        req.TaskQueue,
+		TaskType:         TaskTypeWorkflow,
+		TaskInfo:         nil,
+		ScheduledEventID: 1,
 	}
 	if err := s.matchingClient.AddTask(ctx, taskReq); err != nil {
 		return nil, err
@@ -107,7 +118,7 @@ func (s *Service) SignalWorkflowExecution(ctx context.Context, req *SignalWorkfl
 		WorkflowID:  req.WorkflowID,
 		RunID:       req.RunID,
 		EventType:   "WorkflowExecutionSignaled",
-		EventData:   req.Input,
+		Attributes:  req.Input,
 	}
 	return s.historyClient.RecordEvent(ctx, eventReq)
 }
@@ -118,7 +129,7 @@ func (s *Service) TerminateWorkflowExecution(ctx context.Context, req *Terminate
 		WorkflowID:  req.WorkflowID,
 		RunID:       req.RunID,
 		EventType:   "WorkflowExecutionTerminated",
-		EventData:   req.Details,
+		Attributes:  req.Details,
 	}
 	return s.historyClient.RecordEvent(ctx, eventReq)
 }

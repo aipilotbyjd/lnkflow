@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 
+	apiv1 "github.com/linkflow/engine/api/gen/linkflow/api/v1"
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	"github.com/linkflow/engine/internal/frontend"
@@ -21,17 +22,32 @@ func NewHistoryClient(conn *grpc.ClientConn) *HistoryClient {
 }
 
 func (c *HistoryClient) RecordEvent(ctx context.Context, req *frontend.RecordEventRequest) error {
+	event := &historyv1.HistoryEvent{
+		EventId:   1,
+		EventTime: timestamppb.Now(),
+		EventType: mapEventType(req.EventType),
+	}
+
+	switch req.EventType {
+	case "WorkflowExecutionStarted":
+		if attrs, ok := req.Attributes.(*frontend.ExecutionStartedAttributes); ok {
+			event.Attributes = &historyv1.HistoryEvent_ExecutionStartedAttributes{
+				ExecutionStartedAttributes: &historyv1.ExecutionStartedEventAttributes{
+					WorkflowType: &apiv1.WorkflowType{Name: attrs.WorkflowType},
+					TaskQueue:    &apiv1.TaskQueue{Name: attrs.TaskQueue},
+					Input:        &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attrs.Input}}},
+				},
+			}
+		}
+	}
+
 	protoReq := &historyv1.RecordEventRequest{
 		Namespace: req.NamespaceID,
 		WorkflowExecution: &commonv1.WorkflowExecution{
 			WorkflowId: req.WorkflowID,
 			RunId:      req.RunID,
 		},
-		Event: &historyv1.HistoryEvent{
-			EventId:   1,
-			EventTime: timestamppb.Now(),
-			EventType: mapEventType(req.EventType),
-		},
+		Event: event,
 	}
 
 	_, err := c.client.RecordEvent(ctx, protoReq)

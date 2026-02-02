@@ -90,7 +90,7 @@ func NewWebhookExecutor() *WebhookExecutor {
 }
 
 func (e *WebhookExecutor) NodeType() string {
-	return "webhook"
+	return "trigger_webhook"
 }
 
 func (e *WebhookExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {

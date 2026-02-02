@@ -19,7 +19,7 @@ import (
 
 type Service struct {
 	executors   map[string]executor.Executor
-	taskPoller  *poller.Poller
+	taskPollers []*poller.Poller
 	retryPolicy *retry.Policy
 	logger      *slog.Logger
 	wg          sync.WaitGroup
@@ -30,7 +30,7 @@ type Service struct {
 }
 
 type Config struct {
-	TaskQueue    string
+	TaskQueues   []string
 	Identity     string
 	MatchingAddr string
 	PollInterval time.Duration
@@ -62,23 +62,29 @@ func NewService(cfg Config) *Service {
 
 	client := adapter.NewMatchingClient(conn)
 
-	p := poller.New(poller.Config{
-		Client:       client,
-		TaskQueue:    cfg.TaskQueue,
-		Identity:     cfg.Identity,
-		PollInterval: cfg.PollInterval,
-		Logger:       cfg.Logger,
-	})
+	var pollers []*poller.Poller
+	for _, queue := range cfg.TaskQueues {
+		p := poller.New(poller.Config{
+			Client:       client,
+			TaskQueue:    queue,
+			Identity:     cfg.Identity,
+			PollInterval: cfg.PollInterval,
+			Logger:       cfg.Logger,
+		})
+		pollers = append(pollers, p)
+	}
 
 	svc := &Service{
 		executors:   make(map[string]executor.Executor),
-		taskPoller:  p,
+		taskPollers: pollers,
 		retryPolicy: cfg.RetryPolicy,
 		logger:      cfg.Logger,
 		stopCh:      make(chan struct{}),
 	}
 
-	p.SetHandler(svc.handleTask)
+	for _, p := range pollers {
+		p.SetHandler(svc.handleTask)
+	}
 
 	return svc
 }
@@ -100,8 +106,10 @@ func (s *Service) Start(ctx context.Context) error {
 	s.stopCh = make(chan struct{})
 	s.mu.Unlock()
 
-	if err := s.taskPoller.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start task poller: %w", err)
+	for _, p := range s.taskPollers {
+		if err := p.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start task poller: %w", err)
+		}
 	}
 
 	s.logger.Info("worker service started")
@@ -118,7 +126,9 @@ func (s *Service) Stop() error {
 	close(s.stopCh)
 	s.mu.Unlock()
 
-	s.taskPoller.Stop()
+	for _, p := range s.taskPollers {
+		p.Stop()
+	}
 	s.wg.Wait()
 
 	s.logger.Info("worker service stopped")
@@ -190,12 +200,14 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 	defer cancel()
 
 	req := &executor.ExecuteRequest{
-		NodeType: task.NodeType,
-		NodeID:   task.NodeID,
-		Config:   task.Config,
-		Input:    task.Input,
-		Attempt:  task.Attempt,
-		Timeout:  timeout,
+		NodeType:   task.NodeType,
+		NodeID:     task.NodeID,
+		WorkflowID: task.WorkflowID,
+		RunID:      task.RunID,
+		Config:     task.Config,
+		Input:      task.Input,
+		Attempt:    task.Attempt,
+		Timeout:    timeout,
 	}
 
 	resp, err := exec.Execute(execCtx, req)

@@ -12,12 +12,14 @@ type Executor interface {
 }
 
 type ExecuteRequest struct {
-	NodeType string
-	NodeID   string
-	Config   json.RawMessage
-	Input    json.RawMessage
-	Attempt  int32
-	Timeout  time.Duration
+	NodeType   string
+	NodeID     string
+	WorkflowID string
+	RunID      string
+	Config     json.RawMessage
+	Input      json.RawMessage
+	Attempt    int32
+	Timeout    time.Duration
 }
 
 type ExecuteResponse struct {

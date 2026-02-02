@@ -49,7 +49,7 @@ func NewHTTPExecutor() *HTTPExecutor {
 }
 
 func (e *HTTPExecutor) NodeType() string {
-	return "http"
+	return "action_http_request"
 }
 
 func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {

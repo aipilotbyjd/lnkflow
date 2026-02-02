@@ -15,11 +15,6 @@ import (
 	"github.com/linkflow/engine/internal/history/types"
 )
 
-var (
-	ErrOptimisticLock    = errors.New("optimistic lock failure: version mismatch")
-	ErrExecutionNotFound = errors.New("execution not found")
-)
-
 // PostgresEventStore implements EventStore using PostgreSQL.
 type PostgresEventStore struct {
 	pool       *pgxpool.Pool
@@ -242,7 +237,7 @@ func (s *PostgresMutableStateStore) GetMutableState(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrExecutionNotFound
+			return nil, types.ErrExecutionNotFound
 		}
 		return nil, fmt.Errorf("failed to get mutable state: %w", err)
 	}
@@ -321,7 +316,7 @@ func (s *PostgresMutableStateStore) UpdateMutableState(
 				return fmt.Errorf("failed to insert mutable state: %w", err)
 			}
 		} else {
-			return ErrOptimisticLock
+			return types.ErrOptimisticLock
 		}
 	}
 

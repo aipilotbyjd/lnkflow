@@ -147,7 +147,7 @@ func (c *RedisConsumer) processMessage(ctx context.Context, msg redis.XMessage, 
 		Namespace:    fmt.Sprintf("workspace-%d", job.WorkspaceID),
 		WorkflowID:   fmt.Sprintf("workflow-%d", job.WorkflowID),
 		WorkflowType: "linkflow-workflow",
-		TaskQueue:    "default",
+		TaskQueue:    fmt.Sprintf("workflows-%s", job.Priority),
 		Input:        []byte(payloadStr), // Pass the whole payload as input
 		RequestID:    job.JobID,
 	}

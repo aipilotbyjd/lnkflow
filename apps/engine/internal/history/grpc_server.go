@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	apiv1 "github.com/linkflow/engine/api/gen/linkflow/api/v1"
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	"github.com/linkflow/engine/internal/history/types"
@@ -107,13 +108,13 @@ func (s *GRPCServer) toGRPCError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, ErrExecutionNotFound) || errors.Is(err, ErrEventNotFound) {
+	if errors.Is(err, types.ErrExecutionNotFound) || errors.Is(err, ErrEventNotFound) {
 		return status.Error(codes.NotFound, err.Error())
 	}
 	if errors.Is(err, ErrServiceNotRunning) {
 		return status.Error(codes.Unavailable, err.Error())
 	}
-	if errors.Is(err, ErrOptimisticLock) {
+	if errors.Is(err, types.ErrOptimisticLock) {
 		return status.Error(codes.Aborted, err.Error())
 	}
 	// Add other mappings as needed
@@ -136,6 +137,20 @@ func protoEventToInternal(pe *historyv1.HistoryEvent) *types.HistoryEvent {
 		event.Timestamp = pe.GetEventTime().AsTime()
 	} else {
 		event.Timestamp = time.Now()
+	}
+
+	switch event.EventType {
+	case types.EventTypeExecutionStarted:
+		if attr := pe.GetExecutionStartedAttributes(); attr != nil {
+			internalAttr := &types.ExecutionStartedAttributes{
+				WorkflowType: attr.GetWorkflowType().GetName(),
+				TaskQueue:    attr.GetTaskQueue().GetName(),
+			}
+			if input := attr.GetInput(); input != nil && len(input.GetPayloads()) > 0 {
+				internalAttr.Input = input.GetPayloads()[0].GetData()
+			}
+			event.Attributes = internalAttr
+		}
 	}
 
 	return event
@@ -208,11 +223,66 @@ func internalEventToProto(e *types.HistoryEvent) *historyv1.HistoryEvent {
 		return nil
 	}
 
-	return &historyv1.HistoryEvent{
+	event := &historyv1.HistoryEvent{
 		EventId:   e.EventID,
 		EventType: internalEventTypeToProto(e.EventType),
 		EventTime: timestamppb.New(e.Timestamp),
 		Version:   e.Version,
 		TaskId:    e.TaskID,
 	}
+
+	switch e.EventType {
+	case types.EventTypeExecutionStarted:
+		if attr, ok := e.Attributes.(*types.ExecutionStartedAttributes); ok {
+			event.Attributes = &historyv1.HistoryEvent_ExecutionStartedAttributes{ // This one was correct
+				ExecutionStartedAttributes: &historyv1.ExecutionStartedEventAttributes{
+					WorkflowType: &apiv1.WorkflowType{Name: attr.WorkflowType},
+					TaskQueue:    &apiv1.TaskQueue{Name: attr.TaskQueue},
+					Input:        &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attr.Input}}},
+				},
+			}
+		}
+	case types.EventTypeNodeScheduled:
+		if attr, ok := e.Attributes.(*types.NodeScheduledAttributes); ok {
+			event.Attributes = &historyv1.HistoryEvent_NodeScheduledAttributes{ // Wrapper name fixed
+				NodeScheduledAttributes: &historyv1.NodeScheduledEventAttributes{
+					NodeId:    attr.NodeID,
+					NodeType:  attr.NodeType,
+					Input:     &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attr.Input}}},
+					TaskQueue: &apiv1.TaskQueue{Name: attr.TaskQueue},
+				},
+			}
+		}
+	case types.EventTypeNodeStarted:
+		if attr, ok := e.Attributes.(*types.NodeStartedAttributes); ok {
+			event.Attributes = &historyv1.HistoryEvent_NodeStartedAttributes{ // Wrapper name fixed
+				NodeStartedAttributes: &historyv1.NodeStartedEventAttributes{
+					ScheduledEventId: attr.ScheduledEventID,
+					Identity:         attr.Identity,
+				},
+			}
+		}
+	case types.EventTypeNodeCompleted:
+		if attr, ok := e.Attributes.(*types.NodeCompletedAttributes); ok {
+			event.Attributes = &historyv1.HistoryEvent_NodeCompletedAttributes{ // Wrapper name fixed
+				NodeCompletedAttributes: &historyv1.NodeCompletedEventAttributes{
+					ScheduledEventId: attr.ScheduledEventID,
+					StartedEventId:   attr.StartedEventID,
+					Result:           &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attr.Result}}},
+				},
+			}
+		}
+	case types.EventTypeNodeFailed:
+		if attr, ok := e.Attributes.(*types.NodeFailedAttributes); ok {
+			event.Attributes = &historyv1.HistoryEvent_NodeFailedAttributes{ // Wrapper name fixed
+				NodeFailedAttributes: &historyv1.NodeFailedEventAttributes{
+					ScheduledEventId: attr.ScheduledEventID,
+					StartedEventId:   attr.StartedEventID,
+					Failure:          &commonv1.Failure{Message: attr.Reason, StackTrace: string(attr.Details)},
+				},
+			}
+		}
+	}
+
+	return event
 }

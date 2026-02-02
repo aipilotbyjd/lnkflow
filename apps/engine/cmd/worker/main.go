@@ -8,11 +8,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/linkflow/engine/internal/version"
 	"github.com/linkflow/engine/internal/worker"
+	"github.com/linkflow/engine/internal/worker/adapter"
 	"github.com/linkflow/engine/internal/worker/executor"
 )
 
@@ -26,8 +31,10 @@ func main() {
 func run() error {
 	var (
 		httpPort     = flag.Int("http-port", 8080, "HTTP server port")
-		taskQueue    = flag.String("task-queue", "default", "Task queue name")
+		taskQueue    = flag.String("task-queue", getEnv("TASK_QUEUE", "default"), "Task queue name")
+
 		matchingAddr = flag.String("matching-addr", getEnv("MATCHING_ADDR", "localhost:7235"), "Matching service address")
+		historyAddr  = flag.String("history-addr", getEnv("HISTORY_ADDR", "localhost:7234"), "History service address")
 		numWorkers   = flag.Int("num-workers", 4, "Number of worker goroutines")
 	)
 	flag.Parse()
@@ -37,12 +44,24 @@ func run() error {
 	printBanner("Worker", logger)
 
 	svc := worker.NewService(worker.Config{
-		TaskQueue:    *taskQueue,
+		TaskQueues:   strings.Split(*taskQueue, ","),
 		Identity:     fmt.Sprintf("worker-%d", os.Getpid()),
 		MatchingAddr: *matchingAddr,
 		PollInterval: time.Second,
 		Logger:       logger,
 	})
+
+	// Connect to History Service
+	historyConn, err := grpc.NewClient(*historyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		logger.Error("failed to connect to history service", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	historyClient := adapter.NewHistoryClient(historyConn)
+
+	// Register Workflow Executor
+	workflowExecutor := executor.NewWorkflowExecutor(historyClient, logger)
+	svc.RegisterExecutor(workflowExecutor)
 
 	httpExecutor := executor.NewHTTPExecutor()
 	svc.RegisterExecutor(httpExecutor)
@@ -68,6 +87,9 @@ func run() error {
 
 	webhookExecutor := executor.NewWebhookExecutor()
 	svc.RegisterExecutor(webhookExecutor)
+
+	manualExecutor := executor.NewManualExecutor()
+	svc.RegisterExecutor(manualExecutor)
 
 	slackExecutor := executor.NewSlackExecutor()
 	svc.RegisterExecutor(slackExecutor)

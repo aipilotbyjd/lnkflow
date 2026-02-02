@@ -12,7 +12,7 @@
 x-common-env:
   # SECURITY: SSL mode set to 'prefer' - upgrade to 'require' or 'verify-full' for production
   &common-env
-  DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:-linkflow}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer
+  DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:-linkflow}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer&search_path=workflow
   REDIS_URL: redis://linkflow-redis:6379
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_FORMAT: json
@@ -169,7 +169,7 @@ services:
       # History service for results
       HISTORY_ADDR: linkflow-history:7234
       # Worker config
-      TASK_QUEUE: workflows-high,workflows-default,default
+      TASK_QUEUE: workflows-high,workflows-default,workflows-low,default
       NUM_WORKERS: 4
       POLL_INTERVAL: 1s
       # Laravel callback (for hybrid mode)
@@ -343,7 +343,7 @@ services:
     container_name: linkflow-go-migrate
     environment:
       # SECURITY: Use SSL for production
-      DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:-linkflow}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer
+      DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:-linkflow}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer&search_path=workflow
     command: >
       sh -c "
         echo '🔄 Running Go Engine migrations...' &&

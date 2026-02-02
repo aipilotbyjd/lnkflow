@@ -137,6 +137,7 @@ Route::prefix('v1')->as('v1.')->group(function () {
             Route::get('executions/{execution}/logs', [ExecutionController::class, 'logs'])->name('executions.logs');
             Route::post('executions/{execution}/retry', [ExecutionController::class, 'retry'])->name('executions.retry');
             Route::post('executions/{execution}/cancel', [ExecutionController::class, 'cancel'])->name('executions.cancel');
+            Route::post('workflows/{workflow}/execute', [ExecutionController::class, 'store'])->name('workflows.execute');
             Route::get('workflows/{workflow}/executions', [ExecutionController::class, 'workflowExecutions'])->name('workflows.executions');
 
             // Webhooks

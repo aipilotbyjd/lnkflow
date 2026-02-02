@@ -1,7 +1,13 @@
 package types
 
 import (
+	"errors"
 	"time"
+)
+
+var (
+	ErrExecutionNotFound = errors.New("execution not found")
+	ErrOptimisticLock    = errors.New("optimistic lock failure")
 )
 
 type EventType int32

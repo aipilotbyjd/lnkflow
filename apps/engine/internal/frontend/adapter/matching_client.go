@@ -26,7 +26,12 @@ func (c *MatchingClient) AddTask(ctx context.Context, req *frontend.AddTaskReque
 			Name: req.TaskQueue,
 			Kind: commonv1.TaskQueueKind_TASK_QUEUE_KIND_NORMAL,
 		},
-		TaskType: commonv1.TaskType(req.TaskType),
+		TaskType:         commonv1.TaskType(req.TaskType),
+		ScheduledEventId: req.ScheduledEventID,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: req.WorkflowID,
+			RunId:      req.RunID,
+		},
 		// We are losing TaskInfo here because proto doesn't support it directly in AddTaskRequest?
 		// AddTaskRequest expects WorkflowExecution etc.
 		// For now, simpler mapping to verify connectivity.

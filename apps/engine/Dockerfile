@@ -6,8 +6,7 @@ ARG VERSION=dev
 
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Install buf for protobuf generation
-RUN go install github.com/bufbuild/buf/cmd/buf@latest
+
 
 WORKDIR /app
 
@@ -18,8 +17,7 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Generate protobuf code
-RUN buf generate
+
 
 # Build the service
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \

@@ -23,4 +23,5 @@ GRANT ALL ON SCHEMA matching TO linkflow;
 GRANT ALL ON SCHEMA public TO linkflow;
 
 -- Run schema
+SET search_path TO workflow;
 \i schema.sql

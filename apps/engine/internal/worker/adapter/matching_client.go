@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
@@ -54,9 +55,14 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 			task.Input = resp.ActivityTaskInfo.Input.Payloads[0].Data
 		}
 	} else if resp.WorkflowTaskInfo != nil {
-		// Placeholder for Workflow Task
-		// Not implemented yet for worker poller which expects Activity
-		return nil, nil
+		task = &poller.Task{
+			TaskID:     fmt.Sprintf("%d", resp.WorkflowTaskInfo.ScheduledEventId),
+			WorkflowID: resp.WorkflowExecution.GetWorkflowId(),
+			RunID:      resp.WorkflowExecution.GetRunId(),
+			NodeType:   "workflow",
+			Attempt:    resp.Attempt,
+			TimeoutSec: 60,
+		}
 	} else {
 		return nil, nil
 	}
