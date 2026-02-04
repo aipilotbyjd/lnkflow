@@ -54,10 +54,13 @@ func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest
 	)
 
 	// Generate secure random token for task authentication
-	token, err := generateSecureToken()
+	// The worker client expects format: "namespace|token"
+	rawToken, err := generateSecureToken()
 	if err != nil {
 		return nil, err
 	}
+	token := []byte(fmt.Sprintf("%s|%s", req.Namespace, string(rawToken)))
+
 	task := &engine.Task{
 		ID:               taskID,
 		Token:            token,
