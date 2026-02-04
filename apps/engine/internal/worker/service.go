@@ -272,10 +272,10 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 			}
 
 			histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
-			defer histCancel()
 			if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
-				s.logger.Error("failed to record event", slog.String("error", err.Error()))
+				s.logger.Error("failed to record node failure event", slog.String("error", err.Error()))
 			}
+			histCancel()
 		}
 
 		return &TaskResult{
@@ -320,10 +320,10 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 					namespace = "default"
 				}
 				histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
-				defer histCancel()
 				if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
-					s.logger.Error("failed to record event", slog.String("error", err.Error()))
+					s.logger.Error("failed to record non-retryable failure event", slog.String("error", err.Error()))
 				}
+				histCancel()
 			}
 		}
 	} else {
@@ -346,10 +346,10 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 			}
 
 			histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
-			defer histCancel()
 			if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
-				s.logger.Error("failed to record event", slog.String("error", err.Error()))
+				s.logger.Error("failed to record node completion event", slog.String("error", err.Error()))
 			}
+			histCancel()
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/linkflow/engine/internal/matching/engine"
 	"github.com/linkflow/engine/internal/matching/partition"
@@ -19,6 +20,10 @@ type Service struct {
 	taskQueues   map[string]*engine.TaskQueue
 	logger       *slog.Logger
 	mu           sync.RWMutex
+
+	stopCh  chan struct{}
+	wg      sync.WaitGroup
+	running bool
 }
 
 type Config struct {
@@ -131,4 +136,73 @@ func (s *Service) GetTaskQueue(name string) (*engine.TaskQueue, error) {
 
 func (s *Service) PartitionManager() *partition.Manager {
 	return s.partitionMgr
+}
+
+func (s *Service) Start(ctx context.Context) error {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return nil
+	}
+	s.running = true
+	s.stopCh = make(chan struct{})
+	s.mu.Unlock()
+
+	s.wg.Add(1)
+	go s.runLeaseReaper(ctx)
+
+	s.logger.Info("matching service started")
+	return nil
+}
+
+func (s *Service) Stop() error {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return nil
+	}
+	s.running = false
+	close(s.stopCh)
+	s.mu.Unlock()
+
+	s.wg.Wait()
+	s.logger.Info("matching service stopped")
+	return nil
+}
+
+func (s *Service) runLeaseReaper(ctx context.Context) {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.requeueExpiredTasks()
+		}
+	}
+}
+
+func (s *Service) requeueExpiredTasks() {
+	s.mu.RLock()
+	queues := make([]*engine.TaskQueue, 0, len(s.taskQueues))
+	for _, tq := range s.taskQueues {
+		queues = append(queues, tq)
+	}
+	s.mu.RUnlock()
+
+	totalRequeued := 0
+	for _, tq := range queues {
+		requeued := tq.RequeueExpiredTasks()
+		totalRequeued += requeued
+	}
+
+	if totalRequeued > 0 {
+		s.logger.Info("requeued expired tasks", slog.Int("count", totalRequeued))
+	}
 }
