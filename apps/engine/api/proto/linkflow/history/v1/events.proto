@@ -156,6 +156,7 @@ message NodeCompletedEventAttributes {
   int64 started_event_id = 2;
   linkflow.common.v1.Payloads result = 3;
   string identity = 4;
+  linkflow.common.v1.Payloads logs = 5;
 }
 
 // NodeFailedEventAttributes contains attributes for node failed event.
@@ -165,6 +166,7 @@ message NodeFailedEventAttributes {
   linkflow.common.v1.Failure failure = 3;
   string identity = 4;
   linkflow.common.v1.RetryPolicy retry_policy = 5;
+  linkflow.common.v1.Payloads logs = 6;
 }
 
 // NodeTimedOutEventAttributes contains attributes for node timed out event.

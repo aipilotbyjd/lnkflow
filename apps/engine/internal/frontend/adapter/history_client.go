@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 
 	apiv1 "github.com/linkflow/engine/api/gen/linkflow/api/v1"
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
@@ -75,11 +76,12 @@ func (c *HistoryClient) GetHistory(ctx context.Context, req *frontend.GetHistory
 	if resp.History != nil {
 		events = make([]*frontend.HistoryEvent, 0, len(resp.History.Events))
 		for _, e := range resp.History.Events {
+			data, _ := extractAttributes(e)
 			events = append(events, &frontend.HistoryEvent{
 				EventID:   e.EventId,
 				EventType: e.EventType.String(),
 				Timestamp: e.EventTime.AsTime(),
-				Data:      nil,
+				Data:      data,
 			})
 		}
 	}
@@ -88,6 +90,55 @@ func (c *HistoryClient) GetHistory(ctx context.Context, req *frontend.GetHistory
 		Events:        events,
 		NextPageToken: resp.NextPageToken,
 	}, nil
+}
+
+func extractAttributes(e *historyv1.HistoryEvent) ([]byte, error) {
+	var attrs interface{}
+	switch e.EventType {
+	case commonv1.EventType_EVENT_TYPE_EXECUTION_STARTED:
+		if a := e.GetExecutionStartedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_EXECUTION_COMPLETED:
+		if a := e.GetExecutionCompletedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_EXECUTION_FAILED:
+		if a := e.GetExecutionFailedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED:
+		if a := e.GetNodeScheduledAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_NODE_STARTED:
+		if a := e.GetNodeStartedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_NODE_COMPLETED:
+		if a := e.GetNodeCompletedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_NODE_FAILED:
+		if a := e.GetNodeFailedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_TIMER_STARTED:
+		if a := e.GetTimerStartedAttributes(); a != nil {
+			attrs = a
+		}
+	case commonv1.EventType_EVENT_TYPE_TIMER_FIRED:
+		if a := e.GetTimerFiredAttributes(); a != nil {
+			attrs = a
+		}
+	}
+
+	if attrs == nil {
+		return nil, nil
+	}
+
+	// Use protojson if available, or just standard json since generated structs have json tags
+	return json.Marshal(attrs)
 }
 
 func (c *HistoryClient) GetMutableState(ctx context.Context, key frontend.ExecutionKey) (*frontend.MutableState, error) {

@@ -179,16 +179,23 @@ func protoEventToInternal(pe *historyv1.HistoryEvent) *types.HistoryEvent {
 			if result := attr.GetResult(); result != nil && len(result.GetPayloads()) > 0 {
 				internalAttr.Result = result.GetPayloads()[0].GetData()
 			}
+			if logs := attr.GetLogs(); logs != nil && len(logs.GetPayloads()) > 0 {
+				internalAttr.Logs = logs.GetPayloads()[0].GetData()
+			}
 			event.Attributes = internalAttr
 		}
 	case types.EventTypeNodeFailed:
 		if attr := pe.GetNodeFailedAttributes(); attr != nil {
-			event.Attributes = &types.NodeFailedAttributes{
+			internalAttr := &types.NodeFailedAttributes{
 				ScheduledEventID: attr.GetScheduledEventId(),
 				StartedEventID:   attr.GetStartedEventId(),
 				Reason:           attr.GetFailure().GetMessage(),
 				Details:          []byte(attr.GetFailure().GetStackTrace()),
 			}
+			if logs := attr.GetLogs(); logs != nil && len(logs.GetPayloads()) > 0 {
+				internalAttr.Logs = logs.GetPayloads()[0].GetData()
+			}
+			event.Attributes = internalAttr
 		}
 		// TODO: Add Timer and Activity mappings if needed for future tasks
 		// For now, Node events are critical for workflow progress.
@@ -312,6 +319,9 @@ func internalEventToProto(e *types.HistoryEvent) *historyv1.HistoryEvent {
 					Result:           &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attr.Result}}},
 				},
 			}
+			if len(attr.Logs) > 0 {
+				event.GetNodeCompletedAttributes().Logs = &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attr.Logs}}}
+			}
 		}
 	case types.EventTypeNodeFailed:
 		if attr, ok := e.Attributes.(*types.NodeFailedAttributes); ok {
@@ -321,6 +331,9 @@ func internalEventToProto(e *types.HistoryEvent) *historyv1.HistoryEvent {
 					StartedEventId:   attr.StartedEventID,
 					Failure:          &commonv1.Failure{Message: attr.Reason, StackTrace: string(attr.Details)},
 				},
+			}
+			if len(attr.Logs) > 0 {
+				event.GetNodeFailedAttributes().Logs = &commonv1.Payloads{Payloads: []*commonv1.Payload{{Data: attr.Logs}}}
 			}
 		}
 	}

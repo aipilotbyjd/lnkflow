@@ -304,6 +304,12 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 		} else {
 			// Record Logic Failure (Non-retryable or exhausted)
 			if task.NodeType != "workflow" && s.historyClient != nil {
+				// Marshal logs
+				var logsData []byte
+				if len(resp.Logs) > 0 {
+					logsData, _ = json.Marshal(resp.Logs)
+				}
+
 				event := &historyv1.HistoryEvent{
 					EventType: commonv1.EventType_EVENT_TYPE_NODE_FAILED,
 					Attributes: &historyv1.HistoryEvent_NodeFailedAttributes{
@@ -311,6 +317,9 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 							ScheduledEventId: task.ScheduledEventID,
 							Failure: &commonv1.Failure{
 								Message: result.Error,
+							},
+							Logs: &commonv1.Payloads{
+								Payloads: []*commonv1.Payload{{Data: logsData}},
 							},
 						},
 					},
@@ -329,6 +338,12 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 	} else {
 		// Record Success
 		if task.NodeType != "workflow" && s.historyClient != nil {
+			// Marshal logs
+			var logsData []byte
+			if len(resp.Logs) > 0 {
+				logsData, _ = json.Marshal(resp.Logs)
+			}
+
 			event := &historyv1.HistoryEvent{
 				EventType: commonv1.EventType_EVENT_TYPE_NODE_COMPLETED,
 				Attributes: &historyv1.HistoryEvent_NodeCompletedAttributes{
@@ -336,6 +351,9 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 						ScheduledEventId: task.ScheduledEventID,
 						Result: &commonv1.Payloads{
 							Payloads: []*commonv1.Payload{{Data: resp.Output}},
+						},
+						Logs: &commonv1.Payloads{
+							Payloads: []*commonv1.Payload{{Data: logsData}},
 						},
 					},
 				},

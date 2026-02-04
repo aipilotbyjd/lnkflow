@@ -184,6 +184,7 @@ type NodeCompletedAttributes struct {
 	ScheduledEventID int64
 	StartedEventID   int64
 	Result           []byte
+	Logs             []byte
 }
 
 type NodeFailedAttributes struct {
@@ -193,6 +194,7 @@ type NodeFailedAttributes struct {
 	Reason           string
 	Details          []byte
 	RetryState       int32
+	Logs             []byte
 }
 
 type TimerStartedAttributes struct {
