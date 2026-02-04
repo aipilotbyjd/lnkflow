@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrServiceNotRunning  = errors.New("timer service is not running")
-	ErrTimerNotFound      = errors.New("timer not found")
-	ErrTimerAlreadyExists = errors.New("timer already exists")
+	ErrServiceNotRunning      = errors.New("timer service is not running")
+	ErrTimerNotFound          = errors.New("timer not found")
+	ErrTimerAlreadyExists     = errors.New("timer already exists")
+	ErrOptimisticLockConflict = errors.New("optimistic lock conflict: version mismatch")
 )
 
 // TimerStatus represents the status of a timer.
@@ -341,7 +342,6 @@ func (s *Service) runProcessor(ctx context.Context, id int) {
 }
 
 func (s *Service) processTimer(ctx context.Context, timer *Timer) {
-	// Double-check the timer is still pending
 	current, err := s.store.GetTimer(ctx, timer.NamespaceID, timer.WorkflowID, timer.RunID, timer.TimerID)
 	if err != nil {
 		s.logger.Error("failed to get timer for processing",
@@ -359,7 +359,6 @@ func (s *Service) processTimer(ctx context.Context, timer *Timer) {
 		return
 	}
 
-	// Check if timer is too old
 	delay := time.Since(timer.FireTime)
 	if delay > s.config.MaxFireDelay {
 		s.logger.Warn("timer fire delayed significantly",
@@ -368,26 +367,38 @@ func (s *Service) processTimer(ctx context.Context, timer *Timer) {
 		)
 	}
 
-	// Notify history service
-	if err := s.historyClient.RecordTimerFired(ctx, timer.NamespaceID, timer.WorkflowID, timer.RunID, timer.TimerID); err != nil {
+	current.Status = TimerStatusFired
+	current.FiredAt = time.Now()
+	current.Version++
+
+	if err := s.store.UpdateTimer(ctx, current); err != nil {
+		if errors.Is(err, ErrOptimisticLockConflict) {
+			s.logger.Debug("timer already claimed by another processor",
+				slog.String("timer_id", timer.TimerID))
+			return
+		}
+		s.logger.Error("failed to claim timer",
+			slog.String("timer_id", timer.TimerID),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	if err := s.historyClient.RecordTimerFired(ctx, current.NamespaceID, current.WorkflowID, current.RunID, current.TimerID); err != nil {
 		s.logger.Error("failed to record timer fired",
 			slog.String("timer_id", timer.TimerID),
 			slog.String("error", err.Error()),
 		)
-		// Don't mark as fired if notification failed - it will be retried
+		current.Status = TimerStatusPending
+		current.FiredAt = time.Time{}
+		current.Version++
+		if rollbackErr := s.store.UpdateTimer(ctx, current); rollbackErr != nil {
+			s.logger.Error("failed to rollback timer status",
+				slog.String("timer_id", timer.TimerID),
+				slog.String("error", rollbackErr.Error()),
+			)
+		}
 		return
-	}
-
-	// Mark timer as fired
-	timer.Status = TimerStatusFired
-	timer.FiredAt = time.Now()
-	timer.Version++
-
-	if err := s.store.UpdateTimer(ctx, timer); err != nil {
-		s.logger.Error("failed to update timer status",
-			slog.String("timer_id", timer.TimerID),
-			slog.String("error", err.Error()),
-		)
 	}
 
 	s.logger.Info("timer fired",

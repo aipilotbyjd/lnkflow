@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -71,9 +70,8 @@ func (s *MemoryStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 		return timer.ErrTimerNotFound
 	}
 
-	// Optimistic locking check
 	if existing.Version != t.Version-1 {
-		return errors.New("version mismatch")
+		return timer.ErrOptimisticLockConflict
 	}
 
 	clone := *t

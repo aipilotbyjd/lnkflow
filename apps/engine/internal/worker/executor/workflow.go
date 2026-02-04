@@ -45,8 +45,15 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	}
 	resp, err := e.historyClient.GetHistory(ctx, namespace, req.WorkflowID, req.RunID)
 	if err != nil {
+		e.logger.Error("failed to fetch history",
+			slog.String("error", err.Error()),
+		)
 		return nil, fmt.Errorf("failed to fetch history: %w", err)
 	}
+
+	e.logger.Info("history response received",
+		slog.Bool("has_history", resp.GetHistory() != nil),
+	)
 
 	events := resp.GetHistory().GetEvents()
 	e.logger.Info("fetched history events",

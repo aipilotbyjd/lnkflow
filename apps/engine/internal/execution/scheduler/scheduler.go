@@ -81,6 +81,7 @@ type ExecutionState struct {
 	CompletedNodes map[string]bool
 	FailedNodes    map[string]*NodeError
 	SkippedNodes   map[string]bool
+	ScheduledNodes map[string]bool
 
 	StartedAt   time.Time
 	CompletedAt time.Time
@@ -187,6 +188,7 @@ func (s *Scheduler) Execute(ctx context.Context, executionID string, input json.
 		CompletedNodes: make(map[string]bool),
 		FailedNodes:    make(map[string]*NodeError),
 		SkippedNodes:   make(map[string]bool),
+		ScheduledNodes: make(map[string]bool),
 		StartedAt:      time.Now(),
 	}
 
@@ -214,8 +216,7 @@ func (s *Scheduler) Execute(ctx context.Context, executionID string, input json.
 	// Process results until complete
 	err := s.processUntilComplete(ctx)
 
-	// Cleanup
-	close(s.taskQueue)
+	// Cleanup - rely on context cancellation, do not close taskQueue
 	s.wg.Wait()
 
 	s.state.CompletedAt = time.Now()
@@ -261,14 +262,23 @@ func (s *Scheduler) worker(ctx context.Context) {
 
 			result, err := s.executeNode(ctx, task)
 			if err != nil {
-				s.errorQueue <- &NodeError{
+				nodeErr := &NodeError{
 					NodeID:    task.NodeID,
 					Error:     err,
 					Attempt:   task.Attempt,
 					Retryable: isRetryableError(err),
 				}
+				select {
+				case s.errorQueue <- nodeErr:
+				case <-ctx.Done():
+					return
+				}
 			} else {
-				s.resultQueue <- result
+				select {
+				case s.resultQueue <- result:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}
@@ -333,7 +343,6 @@ func (s *Scheduler) processUntilComplete(ctx context.Context) error {
 
 func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult) {
 	s.state.mu.Lock()
-	defer s.state.mu.Unlock()
 
 	// Update state
 	s.state.CompletedNodes[result.NodeID] = true
@@ -348,7 +357,19 @@ func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult)
 	// Find and schedule next nodes
 	nextNodes := s.dag.GetNextNodes(s.state.CompletedNodes)
 
+	// Collect nodes to schedule (check if already scheduled)
+	var nodesToSchedule []string
 	for _, nextID := range nextNodes {
+		if s.state.ScheduledNodes[nextID] {
+			continue
+		}
+		s.state.ScheduledNodes[nextID] = true
+		nodesToSchedule = append(nodesToSchedule, nextID)
+	}
+
+	s.state.mu.Unlock()
+
+	for _, nextID := range nodesToSchedule {
 		// Check conditions if any
 		node := s.dag.Nodes[nextID]
 		if len(node.Conditions) > 0 {
@@ -363,7 +384,7 @@ func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult)
 
 		// Merge inputs from all upstream nodes
 		input := s.mergeInputs(nextID)
-		go s.scheduleNode(ctx, nextID, input)
+		s.scheduleNode(ctx, nextID, input)
 	}
 }
 
@@ -387,10 +408,10 @@ func (s *Scheduler) scheduleRetry(ctx context.Context, nodeErr *NodeError) {
 	s.state.mu.Lock()
 	s.state.NodeStates[nodeErr.NodeID].Attempt++
 	attempt := s.state.NodeStates[nodeErr.NodeID].Attempt
+	input := s.state.NodeOutputs[nodeErr.NodeID]
 	s.state.mu.Unlock()
 
 	node := s.dag.Nodes[nodeErr.NodeID]
-	input := s.state.NodeOutputs[nodeErr.NodeID]
 
 	s.logger.Info("retrying node",
 		slog.String("node_id", nodeErr.NodeID),

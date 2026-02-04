@@ -9,26 +9,34 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const DefaultLeaseTimeout = 60 * time.Second
+
 type TaskQueue struct {
-	name        string
-	kind        TaskQueueKind
-	tasks       *list.List
-	tasksMap    map[string]*list.Element
-	pollers     *list.List
-	rateLimiter *rate.Limiter
-	metrics     *Metrics
-	mu          sync.Mutex
+	name           string
+	kind           TaskQueueKind
+	tasks          *list.List
+	tasksMap       map[string]*list.Element
+	pollers        *list.List
+	rateLimiter    *rate.Limiter
+	metrics        *Metrics
+	mu             sync.Mutex
+	inFlight       map[string]*Task
+	inFlightExpiry map[string]time.Time
+	leaseTimeout   time.Duration
 }
 
 func NewTaskQueue(name string, kind TaskQueueKind, rateLimit float64, burst int) *TaskQueue {
 	return &TaskQueue{
-		name:        name,
-		kind:        kind,
-		tasks:       list.New(),
-		tasksMap:    make(map[string]*list.Element),
-		pollers:     list.New(),
-		rateLimiter: rate.NewLimiter(rate.Limit(rateLimit), burst),
-		metrics:     NewMetrics(),
+		name:           name,
+		kind:           kind,
+		tasks:          list.New(),
+		tasksMap:       make(map[string]*list.Element),
+		pollers:        list.New(),
+		rateLimiter:    rate.NewLimiter(rate.Limit(rateLimit), burst),
+		metrics:        NewMetrics(),
+		inFlight:       make(map[string]*Task),
+		inFlightExpiry: make(map[string]time.Time),
+		leaseTimeout:   DefaultLeaseTimeout,
 	}
 }
 
@@ -106,11 +114,18 @@ func (tq *TaskQueue) CompleteTask(taskID string) bool {
 	tq.mu.Lock()
 	defer tq.mu.Unlock()
 
+	if _, exists := tq.inFlight[taskID]; exists {
+		delete(tq.inFlight, taskID)
+		delete(tq.inFlightExpiry, taskID)
+		return true
+	}
+
 	if elem, exists := tq.tasksMap[taskID]; exists {
 		tq.tasks.Remove(elem)
 		delete(tq.tasksMap, taskID)
 		return true
 	}
+
 	return false
 }
 
@@ -122,6 +137,8 @@ func (tq *TaskQueue) getNextTaskLocked() *Task {
 	task := elem.Value.(*Task)
 	tq.tasks.Remove(elem)
 	delete(tq.tasksMap, task.ID)
+	tq.inFlight[task.ID] = task
+	tq.inFlightExpiry[task.ID] = time.Now().Add(tq.leaseTimeout)
 	return task
 }
 
@@ -135,6 +152,8 @@ func (tq *TaskQueue) tryDispatchLocked(task *Task) bool {
 	tq.pollers.Remove(elem)
 
 	task.StartedTime = time.Now()
+	tq.inFlight[task.ID] = task
+	tq.inFlightExpiry[task.ID] = time.Now().Add(tq.leaseTimeout)
 	poller.ResultCh <- task
 
 	tq.metrics.TaskDispatched()
@@ -152,6 +171,28 @@ func (tq *TaskQueue) PollerCount() int {
 	tq.mu.Lock()
 	defer tq.mu.Unlock()
 	return tq.pollers.Len()
+}
+
+func (tq *TaskQueue) RequeueExpiredTasks() int {
+	tq.mu.Lock()
+	defer tq.mu.Unlock()
+
+	now := time.Now()
+	requeued := 0
+
+	for taskID, expiry := range tq.inFlightExpiry {
+		if now.After(expiry) {
+			task := tq.inFlight[taskID]
+			delete(tq.inFlight, taskID)
+			delete(tq.inFlightExpiry, taskID)
+
+			elem := tq.tasks.PushBack(task)
+			tq.tasksMap[task.ID] = elem
+			requeued++
+		}
+	}
+
+	return requeued
 }
 
 var ErrRateLimited = errRateLimited{}

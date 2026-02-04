@@ -47,6 +47,8 @@ type Poller struct {
 	stopCh  chan struct{}
 	running bool
 	mu      sync.Mutex
+	pollCtx context.Context
+	cancel  context.CancelFunc
 }
 
 type Config struct {
@@ -87,10 +89,11 @@ func (p *Poller) Start(ctx context.Context) error {
 	}
 	p.running = true
 	p.stopCh = make(chan struct{})
+	p.pollCtx, p.cancel = context.WithCancel(ctx)
 	p.mu.Unlock()
 
 	p.wg.Add(1)
-	go p.pollLoop(ctx)
+	go p.pollLoop(p.pollCtx)
 
 	p.logger.Info("poller started",
 		slog.String("task_queue", p.taskQueue),
@@ -107,6 +110,9 @@ func (p *Poller) Stop() {
 		return
 	}
 	p.running = false
+	if p.cancel != nil {
+		p.cancel()
+	}
 	close(p.stopCh)
 	p.mu.Unlock()
 

@@ -109,7 +109,7 @@ func (s *PostgresStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 		return fmt.Errorf("failed to update timer: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("version mismatch or timer not found")
+		return timer.ErrOptimisticLockConflict
 	}
 	return nil
 }

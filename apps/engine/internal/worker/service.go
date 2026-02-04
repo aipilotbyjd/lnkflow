@@ -29,7 +29,6 @@ type Service struct {
 	logger        *slog.Logger
 	wg            sync.WaitGroup
 	stopCh        chan struct{}
-	shutdownOnce  sync.Once
 
 	mu      sync.RWMutex
 	running bool
@@ -130,36 +129,32 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) Stop() error {
-	var stopErr error
-	s.shutdownOnce.Do(func() {
-		s.mu.Lock()
-		if !s.running {
-			s.mu.Unlock()
-			stopErr = ErrServiceNotRunning
-			return
-		}
-		s.running = false
-		close(s.stopCh)
+	s.mu.Lock()
+	if !s.running {
 		s.mu.Unlock()
+		return ErrServiceNotRunning
+	}
+	s.running = false
+	close(s.stopCh)
+	s.mu.Unlock()
 
-		// Stop all pollers
-		for _, p := range s.taskPollers {
-			p.Stop()
+	// Stop all pollers
+	for _, p := range s.taskPollers {
+		p.Stop()
+	}
+
+	// Wait for in-flight tasks to complete
+	s.wg.Wait()
+
+	// Close the gRPC connection to matching service
+	if s.matchingConn != nil {
+		if err := s.matchingConn.Close(); err != nil {
+			s.logger.Warn("failed to close matching connection", slog.String("error", err.Error()))
 		}
+	}
 
-		// Wait for in-flight tasks to complete
-		s.wg.Wait()
-
-		// Close the gRPC connection to matching service
-		if s.matchingConn != nil {
-			if err := s.matchingConn.Close(); err != nil {
-				s.logger.Warn("failed to close matching connection", slog.String("error", err.Error()))
-			}
-		}
-
-		s.logger.Info("worker service stopped")
-	})
-	return stopErr
+	s.logger.Info("worker service stopped")
+	return nil
 }
 
 func (s *Service) IsRunning() bool {
@@ -276,7 +271,11 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 				namespace = "default"
 			}
 
-			_ = s.historyClient.RecordEvent(context.Background(), namespace, task.WorkflowID, task.RunID, event)
+			histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer histCancel()
+			if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
+				s.logger.Error("failed to record event", slog.String("error", err.Error()))
+			}
 		}
 
 		return &TaskResult{
@@ -320,7 +319,11 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 				if namespace == "" {
 					namespace = "default"
 				}
-				_ = s.historyClient.RecordEvent(context.Background(), namespace, task.WorkflowID, task.RunID, event)
+				histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
+				defer histCancel()
+				if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
+					s.logger.Error("failed to record event", slog.String("error", err.Error()))
+				}
 			}
 		}
 	} else {
@@ -342,16 +345,21 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 				namespace = "default"
 			}
 
-			err := s.historyClient.RecordEvent(context.Background(), namespace, task.WorkflowID, task.RunID, event)
-			if err != nil {
-				s.logger.Error("failed to record node completion", slog.String("error", err.Error()))
+			histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer histCancel()
+			if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
+				s.logger.Error("failed to record event", slog.String("error", err.Error()))
 			}
 		}
 	}
 
 	if len(resp.Logs) > 0 {
-		logsJSON, _ := json.Marshal(resp.Logs)
-		result.Logs = logsJSON
+		logsJSON, err := json.Marshal(resp.Logs)
+		if err != nil {
+			s.logger.Warn("failed to marshal logs", slog.String("error", err.Error()))
+		} else {
+			result.Logs = logsJSON
+		}
 	}
 
 	s.logger.Info("task processed",

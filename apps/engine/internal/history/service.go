@@ -203,6 +203,11 @@ func (s *Service) RecordEvent(ctx context.Context, key types.ExecutionKey, event
 
 	expectedVersion := state.DBVersion
 
+	// Ensure EventID is assigned before processing
+	if event.EventID == 0 {
+		event.EventID = state.NextEventID
+	}
+
 	// Use the engine logic to validate and apply the event to the state
 	if err := s.historyEngine.ProcessEvent(state, event); err != nil {
 		return err
@@ -244,6 +249,9 @@ func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, eve
 	case types.EventTypeExecutionStarted:
 		attrs, ok := event.Attributes.(*types.ExecutionStartedAttributes)
 		if !ok {
+			s.logger.Error("invalid event attributes type",
+				slog.String("event_type", string(event.EventType)),
+				slog.String("workflow_id", key.WorkflowID))
 			return nil
 		}
 		taskType = commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK
@@ -252,6 +260,9 @@ func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, eve
 	case types.EventTypeNodeScheduled:
 		attrs, ok := event.Attributes.(*types.NodeScheduledAttributes)
 		if !ok {
+			s.logger.Error("invalid event attributes type",
+				slog.String("event_type", string(event.EventType)),
+				slog.String("workflow_id", key.WorkflowID))
 			return nil
 		}
 		taskType = commonv1.TaskType_TASK_TYPE_ACTIVITY_TASK
@@ -263,13 +274,18 @@ func (s *Service) dispatchTasks(ctx context.Context, key types.ExecutionKey, eve
 		if state.ExecutionInfo != nil {
 			taskQueue = state.ExecutionInfo.TaskQueue
 		} else {
-			// Should not happen if state is valid
+			s.logger.Error("nil execution info in state",
+				slog.String("event_type", string(event.EventType)),
+				slog.String("workflow_id", key.WorkflowID))
 			return nil
 		}
 
 	case types.EventTypeActivityScheduled:
 		attrs, ok := event.Attributes.(*types.ActivityScheduledAttributes)
 		if !ok {
+			s.logger.Error("invalid event attributes type",
+				slog.String("event_type", string(event.EventType)),
+				slog.String("workflow_id", key.WorkflowID))
 			return nil
 		}
 		taskType = commonv1.TaskType_TASK_TYPE_ACTIVITY_TASK
@@ -333,6 +349,10 @@ func (s *Service) RecordEvents(ctx context.Context, key types.ExecutionKey, even
 
 	// Apply all events
 	for _, event := range events {
+		// Ensure EventID is assigned before processing
+		if event.EventID == 0 {
+			event.EventID = state.NextEventID
+		}
 		if err := s.historyEngine.ProcessEvent(state, event); err != nil {
 			return err
 		}
