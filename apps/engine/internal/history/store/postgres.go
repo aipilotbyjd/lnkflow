@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/linkflow/engine/internal/history/engine"
@@ -89,6 +90,14 @@ func (s *PostgresEventStore) AppendEvents(
 			data,
 		)
 		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				// Unique violation means event already exists.
+				// This makes the operation idempotent.
+				// We should verify if the existing event matches regarding crucial data,
+				// but for now we assume it's the same event from a retried request.
+				continue
+			}
 			return fmt.Errorf("failed to insert event %d: %w", event.EventID, err)
 		}
 	}

@@ -1,4 +1,4 @@
--- LinkFlow Execution Engine Initial Migration
+-- LinkFlow Execution Engine Initial Migration (Consolidated)
 -- PostgreSQL 14+
 
 -- Extensions
@@ -9,14 +9,21 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 -- NAMESPACES
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS namespaces (
-    id              VARCHAR(255) PRIMARY KEY,
-    name            VARCHAR(255) UNIQUE NOT NULL,
-    description     TEXT,
-    owner_email     VARCHAR(255),
-    retention_days  INTEGER DEFAULT 30,
-    data            JSONB,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    owner_email VARCHAR(255),
+    retention_days INTEGER DEFAULT 30,
+    history_size_limit_mb INTEGER DEFAULT 50,
+    workflow_execution_ttl_seconds BIGINT,
+    allowed_clusters TEXT[],
+    default_cluster VARCHAR(255),
+    search_attributes JSONB,
+    archival_enabled BOOLEAN DEFAULT FALSE,
+    archival_uri TEXT,
+    data JSONB, -- Kept for backward compat if needed
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_namespaces_name ON namespaces (name);
@@ -117,11 +124,14 @@ CREATE TABLE IF NOT EXISTS timers (
     run_id          UUID NOT NULL,
     timer_id        VARCHAR(255) NOT NULL,
     fire_time       TIMESTAMPTZ NOT NULL,
-    task_status     SMALLINT DEFAULT 0,
+    status          SMALLINT DEFAULT 0,
+    version         BIGINT NOT NULL DEFAULT 1,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    fired_at        TIMESTAMPTZ,
     PRIMARY KEY (shard_id, namespace_id, workflow_id, run_id, timer_id)
 );
 
-CREATE INDEX idx_timers_fire_time ON timers (shard_id, fire_time, task_status);
+CREATE INDEX idx_timers_fire_time ON timers (shard_id, fire_time, status);
 CREATE INDEX idx_timers_workflow ON timers (namespace_id, workflow_id, run_id);
 
 -- =============================================================================
@@ -138,6 +148,9 @@ CREATE TABLE IF NOT EXISTS visibility (
     execution_time      TIMESTAMPTZ,
     memo                BYTEA,
     search_attributes   JSONB,
+    task_queue          VARCHAR(255),
+    parent_workflow_id  VARCHAR(255),
+    parent_run_id       VARCHAR(255),
     PRIMARY KEY (namespace_id, workflow_id, run_id)
 );
 
@@ -160,6 +173,55 @@ CREATE TABLE IF NOT EXISTS task_queues (
 );
 
 CREATE INDEX idx_task_queues_namespace ON task_queues (namespace_id, name);
+
+-- =============================================================================
+-- CLUSTERS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS clusters (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    region VARCHAR(100),
+    endpoint VARCHAR(255),
+    status SMALLINT NOT NULL DEFAULT 0,
+    last_heartbeat TIMESTAMPTZ,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =============================================================================
+-- SERVICE_INSTANCES
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS service_instances (
+    id VARCHAR(255) PRIMARY KEY,
+    service VARCHAR(100) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    port INTEGER NOT NULL,
+    metadata JSONB,
+    health SMALLINT NOT NULL DEFAULT 0,
+    last_check TIMESTAMPTZ,
+    version VARCHAR(50),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_service_instances_service ON service_instances (service, health);
+
+-- =============================================================================
+-- CREDENTIALS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS credentials (
+    id VARCHAR(255) PRIMARY KEY,
+    namespace_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    encrypted_value TEXT NOT NULL,
+    credential_type VARCHAR(50),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (namespace_id, name)
+);
+
+CREATE INDEX idx_credentials_namespace ON credentials (namespace_id);
 
 -- =============================================================================
 -- TRIGGERS

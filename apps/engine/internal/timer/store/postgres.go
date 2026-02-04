@@ -50,6 +50,7 @@ func (s *PostgresStore) CreateTimer(ctx context.Context, t *timer.Timer) error {
 func (s *PostgresStore) GetTimer(ctx context.Context, namespaceID, workflowID, runID, timerID string) (*timer.Timer, error) {
 	var t timer.Timer
 	var status int16
+	var firedAt *time.Time
 
 	err := s.pool.QueryRow(ctx, `
 		SELECT shard_id, namespace_id, workflow_id, run_id, timer_id,
@@ -66,7 +67,7 @@ func (s *PostgresStore) GetTimer(ctx context.Context, namespaceID, workflowID, r
 		&status,
 		&t.Version,
 		&t.CreatedAt,
-		&t.FiredAt,
+		&firedAt,
 	)
 
 	if err != nil {
@@ -77,11 +78,19 @@ func (s *PostgresStore) GetTimer(ctx context.Context, namespaceID, workflowID, r
 	}
 
 	t.Status = timer.TimerStatus(status)
+	if firedAt != nil {
+		t.FiredAt = *firedAt
+	}
 	return &t, nil
 }
 
 // UpdateTimer updates a timer.
 func (s *PostgresStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
+	var firedAt *time.Time
+	if !t.FiredAt.IsZero() {
+		firedAt = &t.FiredAt
+	}
+
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE timers
 		SET status = $1, version = $2, fired_at = $3
@@ -89,7 +98,7 @@ func (s *PostgresStore) UpdateTimer(ctx context.Context, t *timer.Timer) error {
 	`,
 		int16(t.Status),
 		t.Version,
-		t.FiredAt,
+		firedAt,
 		t.NamespaceID,
 		t.WorkflowID,
 		t.RunID,
@@ -136,6 +145,7 @@ func (s *PostgresStore) GetDueTimers(ctx context.Context, shardID int32, fireTim
 	for rows.Next() {
 		var t timer.Timer
 		var status int16
+		var firedAt *time.Time
 		if err := rows.Scan(
 			&t.ShardID,
 			&t.NamespaceID,
@@ -146,11 +156,14 @@ func (s *PostgresStore) GetDueTimers(ctx context.Context, shardID int32, fireTim
 			&status,
 			&t.Version,
 			&t.CreatedAt,
-			&t.FiredAt,
+			&firedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan timer: %w", err)
 		}
 		t.Status = timer.TimerStatus(status)
+		if firedAt != nil {
+			t.FiredAt = *firedAt
+		}
 		timers = append(timers, &t)
 	}
 
@@ -175,6 +188,7 @@ func (s *PostgresStore) GetTimersByExecution(ctx context.Context, namespaceID, w
 	for rows.Next() {
 		var t timer.Timer
 		var status int16
+		var firedAt *time.Time
 		if err := rows.Scan(
 			&t.ShardID,
 			&t.NamespaceID,
@@ -185,11 +199,14 @@ func (s *PostgresStore) GetTimersByExecution(ctx context.Context, namespaceID, w
 			&status,
 			&t.Version,
 			&t.CreatedAt,
-			&t.FiredAt,
+			&firedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan timer: %w", err)
 		}
 		t.Status = timer.TimerStatus(status)
+		if firedAt != nil {
+			t.FiredAt = *firedAt
+		}
 		timers = append(timers, &t)
 	}
 

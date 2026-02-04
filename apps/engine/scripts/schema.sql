@@ -113,7 +113,10 @@ CREATE TABLE IF NOT EXISTS timers (
     run_id          UUID NOT NULL,
     timer_id        VARCHAR(255) NOT NULL,
     fire_time       TIMESTAMPTZ NOT NULL,
-    task_status     SMALLINT DEFAULT 0,
+    status          SMALLINT DEFAULT 0,
+    version         BIGINT NOT NULL DEFAULT 1,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    fired_at        TIMESTAMPTZ,
     PRIMARY KEY (shard_id, namespace_id, workflow_id, run_id, timer_id)
 );
 

@@ -3,11 +3,17 @@ package executor
 import "encoding/json"
 
 type JobPayload struct {
-	JobID       string                 `json:"job_id"`
-	Workflow    WorkflowDefinition     `json:"workflow"`
-	TriggerData map[string]interface{} `json:"trigger_data"`
-	Credentials map[string]interface{} `json:"credentials"`
-	Variables   map[string]interface{} `json:"variables"`
+	JobID         string                 `json:"job_id"`
+	CallbackToken string                 `json:"callback_token"`
+	ExecutionID   int                    `json:"execution_id"`
+	WorkflowID    int                    `json:"workflow_id"`
+	WorkspaceID   int                    `json:"workspace_id"`
+	Workflow      WorkflowDefinition     `json:"workflow"`
+	TriggerData   map[string]interface{} `json:"trigger_data"`
+	Credentials   map[string]interface{} `json:"credentials"`
+	Variables     map[string]interface{} `json:"variables"`
+	CallbackURL   string                 `json:"callback_url"`
+	ProgressURL   string                 `json:"progress_url"`
 }
 
 type WorkflowDefinition struct {

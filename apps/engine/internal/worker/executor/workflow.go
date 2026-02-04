@@ -1,10 +1,13 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"time"
 
 	apiv1 "github.com/linkflow/engine/api/gen/linkflow/api/v1"
@@ -15,13 +18,17 @@ import (
 
 type WorkflowExecutor struct {
 	historyClient *adapter.HistoryClient
+	httpClient    *http.Client
 	logger        *slog.Logger
 }
 
 func NewWorkflowExecutor(client *adapter.HistoryClient, logger *slog.Logger) *WorkflowExecutor {
 	return &WorkflowExecutor{
 		historyClient: client,
-		logger:        logger,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		logger: logger,
 	}
 }
 
@@ -42,8 +49,18 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	}
 
 	events := resp.GetHistory().GetEvents()
+	e.logger.Info("fetched history events",
+		slog.Int("event_count", len(events)),
+	)
 	if len(events) == 0 {
 		return nil, fmt.Errorf("history is empty")
+	}
+
+	// Log first event type for debug
+	if len(events) > 0 {
+		e.logger.Info("first event",
+			slog.String("type", events[0].GetEventType().String()),
+		)
 	}
 
 	// 2. Replay History & Extract Payload
@@ -62,8 +79,20 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 			attr := event.GetExecutionStartedAttributes()
 			if attr != nil && attr.GetInput() != nil && len(attr.GetInput().GetPayloads()) > 0 {
 				inputData := attr.GetInput().GetPayloads()[0].GetData()
+				e.logger.Info("found execution started event",
+					slog.Int("input_data_len", len(inputData)),
+				)
 				if err := json.Unmarshal(inputData, &payload); err == nil {
 					payloadFound = true
+					e.logger.Info("payload parsed successfully",
+						slog.String("callback_url", payload.CallbackURL),
+						slog.Int("nodes", len(payload.Workflow.Nodes)),
+					)
+				} else {
+					e.logger.Error("failed to parse payload",
+						slog.String("error", err.Error()),
+						slog.String("raw_data", string(inputData[:min(200, len(inputData))])),
+					)
 				}
 			}
 		case commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED:
@@ -114,6 +143,14 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	if !payloadFound {
 		return nil, fmt.Errorf("workflow definition not found in execution input")
 	}
+
+	// Debug log payload info
+	e.logger.Info("parsed workflow payload",
+		slog.String("job_id", payload.JobID),
+		slog.Int("execution_id", payload.ExecutionID),
+		slog.String("callback_url", payload.CallbackURL),
+		slog.Int("node_count", len(payload.Workflow.Nodes)),
+	)
 
 	graph := payload.Workflow
 
@@ -231,11 +268,149 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 		})
 	}
 
+	// 5. Send completion callback after scheduling nodes
+	// For simple workflows, we mark as completed after nodes are scheduled
+	// The actual node execution happens asynchronously (or via external services)
+	if len(nodesToSchedule) > 0 && payload.CallbackURL != "" {
+		e.logger.Info("workflow nodes scheduled, sending completion callback",
+			slog.String("workflow_id", req.WorkflowID),
+			slog.String("run_id", req.RunID),
+			slog.Int("nodes_scheduled", len(nodesToSchedule)),
+			slog.String("callback_url", payload.CallbackURL),
+		)
+
+		go e.sendCompletionCallback(payload, nodeStates, nodeOutputs)
+
+		logs = append(logs, LogEntry{
+			Timestamp: time.Now(),
+			Level:     "INFO",
+			Message:   "Workflow execution completed",
+		})
+	}
+
 	return &ExecuteResponse{
 		Output:   json.RawMessage(`{"status": "workflow_step_completed"}`),
 		Duration: time.Millisecond * 10,
 		Logs:     logs,
 	}, nil
+}
+
+// isWorkflowComplete checks if all terminal nodes have completed
+func (e *WorkflowExecutor) isWorkflowComplete(graph WorkflowDefinition, nodeStates map[string]string) bool {
+	// Find terminal nodes (nodes with no outgoing edges)
+	hasOutgoingEdge := make(map[string]bool)
+	for _, edge := range graph.Edges {
+		hasOutgoingEdge[edge.Source] = true
+	}
+
+	for _, node := range graph.Nodes {
+		// Skip trigger nodes
+		if node.Type == "trigger_manual" || node.Type == "trigger_webhook" || node.Type == "trigger_schedule" {
+			continue
+		}
+
+		// If this is a terminal node (no outgoing edges) and not completed, workflow is not complete
+		if !hasOutgoingEdge[node.ID] {
+			if nodeStates[node.ID] != "Completed" {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// sendCompletionCallback sends the completion callback to Laravel
+func (e *WorkflowExecutor) sendCompletionCallback(payload JobPayload, nodeStates map[string]string, nodeOutputs map[string][]byte) {
+	// Build node results
+	nodes := make([]map[string]interface{}, 0)
+	for nodeID, status := range nodeStates {
+		nodeResult := map[string]interface{}{
+			"node_id":   nodeID,
+			"node_type": "unknown",
+			"node_name": nodeID,
+			"status":    mapStatus(status),
+		}
+
+		if output, ok := nodeOutputs[nodeID]; ok {
+			var outputData interface{}
+			if err := json.Unmarshal(output, &outputData); err == nil {
+				nodeResult["output"] = outputData
+			}
+		}
+
+		nodes = append(nodes, nodeResult)
+	}
+
+	callbackPayload := map[string]interface{}{
+		"job_id":         payload.JobID,
+		"callback_token": payload.CallbackToken,
+		"execution_id":   payload.ExecutionID,
+		"status":         "completed",
+		"nodes":          nodes,
+		"duration_ms":    0,
+	}
+
+	body, err := json.Marshal(callbackPayload)
+	if err != nil {
+		e.logger.Error("failed to marshal callback payload",
+			slog.String("job_id", payload.JobID),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	req, err := http.NewRequest("POST", payload.CallbackURL, bytes.NewReader(body))
+	if err != nil {
+		e.logger.Error("failed to create callback request",
+			slog.String("job_id", payload.JobID),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		e.logger.Error("callback request failed",
+			slog.String("job_id", payload.JobID),
+			slog.String("callback_url", payload.CallbackURL),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		e.logger.Error("callback returned error",
+			slog.String("job_id", payload.JobID),
+			slog.Int("status", resp.StatusCode),
+			slog.String("body", string(bodyBytes)),
+		)
+		return
+	}
+
+	e.logger.Info("callback sent successfully",
+		slog.String("job_id", payload.JobID),
+		slog.Int("execution_id", payload.ExecutionID),
+		slog.Int("status", resp.StatusCode),
+	)
+}
+
+func mapStatus(status string) string {
+	switch status {
+	case "Completed":
+		return "completed"
+	case "Failed":
+		return "failed"
+	case "Scheduled":
+		return "pending"
+	default:
+		return "running"
+	}
 }
 
 func (e *WorkflowExecutor) NodeType() string {

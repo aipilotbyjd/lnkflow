@@ -89,10 +89,22 @@ func (c *RedisConsumer) consumePartition(ctx context.Context, partition int) {
 	consumerName := fmt.Sprintf("engine-consumer-%d", partition)
 
 	// Create consumer group
-	err := c.client.XGroupCreateMkStream(ctx, streamKey, groupName, "$").Err()
-	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
-		c.logger.Error("failed to create consumer group", slog.String("error", err.Error()))
-		return
+	for {
+		err := c.client.XGroupCreateMkStream(ctx, streamKey, groupName, "$").Err()
+		if err == nil {
+			break
+		}
+		if err.Error() == "BUSYGROUP Consumer Group name already exists" {
+			break
+		}
+
+		c.logger.Error("failed to create consumer group, retrying...", slog.String("error", err.Error()))
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+			continue
+		}
 	}
 
 	for {

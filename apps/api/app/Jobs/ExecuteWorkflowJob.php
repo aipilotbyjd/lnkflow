@@ -112,8 +112,8 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
             'trigger_data' => (object) $this->triggerData,
             'credentials' => (object) $this->getDecryptedCredentials(),
             'variables' => (object) $this->getVariables(),
-            'callback_url' => config('app.url').'/api/v1/jobs/callback',
-            'progress_url' => config('app.url').'/api/v1/jobs/progress',
+            'callback_url' => $this->getInternalApiUrl().'/api/v1/jobs/callback',
+            'progress_url' => $this->getInternalApiUrl().'/api/v1/jobs/progress',
             'created_at' => now()->toIso8601String(),
         ];
     }
@@ -166,6 +166,15 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
                     : $variable->value,
             ])
             ->all();
+    }
+
+    /**
+     * Get the internal API URL for Docker container communication.
+     */
+    protected function getInternalApiUrl(): string
+    {
+        // In Docker, use internal service name; otherwise use APP_URL
+        return config('services.engine.api_url', 'http://linkflow-api:8000');
     }
 
     /**
