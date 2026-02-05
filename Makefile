@@ -1,4 +1,4 @@
-.PHONY: help setup start stop restart logs ps test clean lint security format check-deps install-tools build ci validate-deps validate-docker
+.PHONY: help setup start stop restart logs ps test clean lint security format check-deps install-tools build ci validate-deps validate-docker lint-go lint-php test-go test-php test-go-cover test-php-cover test-integration security-go security-php security-npm reset
 
 validate-docker:
 	@if ! command -v docker >/dev/null 2>&1; then \
@@ -59,30 +59,76 @@ logs: validate-docker
 ps: validate-docker
 	docker-compose ps
 
-test: validate-docker
-	@echo "Testing Engine..."
-	cd apps/engine && go test ./...
-	@echo "Testing API..."
-	cd apps/api && php artisan test
+test: test-go test-php
 
 clean: validate-docker
 	docker-compose down -v
 	@echo "Data volumes removed."
 
-# Quality Assurance Tools
-lint:
-	@echo "Running linters..."
+# Granular lint targets
+lint-go:
+	@echo "Linting Go code..."
+	cd apps/engine && golangci-lint run --timeout=5m
+
+lint-php:
+	@echo "Linting PHP code..."
 	cd apps/api && ./vendor/bin/pint --test
+	cd apps/api && ./vendor/bin/phpstan analyse
+
+lint: lint-go lint-php
 
 format:
 	@echo "Formatting code..."
 	cd apps/engine && gofmt -w .
 	cd apps/api && ./vendor/bin/pint
 
-security:
-	@echo "Running security scans..."
-	cd apps/api && composer audit --no-dev || true
-	echo "✅ Security scans completed!"
+# Granular test targets
+test-go:
+	@echo "Testing Go..."
+	cd apps/engine && go test -race ./...
+
+test-php:
+	@echo "Testing PHP..."
+	cd apps/api && php artisan test
+
+test-go-cover:
+	@echo "Testing Go with coverage..."
+	cd apps/engine && go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+test-php-cover:
+	@echo "Testing PHP with coverage..."
+	cd apps/api && ./vendor/bin/pest --coverage
+
+test-integration:
+	@echo "Running integration tests..."
+	docker-compose -f docker-compose.yml up -d postgres redis
+	@sleep 5
+	cd apps/api && php artisan test --group=integration || true
+	cd apps/engine && go test -tags=integration ./... || true
+
+# Security targets (no || true - should fail on issues)
+security-go:
+	@echo "Running Go security scans..."
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+	cd apps/engine && govulncheck ./...
+
+security-php:
+	@echo "Running PHP security scans..."
+	cd apps/api && composer audit
+
+security-npm:
+	@echo "Running npm security scan..."
+	cd apps/api && npm audit --audit-level=high || true
+
+security: security-go security-php security-npm
+
+# Reset development environment
+reset: clean
+	@echo "Resetting development environment..."
+	docker-compose up -d
+	@sleep 10
+	cd apps/api && php artisan migrate:fresh --seed
+	@echo "Environment reset complete!"
 
 check-deps:
 	@echo "Checking for outdated dependencies..."

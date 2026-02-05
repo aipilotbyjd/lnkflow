@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"
     groups:
       actions:
         patterns:
@@ -15,6 +20,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(php)"
+    labels:
+      - "dependencies"
+      - "php"
     groups:
       laravel:
         patterns:
@@ -29,6 +39,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(go)"
+    labels:
+      - "dependencies"
+      - "go"
     groups:
       all-go-deps:
         patterns:
@@ -39,6 +54,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(npm)"
+    labels:
+      - "dependencies"
+      - "npm"
     groups:
       npm-deps:
         patterns:
@@ -48,8 +68,28 @@ updates:
     directory: "/apps/api"
     schedule:
       interval: "monthly"
+    commit-message:
+      prefix: "deps(docker)"
+    labels:
+      - "dependencies"
+      - "docker"
 
   - package-ecosystem: "docker"
     directory: "/apps/engine"
     schedule:
       interval: "monthly"
+    commit-message:
+      prefix: "deps(docker)"
+    labels:
+      - "dependencies"
+      - "docker"
+
+  - package-ecosystem: "docker"
+    directory: "/infra"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "deps(docker)"
+    labels:
+      - "dependencies"
+      - "docker"

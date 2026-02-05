@@ -37,11 +37,16 @@ services:
     networks:
       - linkflow
     healthcheck:
-      test: [ "CMD", "php", "-r", "echo 'OK';" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # ============================================
   # Queue Worker
@@ -62,9 +67,17 @@ services:
     volumes:
       - .:/var/www/html
     command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --verbose
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'queue:work' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - linkflow
 
@@ -88,9 +101,15 @@ services:
       - .:/var/www/html
     command: >
       sh -c "while true; do php artisan schedule:run --verbose; sleep 60; done"
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'schedule:run' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     networks:
       - linkflow
     profiles:

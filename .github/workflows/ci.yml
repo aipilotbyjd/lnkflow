@@ -51,6 +51,33 @@ jobs:
         working-directory: apps/api
         run: ./vendor/bin/pint --test
 
+  php-stan:
+    name: PHP Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+      - name: Get Composer cache directory
+        id: composer-cache
+        working-directory: apps/api
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('apps/api/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Install dependencies
+        working-directory: apps/api
+        run: composer install --no-interaction --prefer-dist
+      - name: Run PHPStan
+        working-directory: apps/api
+        run: ./vendor/bin/phpstan analyse --error-format=github
+
   php-test:
     name: PHP Tests
     runs-on: ubuntu-latest
@@ -265,7 +292,7 @@ jobs:
         run: |
           for service in frontend history matching worker timer visibility control-plane edge; do
             echo "Building $service..."
-            go build -o bin/$service ./cmd/$service || true
+            go build -o bin/$service ./cmd/$service
           done
 
   go-security:
@@ -284,7 +311,7 @@ jobs:
         working-directory: apps/engine
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... || true
+          govulncheck ./...
 
   # ============================================
   # Security Scanning
@@ -301,8 +328,37 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          exit-code: '1'
           format: 'table'
+
+  npm-security:
+    name: NPM Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/api
+        run: npm ci
+      - name: Run npm audit
+        working-directory: apps/api
+        run: npm audit --audit-level=high
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
 
   # ============================================
   # Docker Build
@@ -342,14 +398,16 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [php-test, go-test, security-scan]
+    needs: [php-test, php-stan, go-test, security-scan, npm-security]
     if: always()
     steps:
       - name: Check all jobs passed
         run: |
           if [[ "${{ needs.php-test.result }}" != "success" ]] || \
+             [[ "${{ needs.php-stan.result }}" != "success" ]] || \
              [[ "${{ needs.go-test.result }}" != "success" ]] || \
-             [[ "${{ needs.security-scan.result }}" != "success" ]]; then
+             [[ "${{ needs.security-scan.result }}" != "success" ]] || \
+             [[ "${{ needs.npm-security.result }}" != "success" ]]; then
             echo "One or more jobs failed"
             exit 1
           fi

@@ -11,6 +11,15 @@ linters:
     - goimports
     - govet
     - ineffassign
+    - errcheck
+    - staticcheck
+    - unused
+    - revive
+    - gosec
+    - misspell
+    - gocritic
+    - unconvert
+    - dupl
 
 linters-settings:
   govet:
@@ -29,6 +38,43 @@ linters-settings:
       - os.WriteFile
       - io.Copy
       - rand.Read
+  revive:
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: package-comments
+        disabled: true
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+  gosec:
+    severity: warning
+    confidence: medium
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+  dupl:
+    threshold: 150
+  misspell:
+    locale: US
 
 issues:
   exclude-dirs:
@@ -42,18 +88,16 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
-        - unused
         - govet
+        - dupl
+        - gosec
     - path: cmd/
       linters:
         - errcheck
     - path: scripts/
       linters:
         - errcheck
-        - unused
-    - path: internal/
-      linters:
-        - unused
+        - gosec
 
   max-issues-per-linter: 0
   max-same-issues: 0
