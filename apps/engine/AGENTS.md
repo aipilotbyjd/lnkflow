@@ -1,88 +1,41 @@
-# LinkFlow Execution Engine
+# LinkFlow Engine Assistant Guide
 
-## Build Commands
+This file contains instructions for AI assistants working on the LinkFlow Execution Engine (Go).
 
-```bash
-make build              # Build all services
-make build-frontend     # Build individual service
-make build-{service}    # Services: frontend, history, matching, worker, timer, visibility, edge, control-plane
-```
+## Context
 
-## Test Commands
+The Engine is the **Execution Plane** of LinkFlow. It handles:
+- High-performance workflow execution
+- Task scheduling and dispatching
+- Worker management
+- State persistence (Event Sourcing)
 
-```bash
-make test               # Run all tests with race detector
-make test-cover         # Run tests with coverage report
-make lint               # Run golangci-lint
-```
+## Tech Stack
 
-## Development
+- **Language**: Go 1.24
+- **Communication**: gRPC + Protobuf
+- **Database**: PostgreSQL 16
+- **Queue**: Redis Streams
 
-```bash
-make dev                # Run with hot reload (air)
-make run-{service}      # Run individual service
-make tools              # Install dev tools (buf, golangci-lint, air, mockgen)
-```
+## Key Locations
 
-## Proto Generation
+| Service | Directory |
+|---------|-----------|
+| **Frontend** | `cmd/frontend/`, `internal/frontend/` |
+| **History** | `cmd/history/`, `internal/history/` |
+| **Matching** | `cmd/matching/`, `internal/matching/` |
+| **Worker** | `cmd/worker/`, `internal/worker/` |
+| **Proto Defs** | `api/proto/` |
 
-```bash
-make proto              # Generate protobuf code using buf
-make generate           # Run go generate
-```
+## Documentation
 
-## Docker
+- **Architecture**: `../../docs/02-architecture/03-execution-plane.md`
+- **Deployment**: `../../docs/05-deployment/`
 
-```bash
-make docker             # Build all Docker images
-make docker-{service}   # Build individual image
-docker-compose up -d    # Start local dev environment
-```
+## Development Rules
 
-## Database
-
-```bash
-make migrate-up         # Run migrations up
-make migrate-down       # Run migrations down
-```
-
-## Code Style Guidelines
-
-- Follow standard Go conventions and idioms
-- Use `gofmt` and `goimports` for formatting
-- Error messages should be lowercase, no trailing punctuation
-- Use context.Context as first parameter for functions that do I/O
-- Prefer returning errors over panicking
-- Use meaningful variable names; avoid single-letter names except for loop indices
-- Group imports: stdlib, external, internal
-- Write table-driven tests where appropriate
-- Use interfaces for dependencies to enable testing
-
-## Project Structure
-
-```
-go-engine/
-├── cmd/                    # Service entry points
-│   ├── control-plane/      # Cluster management service
-│   ├── frontend/           # API gateway service
-│   ├── history/            # Workflow history service
-│   ├── matching/           # Task matching service
-│   ├── worker/             # Workflow worker service
-│   ├── timer/              # Timer management service
-│   ├── visibility/         # Search and visibility service
-│   └── edge/               # Edge proxy service
-├── api/
-│   └── proto/              # Protocol buffer definitions
-│       └── linkflow/
-├── internal/               # Private application code
-│   ├── frontend/           # Frontend service implementation
-│   ├── history/            # History service implementation
-│   ├── matching/           # Matching service implementation
-│   └── worker/             # Worker service implementation
-├── deploy/
-│   ├── docker/             # Docker configurations
-│   ├── helm/               # Helm charts
-│   └── k8s/                # Kubernetes manifests
-├── scripts/                # Utility scripts
-└── configs/                # Configuration files
-```
+1.  **Context**: Always pass `context.Context` as the first argument.
+2.  **Errors**: Return errors, do not panic. Use `fmt.Errorf` with wrapping (`%w`).
+3.  **Concurrency**: Use channels and wait groups carefully. Watch out for goroutine leaks.
+4.  **Testing**: Write table-driven tests. Use `t.Parallel()` where appropriate.
+5.  **Linting**: Run `golangci-lint run` before committing.
