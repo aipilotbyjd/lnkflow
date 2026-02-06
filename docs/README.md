@@ -15,6 +15,8 @@ Welcome to the LinkFlow documentation. This guide will help you understand, depl
 | [Development](./07-development/) | Contributing, testing, and code style |
 | [ADRs](./adr/) | Architecture Decision Records |
 
+[**🗺️ View Documentation Map**](./STRUCTURE.md) - Visual guide to the docs structure.
+
 ## What is LinkFlow?
 
 LinkFlow is a high-performance workflow automation platform that enables you to:
