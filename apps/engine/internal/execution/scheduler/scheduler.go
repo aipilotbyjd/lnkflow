@@ -354,6 +354,21 @@ func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult)
 		slog.String("node_id", result.NodeID),
 	)
 
+	// Check if the completed node is a condition node (for logging)
+	completedNode := s.dag.Nodes[result.NodeID]
+	if completedNode.Type == "condition" {
+		// Parse and log the condition output for debugging
+		var condResult struct {
+			Output string `json:"output"`
+		}
+		if err := json.Unmarshal(result.Output, &condResult); err == nil {
+			s.logger.Debug("condition node output",
+				slog.String("node_id", result.NodeID),
+				slog.String("selected_branch", condResult.Output),
+			)
+		}
+	}
+
 	// Find and schedule next nodes
 	nextNodes := s.dag.GetNextNodes(s.state.CompletedNodes)
 
@@ -363,25 +378,49 @@ func (s *Scheduler) handleNodeCompleted(ctx context.Context, result *NodeResult)
 		if s.state.ScheduledNodes[nextID] {
 			continue
 		}
-		s.state.ScheduledNodes[nextID] = true
-		nodesToSchedule = append(nodesToSchedule, nextID)
+
+		// Check if this node should be skipped due to conditional branching
+		shouldSchedule := true
+
+		// Check all upstream nodes to see if any are condition nodes
+		for _, upstreamID := range s.dag.ReverseEdges[nextID] {
+			upstreamNode := s.dag.Nodes[upstreamID]
+			if upstreamNode.Type == "condition" {
+				// Get the edge info to check sourceHandle
+				edgeInfo := s.dag.GetEdgeInfo(upstreamID, nextID)
+				if edgeInfo != nil && edgeInfo.SourceHandle != "" {
+					// This is a conditional edge - check if it matches the condition output
+					upstreamOutput := s.state.NodeOutputs[upstreamID]
+					var upstreamCondResult struct {
+						Output string `json:"output"`
+					}
+					if err := json.Unmarshal(upstreamOutput, &upstreamCondResult); err == nil {
+						// Only schedule if the edge sourceHandle matches the condition output
+						if edgeInfo.SourceHandle != upstreamCondResult.Output {
+							shouldSchedule = false
+							s.logger.Debug("skipping node due to unmatched condition branch",
+								slog.String("node_id", nextID),
+								slog.String("edge_handle", edgeInfo.SourceHandle),
+								slog.String("condition_output", upstreamCondResult.Output),
+							)
+							// Mark as skipped
+							s.state.SkippedNodes[nextID] = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if shouldSchedule {
+			s.state.ScheduledNodes[nextID] = true
+			nodesToSchedule = append(nodesToSchedule, nextID)
+		}
 	}
 
 	s.state.mu.Unlock()
 
 	for _, nextID := range nodesToSchedule {
-		// Check conditions if any
-		node := s.dag.Nodes[nextID]
-		if len(node.Conditions) > 0 {
-			// Condition evaluation: for now, we proceed with all nodes
-			// Full condition evaluation would require a CEL or expression engine
-			// This is a production-safe placeholder that logs when conditions exist
-			s.logger.Debug("node has conditions, proceeding with execution",
-				slog.String("node_id", nextID),
-				slog.Int("condition_count", len(node.Conditions)),
-			)
-		}
-
 		// Merge inputs from all upstream nodes
 		input := s.mergeInputs(nextID)
 		s.scheduleNode(ctx, nextID, input)

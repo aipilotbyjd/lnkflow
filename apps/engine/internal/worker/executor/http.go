@@ -151,10 +151,24 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 		headers[key] = resp.Header.Get(key)
 	}
 
+	// Handle body - ensure it's valid JSON for marshaling
+	var jsonBody json.RawMessage
+	if len(body) == 0 {
+		// Empty body - use empty object
+		jsonBody = json.RawMessage(`{}`)
+	} else if json.Valid(body) {
+		// Body is valid JSON - use as-is
+		jsonBody = body
+	} else {
+		// Body is not valid JSON (e.g., HTML, plain text) - wrap in a JSON object
+		wrapped := map[string]string{"body": string(body)}
+		jsonBody, _ = json.Marshal(wrapped)
+	}
+
 	httpResp := HTTPResponse{
 		StatusCode: resp.StatusCode,
 		Headers:    headers,
-		Body:       body,
+		Body:       jsonBody,
 	}
 
 	output, err := json.Marshal(httpResp)

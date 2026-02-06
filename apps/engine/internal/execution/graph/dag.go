@@ -18,12 +18,24 @@ type DAG struct {
 	Edges        map[string][]string // source -> targets
 	ReverseEdges map[string][]string // target -> sources
 
+	// EdgeMap stores edge metadata (source -> target -> EdgeInfo)
+	// This enables conditional branching by preserving sourceHandle
+	EdgeMap map[string]map[string]*EdgeInfo
+
 	EntryNodes []string
 	ExitNodes  []string
 
 	// Topological ordering
 	Order  []string
 	Levels map[string]int
+}
+
+// EdgeInfo stores metadata about an edge.
+type EdgeInfo struct {
+	SourceHandle string `json:"sourceHandle"`
+	TargetHandle string `json:"targetHandle"`
+	Label        string `json:"label"`
+	Condition    string `json:"condition"`
 }
 
 // Node represents a node in the DAG.
@@ -88,6 +100,7 @@ func BuildDAG(workflow *WorkflowDefinition) (*DAG, error) {
 		Nodes:        make(map[string]*Node),
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
+		EdgeMap:      make(map[string]map[string]*EdgeInfo),
 		Levels:       make(map[string]int),
 	}
 
@@ -113,6 +126,17 @@ func BuildDAG(workflow *WorkflowDefinition) (*DAG, error) {
 
 		dag.Edges[e.Source] = append(dag.Edges[e.Source], e.Target)
 		dag.ReverseEdges[e.Target] = append(dag.ReverseEdges[e.Target], e.Source)
+
+		// Store edge metadata for conditional branching
+		if dag.EdgeMap[e.Source] == nil {
+			dag.EdgeMap[e.Source] = make(map[string]*EdgeInfo)
+		}
+		dag.EdgeMap[e.Source][e.Target] = &EdgeInfo{
+			SourceHandle: e.SourceHandle,
+			TargetHandle: e.TargetHandle,
+			Label:        e.Label,
+			Condition:    e.Condition,
+		}
 
 		// Handle conditions
 		if e.Condition != "" {
@@ -262,6 +286,14 @@ func (d *DAG) GetDependents(nodeID string) []string {
 	return d.Edges[nodeID]
 }
 
+// GetEdgeInfo returns the edge metadata between two nodes.
+func (d *DAG) GetEdgeInfo(source, target string) *EdgeInfo {
+	if targetMap, ok := d.EdgeMap[source]; ok {
+		return targetMap[target]
+	}
+	return nil
+}
+
 // GetPath returns the path from entry to a specific node.
 func (d *DAG) GetPath(nodeID string) []string {
 	path := []string{nodeID}
@@ -334,6 +366,7 @@ func (d *DAG) Clone() *DAG {
 		Nodes:        make(map[string]*Node, len(d.Nodes)),
 		Edges:        make(map[string][]string, len(d.Edges)),
 		ReverseEdges: make(map[string][]string, len(d.ReverseEdges)),
+		EdgeMap:      make(map[string]map[string]*EdgeInfo, len(d.EdgeMap)),
 		Levels:       make(map[string]int, len(d.Levels)),
 		EntryNodes:   append([]string{}, d.EntryNodes...),
 		ExitNodes:    append([]string{}, d.ExitNodes...),
@@ -356,6 +389,15 @@ func (d *DAG) Clone() *DAG {
 
 	for id, level := range d.Levels {
 		clone.Levels[id] = level
+	}
+
+	// Clone EdgeMap
+	for source, targetMap := range d.EdgeMap {
+		clone.EdgeMap[source] = make(map[string]*EdgeInfo, len(targetMap))
+		for target, info := range targetMap {
+			infoCopy := *info
+			clone.EdgeMap[source][target] = &infoCopy
+		}
 	}
 
 	return clone

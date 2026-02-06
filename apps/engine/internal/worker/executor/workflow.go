@@ -289,8 +289,16 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 			if e.executorRegistry != nil {
 				executor, exists := e.executorRegistry.Get(node.Type)
 				if exists {
-					// Build config from node data
-					configBytes, _ := json.Marshal(node.Data)
+					// Build config from node data — extract the nested "config" object
+					// Node data structure: {"label":"...","config":{"url":"...","method":"GET",...}}
+					// Executors expect just the inner config object
+					var nodeData struct {
+						Config json.RawMessage `json:"config"`
+					}
+					configBytes := node.Data
+					if err := json.Unmarshal(node.Data, &nodeData); err == nil && len(nodeData.Config) > 0 {
+						configBytes = nodeData.Config
+					}
 
 					nodeReq := &ExecuteRequest{
 						NodeType:   node.Type,
