@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\LogLevel;
 use App\Http\Controllers\Controller;
 use App\Models\Execution;
+use App\Models\ExecutionLog;
 use App\Models\ExecutionNode;
 use App\Models\JobStatus;
 use Illuminate\Http\JsonResponse;
@@ -54,10 +56,10 @@ class JobCallbackController extends Controller
             return response()->json(['error' => 'Execution not found'], 404);
         }
 
-        // Update execution nodes
+        // Update execution nodes and create execution logs
         if (! empty($validated['nodes'])) {
             foreach ($validated['nodes'] as $nodeData) {
-                ExecutionNode::updateOrCreate(
+                $executionNode = ExecutionNode::updateOrCreate(
                     [
                         'execution_id' => $execution->id,
                         'node_id' => $nodeData['node_id'],
@@ -73,15 +75,53 @@ class JobCallbackController extends Controller
                         'sequence' => $nodeData['sequence'] ?? 0,
                     ]
                 );
+
+                $nodeName = $nodeData['node_name'] ?? $nodeData['node_id'];
+                $nodeStatus = $nodeData['status'];
+
+                if ($nodeStatus === 'failed') {
+                    $errorMessage = $nodeData['error']['message'] ?? 'Unknown error';
+                    ExecutionLog::create([
+                        'execution_id' => $execution->id,
+                        'execution_node_id' => $executionNode->id,
+                        'level' => LogLevel::Error,
+                        'message' => "Node '{$nodeName}' failed: {$errorMessage}",
+                        'context' => $nodeData['error'] ?? null,
+                        'logged_at' => $nodeData['completed_at'] ?? now(),
+                    ]);
+                } else {
+                    ExecutionLog::create([
+                        'execution_id' => $execution->id,
+                        'execution_node_id' => $executionNode->id,
+                        'level' => LogLevel::Info,
+                        'message' => "Node '{$nodeName}' ({$nodeData['node_type']}) {$nodeStatus}",
+                        'context' => null,
+                        'logged_at' => $nodeData['completed_at'] ?? $nodeData['started_at'] ?? now(),
+                    ]);
+                }
             }
         }
 
+        $startedAt = $execution->started_at ?? (! empty($validated['nodes']) ? $validated['nodes'][0]['started_at'] ?? now() : now());
+
         // Update execution status
-        $execution->update([
-            'status' => $validated['status'],
-            'error' => $validated['error'] ?? null,
-            'completed_at' => now(),
-        ]);
+        if ($validated['status'] === 'completed') {
+            $execution->update([
+                'status' => $validated['status'],
+                'started_at' => $startedAt,
+                'finished_at' => now(),
+                'duration_ms' => $validated['duration_ms'] ?? null,
+                'error' => $validated['error'] ?? null,
+            ]);
+        } else {
+            $execution->update([
+                'status' => $validated['status'],
+                'started_at' => $startedAt,
+                'finished_at' => now(),
+                'duration_ms' => $validated['duration_ms'] ?? null,
+                'error' => $validated['error'] ?? null,
+            ]);
+        }
 
         // Update job status
         if ($validated['status'] === 'completed') {

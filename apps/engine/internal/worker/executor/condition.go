@@ -297,7 +297,7 @@ func getFieldValue(data map[string]interface{}, field string) interface{} {
 }
 
 // evaluateCondition evaluates a single condition.
-func evaluateCondition(fieldValue interface{}, operator string, compareValue interface{}) (bool, string) {
+func evaluateCondition(fieldValue interface{}, operator string, compareValue interface{}) (result bool, message string) {
 	switch operator {
 	case "eq", "==", "equals":
 		result := compareValues(fieldValue, compareValue)
@@ -494,17 +494,20 @@ func evaluateSimpleExpression(expr string, data map[string]interface{}) (bool, e
 				// Try to parse as number
 				if f, err := strconv.ParseFloat(valueStr, 64); err == nil {
 					compareValue = f
-				} else if valueStr == "true" {
-					compareValue = true
-				} else if valueStr == "false" {
-					compareValue = false
-				} else if valueStr == "null" || valueStr == "nil" {
-					compareValue = nil
 				} else {
-					// Remove quotes if present
-					if len(valueStr) >= 2 && ((valueStr[0] == '"' && valueStr[len(valueStr)-1] == '"') ||
-						(valueStr[0] == '\'' && valueStr[len(valueStr)-1] == '\'')) {
-						compareValue = valueStr[1 : len(valueStr)-1]
+					switch {
+					case valueStr == "true":
+						compareValue = true
+					case valueStr == "false":
+						compareValue = false
+					case valueStr == "null" || valueStr == "nil":
+						compareValue = nil
+					default:
+						// Remove quotes if present
+						if len(valueStr) >= 2 && ((valueStr[0] == '"' && valueStr[len(valueStr)-1] == '"') ||
+							(valueStr[0] == '\'' && valueStr[len(valueStr)-1] == '\'')) {
+							compareValue = valueStr[1 : len(valueStr)-1]
+						}
 					}
 				}
 

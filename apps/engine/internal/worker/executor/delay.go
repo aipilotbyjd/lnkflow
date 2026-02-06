@@ -68,7 +68,8 @@ func (e *DelayExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 	// Calculate the delay duration
 	var delayDuration time.Duration
 
-	if config.Until != "" {
+	switch {
+	case config.Until != "":
 		// Wait until a specific time
 		untilTime, err := time.Parse(time.RFC3339, config.Until)
 		if err != nil {
@@ -85,7 +86,7 @@ func (e *DelayExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 		if delayDuration < 0 {
 			delayDuration = 0 // Already past the time
 		}
-	} else if config.Duration != "" {
+	case config.Duration != "":
 		// Parse duration string
 		var err error
 		delayDuration, err = time.ParseDuration(config.Duration)
@@ -99,7 +100,7 @@ func (e *DelayExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 				Duration: time.Since(start),
 			}, nil
 		}
-	} else {
+	default:
 		// Calculate from individual components
 		delayDuration = time.Duration(config.Milliseconds)*time.Millisecond +
 			time.Duration(config.Seconds)*time.Second +

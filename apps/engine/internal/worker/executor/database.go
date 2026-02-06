@@ -220,7 +220,7 @@ func (e *DatabaseExecutor) executeQuery(ctx context.Context, pool *pgxpool.Pool,
 	fieldDescs := rows.FieldDescriptions()
 	columns := make([]string, len(fieldDescs))
 	for i, fd := range fieldDescs {
-		columns[i] = string(fd.Name)
+		columns[i] = fd.Name
 	}
 
 	// Fetch all rows
@@ -288,7 +288,7 @@ func (e *DatabaseExecutor) executeTransaction(ctx context.Context, pool *pgxpool
 	if err != nil {
 		return response, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var totalRowsAffected int64
 
@@ -345,8 +345,8 @@ func truncateString(s string, maxLen int) string {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && findIndex(s, substr) >= 0))
+	return len(s) >= len(substr) && (s == substr || substr == "" ||
+		(s != "" && substr != "" && findIndex(s, substr) >= 0))
 }
 
 func findIndex(s, substr string) int {

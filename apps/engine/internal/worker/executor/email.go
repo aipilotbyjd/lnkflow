@@ -300,7 +300,7 @@ func buildEmailMessage(from string, to, cc []string, subject, body, bodyHTML, re
 	if bodyHTML != "" {
 		// Multipart message with both plain text and HTML
 		boundary := fmt.Sprintf("boundary-%d", time.Now().UnixNano())
-		buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
+		buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q\r\n", boundary))
 		buf.WriteString("\r\n")
 
 		if body != "" {
@@ -331,6 +331,7 @@ func sendMailWithTLS(addr string, auth smtp.Auth, from string, to []string, msg 
 	host := strings.Split(addr, ":")[0]
 	tlsConfig := &tls.Config{
 		ServerName: host,
+		MinVersion: tls.VersionTLS12,
 	}
 
 	conn, err := tls.Dial("tcp", addr, tlsConfig)
