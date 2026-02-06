@@ -138,8 +138,8 @@ func main() {
 		mux := http.NewServeMux()
 
 		// Register Engine API routes
-		fromtendHandler := handler.NewHTTPHandler(svc, logger)
-		fromtendHandler.RegisterRoutes(mux)
+		frontendHandler := handler.NewHTTPHandler(svc, logger)
+		frontendHandler.RegisterRoutes(mux)
 
 		httpServer := &http.Server{
 			Addr:              fmt.Sprintf(":%d", *httpPort),

@@ -1,59 +1,152 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# LinkFlow API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+The **Control Plane** for LinkFlow - a Laravel-based REST API that handles user authentication, workspace management, workflow configuration, and job orchestration.
 
-## About Laravel
+## Tech Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Framework | Laravel | 12.x |
+| Language | PHP | 8.4+ |
+| Authentication | Laravel Passport | 13.x |
+| Permissions | spatie/laravel-permission | 6.x |
+| Testing | Pest PHP | 4.x |
+| Static Analysis | PHPStan/Larastan | 3.x |
+| Formatter | Laravel Pint | 1.x |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Getting Started
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Prerequisites
 
-## Learning Laravel
+- PHP 8.4+
+- Composer 2.x
+- PostgreSQL 16+ (or use Docker)
+- Redis 7+
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### Installation
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+# Install dependencies
+composer install
 
-## Laravel Sponsors
+# Copy environment file
+cp .env.example .env
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# Generate application key
+php artisan key:generate
 
-### Premium Partners
+# Run migrations
+php artisan migrate
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+# Seed the database (optional)
+php artisan db:seed
+```
 
-## Contributing
+### Development Server
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+# Using Laravel Herd (recommended)
+# The app is automatically available at https://lnkflow.test
 
-## Code of Conduct
+# Using built-in server
+php artisan serve
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Using Laravel Sail (Docker)
+./vendor/bin/sail up
+```
 
-## Security Vulnerabilities
+## API Structure
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+The API follows RESTful conventions with versioned endpoints:
+
+```
+/api/v1/
+├── health                    # Health check endpoint
+├── auth/                     # Authentication
+│   ├── register              # POST - User registration
+│   ├── login                 # POST - User login
+│   ├── logout                # POST - User logout
+│   ├── forgot-password       # POST - Password reset request
+│   └── reset-password        # POST - Password reset
+├── user/                     # User profile management
+├── workspaces/               # Workspace CRUD
+│   └── {workspace}/
+│       ├── members/          # Member management
+│       ├── invitations/      # Team invitations
+│       ├── subscription/     # Billing & subscription
+│       ├── workflows/        # Workflow CRUD + execution
+│       ├── credentials/      # Credential storage
+│       ├── executions/       # Execution history
+│       ├── webhooks/         # Webhook management
+│       ├── variables/        # Environment variables
+│       ├── tags/             # Resource tagging
+│       └── activity/         # Activity logs
+├── nodes/                    # Available node types
+├── credential-types/         # Supported credentials
+└── plans/                    # Subscription plans
+```
+
+## Commands
+
+```bash
+# Run tests
+php artisan test
+
+# Run tests with coverage
+php artisan test --coverage
+
+# Format code
+vendor/bin/pint
+
+# Static analysis
+vendor/bin/phpstan analyse
+
+# List all routes
+php artisan route:list --path=api
+
+# Clear caches
+php artisan optimize:clear
+```
+
+## Project Structure
+
+```
+apps/api/
+├── app/
+│   ├── Enums/           # Enum definitions
+│   ├── Http/
+│   │   ├── Controllers/ # API controllers (versioned)
+│   │   ├── Middleware/  # Custom middleware
+│   │   ├── Requests/    # Form request validation
+│   │   └── Resources/   # API resource transformers
+│   ├── Jobs/            # Queue jobs
+│   ├── Models/          # Eloquent models
+│   ├── Notifications/   # Email notifications
+│   ├── Providers/       # Service providers
+│   └── Services/        # Business logic
+├── config/              # Configuration files
+├── database/
+│   ├── factories/       # Model factories
+│   ├── migrations/      # Database migrations
+│   └── seeders/         # Database seeders
+├── routes/
+│   ├── api.php          # API routes
+│   └── admin.php        # Admin routes
+└── tests/
+    ├── Feature/         # Feature tests
+    └── Unit/            # Unit tests
+```
+
+## Communication with Engine
+
+The API communicates with the Go Engine via:
+
+1. **HTTP/REST**: For dispatching workflow executions
+2. **Redis Streams**: For real-time job status updates
+3. **Callbacks**: Engine sends execution results back via signed HTTP callbacks
+
+The `LINKFLOW_SECRET` environment variable must match between the API and Engine for secure callback authentication.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Proprietary - All rights reserved.
