@@ -19,6 +19,7 @@ import (
 	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
 	"github.com/linkflow/engine/internal/matching"
 	"github.com/linkflow/engine/internal/version"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -26,6 +27,7 @@ func main() {
 		port           = flag.Int("port", 7235, "gRPC server port")
 		httpPort       = flag.Int("http-port", 8080, "HTTP server port")
 		partitionCount = flag.Int("partition-count", 4, "Number of partitions")
+		redisAddr      = flag.String("redis-addr", getEnv("REDIS_ADDR", "localhost:6379"), "Redis address")
 	)
 	flag.Parse()
 
@@ -38,10 +40,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: *redisAddr,
+	})
+
 	svc := matching.NewService(matching.Config{
 		NumPartitions: int32(*partitionCount),
 		Replicas:      100,
 		Logger:        logger,
+		RedisClient:   redisClient,
 	})
 
 	server := grpc.NewServer()
@@ -131,4 +138,11 @@ func printBanner(service string, logger *slog.Logger) {
 		slog.String("commit", version.GitCommit),
 		slog.String("build_time", version.BuildTime),
 	)
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }

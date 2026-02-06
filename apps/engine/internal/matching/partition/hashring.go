@@ -22,7 +22,17 @@ func NewRing(replicas int) *Ring {
 
 func (r *Ring) Add(partitionID int32) {
 	for i := 0; i < r.replicas; i++ {
-		h := r.hash(strconv.Itoa(int(partitionID)) + "-" + strconv.Itoa(i))
+		key := strconv.Itoa(int(partitionID)) + "-" + strconv.Itoa(i)
+		h := r.hash(key)
+
+		// Handle collisions: simple linear probing
+		for {
+			if _, exists := r.nodeMap[h]; !exists {
+				break
+			}
+			h++
+		}
+
 		r.nodes = append(r.nodes, h)
 		r.nodeMap[h] = partitionID
 	}

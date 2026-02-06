@@ -54,3 +54,19 @@ func (c *HistoryClient) GetHistory(ctx context.Context, namespaceID, workflowID,
 	}
 	return c.client.GetHistory(ctx, req)
 }
+
+func (c *HistoryClient) RespondWorkflowTaskCompleted(ctx context.Context, req *historyv1.RespondWorkflowTaskCompletedRequest) (*historyv1.RespondWorkflowTaskCompletedResponse, error) {
+	return c.client.RespondWorkflowTaskCompleted(ctx, req)
+}
+
+func (c *HistoryClient) RespondWorkflowTaskFailed(ctx context.Context, req *historyv1.RespondWorkflowTaskFailedRequest) (*historyv1.RespondWorkflowTaskFailedResponse, error) {
+	return c.client.RespondWorkflowTaskFailed(ctx, req)
+}
+
+func (c *HistoryClient) RespondActivityTaskCompleted(ctx context.Context, req *historyv1.RespondActivityTaskCompletedRequest) (*historyv1.RespondActivityTaskCompletedResponse, error) {
+	return c.client.RespondActivityTaskCompleted(ctx, req)
+}
+
+func (c *HistoryClient) RespondActivityTaskFailed(ctx context.Context, req *historyv1.RespondActivityTaskFailedRequest) (*historyv1.RespondActivityTaskFailedResponse, error) {
+	return c.client.RespondActivityTaskFailed(ctx, req)
+}

@@ -161,7 +161,7 @@ func TestTaskQueue_CompleteTask(t *testing.T) {
 
 func TestTaskQueue_RateLimiting(t *testing.T) {
 	// Create a queue with very low rate limit
-	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1, 1) // 1 req/sec, burst 1
+	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1, 1, nil) // 1 req/sec, burst 1
 
 	// Add some tasks
 	for i := 0; i < 5; i++ {

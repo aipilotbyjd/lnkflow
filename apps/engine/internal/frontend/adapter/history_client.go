@@ -168,6 +168,10 @@ func (c *HistoryClient) GetMutableState(ctx context.Context, key frontend.Execut
 	}, nil
 }
 
+func (c *HistoryClient) ListWorkflowExecutions(ctx context.Context, req *historyv1.ListWorkflowExecutionsRequest) (*historyv1.ListWorkflowExecutionsResponse, error) {
+	return c.client.ListWorkflowExecutions(ctx, req)
+}
+
 func mapEventType(eventType string) commonv1.EventType {
 	switch eventType {
 	case "WorkflowExecutionStarted":

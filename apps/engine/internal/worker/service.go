@@ -44,8 +44,7 @@ type Config struct {
 	HistoryClient *adapter.HistoryClient
 }
 
-// NewService creates a new worker service. Returns an error if configuration is invalid
-// or if the connection to the matching service fails.
+// NewService creates a new worker service.
 func NewService(cfg Config) (*Service, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
@@ -112,7 +111,7 @@ func (s *Service) Start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return ErrServiceAlreadyStart
+		return fmt.Errorf("service already running")
 	}
 	s.running = true
 	s.stopCh = make(chan struct{})
@@ -132,21 +131,17 @@ func (s *Service) Stop() error {
 	s.mu.Lock()
 	if !s.running {
 		s.mu.Unlock()
-		return ErrServiceNotRunning
+		return fmt.Errorf("service not running")
 	}
 	s.running = false
 	close(s.stopCh)
 	s.mu.Unlock()
 
-	// Stop all pollers
 	for _, p := range s.taskPollers {
 		p.Stop()
 	}
-
-	// Wait for in-flight tasks to complete
 	s.wg.Wait()
 
-	// Close the gRPC connection to matching service
 	if s.matchingConn != nil {
 		if err := s.matchingConn.Close(); err != nil {
 			s.logger.Warn("failed to close matching connection", slog.String("error", err.Error()))
@@ -167,61 +162,86 @@ func (s *Service) handleTask(ctx context.Context, task *poller.Task) (*poller.Ta
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	workerTask := &Task{
-		TaskID:           task.TaskID,
-		WorkflowID:       task.WorkflowID,
-		RunID:            task.RunID,
-		Namespace:        task.Namespace,
-		NodeType:         task.NodeType,
-		NodeID:           task.NodeID,
-		Config:           task.Config,
-		Input:            task.Input,
-		Attempt:          task.Attempt,
-		TimeoutSec:       task.TimeoutSec,
-		ScheduledEventID: task.ScheduledEventID,
+	// Dispatch based on task type (Workflow vs Activity)
+	// Currently the poller returns a generic task. We should infer type from task.NodeType or similar.
+	// The poller.Task struct has NodeType.
+	if task.NodeType == "workflow" {
+		return s.processWorkflowTask(ctx, task)
+	}
+	return s.processActivityTask(ctx, task)
+}
+
+func (s *Service) processWorkflowTask(ctx context.Context, task *poller.Task) (*poller.TaskResult, error) {
+	s.logger.Info("processing workflow task", slog.String("workflow_id", task.WorkflowID))
+
+	// Get Workflow Executor
+	exec, ok := s.executors["workflow"]
+	if !ok {
+		return nil, fmt.Errorf("workflow executor not found")
 	}
 
-	result, err := s.ProcessTask(ctx, workerTask)
+	req := &executor.ExecuteRequest{
+		NodeType:   "workflow",
+		WorkflowID: task.WorkflowID,
+		RunID:      task.RunID,
+		Namespace:  task.Namespace,
+		Input:      task.Input,
+		Attempt:    task.Attempt,
+		Timeout:    30 * time.Second,
+	}
+
+	resp, err := exec.Execute(ctx, req)
 	if err != nil {
+		s.logger.Error("workflow execution failed", slog.String("error", err.Error()))
+		// Respond failed
+		s.historyClient.RespondWorkflowTaskFailed(ctx, &historyv1.RespondWorkflowTaskFailedRequest{
+			Namespace: task.Namespace,
+			WorkflowExecution: &commonv1.WorkflowExecution{
+				WorkflowId: task.WorkflowID,
+				RunId:      task.RunID,
+			},
+			TaskToken: task.ScheduledEventID,
+			Failure: &commonv1.Failure{
+				Message: err.Error(),
+			},
+		})
 		return nil, err
 	}
 
-	return &poller.TaskResult{
-		TaskID:    result.TaskID,
-		Output:    result.Output,
-		Error:     result.Error,
-		ErrorType: result.ErrorType,
-		Logs:      result.Logs,
-	}, nil
+	// ExecuteResponse.Output now contains the Commands (marshaled)
+	var commands []*historyv1.Command
+	if err := json.Unmarshal(resp.Output, &commands); err != nil {
+		s.logger.Error("failed to unmarshal workflow commands", slog.String("error", err.Error()))
+		return nil, err
+	}
+
+	_, err = s.historyClient.RespondWorkflowTaskCompleted(ctx, &historyv1.RespondWorkflowTaskCompletedRequest{
+		Namespace: task.Namespace,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: task.WorkflowID,
+			RunId:      task.RunID,
+		},
+		TaskToken: task.ScheduledEventID,
+		Commands:  commands,
+	})
+	if err != nil {
+		s.logger.Error("failed to respond workflow task completed", slog.String("error", err.Error()))
+		return nil, err
+	}
+
+	return &poller.TaskResult{TaskID: task.TaskID}, nil
 }
 
-func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, error) {
-	s.logger.Info("processing task",
-		slog.String("task_id", task.TaskID),
-		slog.String("node_type", task.NodeType),
-		slog.String("node_id", task.NodeID),
-		slog.Int("attempt", int(task.Attempt)),
-	)
+func (s *Service) processActivityTask(ctx context.Context, task *poller.Task) (*poller.TaskResult, error) {
+	s.logger.Info("processing activity task", slog.String("node_type", task.NodeType), slog.String("node_id", task.NodeID))
 
 	s.mu.RLock()
 	exec, ok := s.executors[task.NodeType]
 	s.mu.RUnlock()
 
 	if !ok {
-		return &TaskResult{
-			TaskID:    task.TaskID,
-			Error:     fmt.Sprintf("no executor registered for node type: %s", task.NodeType),
-			ErrorType: ErrorTypeNonRetryable,
-		}, ErrExecutorNotFound
+		return nil, fmt.Errorf("executor not found for type: %s", task.NodeType)
 	}
-
-	timeout := time.Duration(task.TimeoutSec) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
-
-	execCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	req := &executor.ExecuteRequest{
 		NodeType:   task.NodeType,
@@ -232,166 +252,58 @@ func (s *Service) ProcessTask(ctx context.Context, task *Task) (*TaskResult, err
 		Config:     task.Config,
 		Input:      task.Input,
 		Attempt:    task.Attempt,
-		Timeout:    timeout,
+		Timeout:    time.Duration(task.TimeoutSec) * time.Second,
 	}
 
-	resp, err := exec.Execute(execCtx, req)
+	resp, err := exec.Execute(ctx, req)
+
+	// Handle execution result
 	if err != nil {
-		s.logger.Error("executor error",
-			slog.String("task_id", task.TaskID),
-			slog.String("error", err.Error()),
-		)
-
-		// Record Failure in History (if not workflow task)
-		if task.NodeType != "workflow" && s.historyClient != nil {
-			// We need next eventID? History service calculates it.
-			// But wait, RecordEvent API takes an event with EventID?
-			// history/grpc_server says RecordEvent returns the new EventID.
-			// The passed event must have *some* ID? Or can be 0?
-			// history/engine.go IncrementNextEventID uses state.
-			// history/grpc_server.go protoEventToInternal maps it.
-			// Let's check if we can pass 0.
-
-			event := &historyv1.HistoryEvent{
-				EventType: commonv1.EventType_EVENT_TYPE_NODE_FAILED,
-				Attributes: &historyv1.HistoryEvent_NodeFailedAttributes{
-					NodeFailedAttributes: &historyv1.NodeFailedEventAttributes{
-						ScheduledEventId: task.ScheduledEventID,
-						// StartedEventId: ... we don't track started event ID yet?
-						// For now assume ScheduledEventId + 1? No.
-						Failure: &commonv1.Failure{
-							Message: err.Error(),
-						},
-					},
-				},
-			}
-			// Determine namespace from task?
-			namespace := task.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-
-			histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
-			if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
-				s.logger.Error("failed to record node failure event", slog.String("error", err.Error()))
-			}
-			histCancel()
-		}
-
-		return &TaskResult{
-			TaskID:    task.TaskID,
-			Error:     err.Error(),
-			ErrorType: ErrorTypeRetryable,
-		}, err
-	}
-
-	result := &TaskResult{
-		TaskID: task.TaskID,
-		Output: resp.Output,
+		// System error (crash, timeout)
+		s.historyClient.RespondActivityTaskFailed(ctx, &historyv1.RespondActivityTaskFailedRequest{
+			Namespace: task.Namespace,
+			WorkflowExecution: &commonv1.WorkflowExecution{
+				WorkflowId: task.WorkflowID,
+				RunId:      task.RunID,
+			},
+			ScheduledEventId: task.ScheduledEventID,
+			Failure: &commonv1.Failure{
+				Message:     err.Error(),
+				FailureType: commonv1.FailureType_FAILURE_TYPE_ACTIVITY,
+			},
+		})
+		return &poller.TaskResult{Error: err.Error()}, err
 	}
 
 	if resp.Error != nil {
-		result.Error = resp.Error.Message
-		result.ErrorType = resp.Error.Type
-
-		if s.retryPolicy.ShouldRetry(task.Attempt, resp.Error.Type, resp.Error.Message) {
-			delay := s.retryPolicy.NextRetryDelay(task.Attempt)
-			s.logger.Info("task will be retried",
-				slog.String("task_id", task.TaskID),
-				slog.Int("attempt", int(task.Attempt)),
-				slog.Duration("retry_delay", delay),
-			)
-		} else {
-			// Record Logic Failure (Non-retryable or exhausted)
-			if task.NodeType != "workflow" && s.historyClient != nil {
-				// Marshal logs
-				var logsData []byte
-				if len(resp.Logs) > 0 {
-					logsData, _ = json.Marshal(resp.Logs)
-				}
-
-				event := &historyv1.HistoryEvent{
-					EventType: commonv1.EventType_EVENT_TYPE_NODE_FAILED,
-					Attributes: &historyv1.HistoryEvent_NodeFailedAttributes{
-						NodeFailedAttributes: &historyv1.NodeFailedEventAttributes{
-							ScheduledEventId: task.ScheduledEventID,
-							Failure: &commonv1.Failure{
-								Message: result.Error,
-							},
-							Logs: &commonv1.Payloads{
-								Payloads: []*commonv1.Payload{{Data: logsData}},
-							},
-						},
-					},
-				}
-				namespace := task.Namespace
-				if namespace == "" {
-					namespace = "default"
-				}
-				histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
-				if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
-					s.logger.Error("failed to record non-retryable failure event", slog.String("error", err.Error()))
-				}
-				histCancel()
-			}
-		}
-	} else {
-		// Record Success
-		if task.NodeType != "workflow" && s.historyClient != nil {
-			// Marshal logs
-			var logsData []byte
-			if len(resp.Logs) > 0 {
-				logsData, _ = json.Marshal(resp.Logs)
-			}
-
-			event := &historyv1.HistoryEvent{
-				EventType: commonv1.EventType_EVENT_TYPE_NODE_COMPLETED,
-				Attributes: &historyv1.HistoryEvent_NodeCompletedAttributes{
-					NodeCompletedAttributes: &historyv1.NodeCompletedEventAttributes{
-						ScheduledEventId: task.ScheduledEventID,
-						Result: &commonv1.Payloads{
-							Payloads: []*commonv1.Payload{{Data: resp.Output}},
-						},
-						Logs: &commonv1.Payloads{
-							Payloads: []*commonv1.Payload{{Data: logsData}},
-						},
-					},
-				},
-			}
-			namespace := task.Namespace
-			if namespace == "" {
-				namespace = "default"
-			}
-
-			histCtx, histCancel := context.WithTimeout(ctx, 5*time.Second)
-			if err := s.historyClient.RecordEvent(histCtx, namespace, task.WorkflowID, task.RunID, event); err != nil {
-				s.logger.Error("failed to record node completion event", slog.String("error", err.Error()))
-			}
-			histCancel()
-		}
+		// Logical error (API failure, etc.)
+		s.historyClient.RespondActivityTaskFailed(ctx, &historyv1.RespondActivityTaskFailedRequest{
+			Namespace: task.Namespace,
+			WorkflowExecution: &commonv1.WorkflowExecution{
+				WorkflowId: task.WorkflowID,
+				RunId:      task.RunID,
+			},
+			ScheduledEventId: task.ScheduledEventID,
+			Failure: &commonv1.Failure{
+				Message:     resp.Error.Message,
+				FailureType: commonv1.FailureType_FAILURE_TYPE_APPLICATION,
+			},
+		})
+		return &poller.TaskResult{Error: resp.Error.Message}, nil
 	}
 
-	if len(resp.Logs) > 0 {
-		logsJSON, err := json.Marshal(resp.Logs)
-		if err != nil {
-			s.logger.Warn("failed to marshal logs", slog.String("error", err.Error()))
-		} else {
-			result.Logs = logsJSON
-		}
-	}
+	// Success
+	_, err = s.historyClient.RespondActivityTaskCompleted(ctx, &historyv1.RespondActivityTaskCompletedRequest{
+		Namespace: task.Namespace,
+		WorkflowExecution: &commonv1.WorkflowExecution{
+			WorkflowId: task.WorkflowID,
+			RunId:      task.RunID,
+		},
+		ScheduledEventId: task.ScheduledEventID,
+		Result: &commonv1.Payloads{
+			Payloads: []*commonv1.Payload{{Data: resp.Output}},
+		},
+	})
 
-	s.logger.Info("task processed",
-		slog.String("task_id", task.TaskID),
-		slog.Duration("duration", resp.Duration),
-		slog.Bool("has_error", resp.Error != nil),
-	)
-
-	return result, nil
-}
-
-func (s *Service) GetExecutor(nodeType string) (executor.Executor, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	exec, ok := s.executors[nodeType]
-	return exec, ok
+	return &poller.TaskResult{Output: resp.Output}, err
 }

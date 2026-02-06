@@ -8,6 +8,7 @@ import (
 
 	"github.com/linkflow/engine/internal/matching/engine"
 	"github.com/linkflow/engine/internal/matching/partition"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -30,6 +31,7 @@ type Config struct {
 	NumPartitions int32
 	Replicas      int
 	Logger        *slog.Logger
+	RedisClient   *redis.Client
 }
 
 func NewService(cfg Config) *Service {
@@ -44,7 +46,7 @@ func NewService(cfg Config) *Service {
 	}
 
 	return &Service{
-		partitionMgr: partition.NewManager(cfg.NumPartitions, cfg.Replicas),
+		partitionMgr: partition.NewManager(cfg.NumPartitions, cfg.Replicas, cfg.RedisClient),
 		taskQueues:   make(map[string]*engine.TaskQueue),
 		logger:       cfg.Logger,
 	}
@@ -67,7 +69,10 @@ func (s *Service) PollTask(ctx context.Context, taskQueueName string, identity s
 	s.mu.RUnlock()
 
 	if !exists {
-		return nil, ErrTaskQueueNotFound
+		// If queue is not in memory, we might still have it in Redis if persistence is enabled.
+		// But s.taskQueues tracks active queues.
+		// Let's try to "create" (load) it.
+		tq = s.GetOrCreateTaskQueue(taskQueueName, engine.TaskQueueKindNormal)
 	}
 
 	task, err := tq.Poll(ctx, identity)

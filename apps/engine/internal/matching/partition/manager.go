@@ -6,35 +6,40 @@ import (
 	"time"
 
 	"github.com/linkflow/engine/internal/matching/engine"
+	"github.com/redis/go-redis/v9"
 )
 
 type Manager struct {
 	numPartitions int32
 	partitions    map[int32]*Partition
 	hashRing      *Ring
+	redisClient   *redis.Client
 	mu            sync.RWMutex
 }
 
 type Partition struct {
-	ID         int32
-	TaskQueues map[string]*engine.TaskQueue
-	Load       atomic.Int64
-	LastActive time.Time
-	mu         sync.RWMutex
+	ID          int32
+	TaskQueues  map[string]*engine.TaskQueue
+	Load        atomic.Int64
+	LastActive  time.Time
+	redisClient *redis.Client
+	mu          sync.RWMutex
 }
 
-func NewManager(numPartitions int32, replicas int) *Manager {
+func NewManager(numPartitions int32, replicas int, redisClient *redis.Client) *Manager {
 	m := &Manager{
 		numPartitions: numPartitions,
 		partitions:    make(map[int32]*Partition),
 		hashRing:      NewRing(replicas),
+		redisClient:   redisClient,
 	}
 
 	for i := int32(0); i < numPartitions; i++ {
 		m.partitions[i] = &Partition{
-			ID:         i,
-			TaskQueues: make(map[string]*engine.TaskQueue),
-			LastActive: time.Now(),
+			ID:          i,
+			TaskQueues:  make(map[string]*engine.TaskQueue),
+			LastActive:  time.Now(),
+			redisClient: redisClient, // Each partition shares the client, or we could give them their own connections
 		}
 		m.hashRing.Add(i)
 	}
@@ -68,7 +73,7 @@ func (p *Partition) GetOrCreateTaskQueue(name string, kind engine.TaskQueueKind,
 		return tq
 	}
 
-	tq := engine.NewTaskQueue(name, kind, rateLimit, burst)
+	tq := engine.NewTaskQueue(name, kind, rateLimit, burst, p.redisClient)
 	p.TaskQueues[name] = tq
 	p.LastActive = time.Now()
 	return tq

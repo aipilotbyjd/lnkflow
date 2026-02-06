@@ -33,30 +33,40 @@ const (
 	EventTypeActivityTimedOut
 	EventTypeSignalReceived
 	EventTypeMarkerRecorded
+	EventTypeWorkflowTaskScheduled
+	EventTypeWorkflowTaskStarted
+	EventTypeWorkflowTaskCompleted
+	EventTypeWorkflowTaskFailed
+	EventTypeWorkflowTaskTimedOut
 )
 
 func (e EventType) String() string {
 	names := map[EventType]string{
-		EventTypeUnspecified:         "Unspecified",
-		EventTypeExecutionStarted:    "ExecutionStarted",
-		EventTypeExecutionCompleted:  "ExecutionCompleted",
-		EventTypeExecutionFailed:     "ExecutionFailed",
-		EventTypeExecutionTerminated: "ExecutionTerminated",
-		EventTypeNodeScheduled:       "NodeScheduled",
-		EventTypeNodeStarted:         "NodeStarted",
-		EventTypeNodeCompleted:       "NodeCompleted",
-		EventTypeNodeFailed:          "NodeFailed",
-		EventTypeNodeTimedOut:        "NodeTimedOut",
-		EventTypeTimerStarted:        "TimerStarted",
-		EventTypeTimerFired:          "TimerFired",
-		EventTypeTimerCanceled:       "TimerCanceled",
-		EventTypeActivityScheduled:   "ActivityScheduled",
-		EventTypeActivityStarted:     "ActivityStarted",
-		EventTypeActivityCompleted:   "ActivityCompleted",
-		EventTypeActivityFailed:      "ActivityFailed",
-		EventTypeActivityTimedOut:    "ActivityTimedOut",
-		EventTypeSignalReceived:      "SignalReceived",
-		EventTypeMarkerRecorded:      "MarkerRecorded",
+		EventTypeUnspecified:           "Unspecified",
+		EventTypeExecutionStarted:      "ExecutionStarted",
+		EventTypeExecutionCompleted:    "ExecutionCompleted",
+		EventTypeExecutionFailed:       "ExecutionFailed",
+		EventTypeExecutionTerminated:   "ExecutionTerminated",
+		EventTypeNodeScheduled:         "NodeScheduled",
+		EventTypeNodeStarted:           "NodeStarted",
+		EventTypeNodeCompleted:         "NodeCompleted",
+		EventTypeNodeFailed:            "NodeFailed",
+		EventTypeNodeTimedOut:          "NodeTimedOut",
+		EventTypeTimerStarted:          "TimerStarted",
+		EventTypeTimerFired:            "TimerFired",
+		EventTypeTimerCanceled:         "TimerCanceled",
+		EventTypeActivityScheduled:     "ActivityScheduled",
+		EventTypeActivityStarted:       "ActivityStarted",
+		EventTypeActivityCompleted:     "ActivityCompleted",
+		EventTypeActivityFailed:        "ActivityFailed",
+		EventTypeActivityTimedOut:      "ActivityTimedOut",
+		EventTypeSignalReceived:        "SignalReceived",
+		EventTypeMarkerRecorded:        "MarkerRecorded",
+		EventTypeWorkflowTaskScheduled: "WorkflowTaskScheduled",
+		EventTypeWorkflowTaskStarted:   "WorkflowTaskStarted",
+		EventTypeWorkflowTaskCompleted: "WorkflowTaskCompleted",
+		EventTypeWorkflowTaskFailed:    "WorkflowTaskFailed",
+		EventTypeWorkflowTaskTimedOut:  "WorkflowTaskTimedOut",
 	}
 	if name, ok := names[e]; ok {
 		return name
@@ -261,4 +271,39 @@ type SignalReceivedAttributes struct {
 type MarkerRecordedAttributes struct {
 	MarkerName string
 	Details    map[string][]byte
+}
+
+type WorkflowTaskScheduledAttributes struct {
+	TaskQueue    string
+	StartToClose time.Duration
+	Attempt      int32
+}
+
+type WorkflowTaskStartedAttributes struct {
+	ScheduledEventID int64
+	Identity         string
+	RequestID        string
+}
+
+type WorkflowTaskCompletedAttributes struct {
+	ScheduledEventID int64
+	StartedEventID   int64
+	Identity         string
+	BinaryChecksum   string
+}
+
+type WorkflowTaskFailedAttributes struct {
+	ScheduledEventID int64
+	StartedEventID   int64
+	Cause            string
+	FailureReason    string
+	FailureDetails   []byte
+	Identity         string
+	BinaryChecksum   string
+}
+
+type WorkflowTaskTimedOutAttributes struct {
+	ScheduledEventID int64
+	StartedEventID   int64
+	TimeoutType      string
 }

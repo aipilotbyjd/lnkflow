@@ -22,6 +22,7 @@ import (
 	"github.com/linkflow/engine/internal/history"
 	"github.com/linkflow/engine/internal/history/shard"
 	"github.com/linkflow/engine/internal/history/store"
+	"github.com/linkflow/engine/internal/history/visibility"
 	"github.com/linkflow/engine/internal/version"
 )
 
@@ -74,11 +75,13 @@ func run() error {
 	// Initialize stores
 	eventStore := store.NewPostgresEventStore(dbpool, int32(*shardCount))
 	stateStore := store.NewPostgresMutableStateStore(dbpool, int32(*shardCount))
+	visibilityStore := visibility.NewPostgresStore(dbpool)
 
 	svc := history.NewService(
 		shardController,
 		eventStore,
 		stateStore,
+		visibilityStore,
 		matchingClient,
 		logger,
 	)
