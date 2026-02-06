@@ -48,6 +48,16 @@ graph TD
     Guides --> G2[nodes/]
     Guides --> G3[credentials/]
     Guides --> G4[integrations/]
+    Guides --> G5[reference/]
+    Guides --> G6[cookbook/]
+
+    %% Reference
+    G5 --> G5A[expressions]
+
+    %% Cookbook
+    G6 --> G6A[fan-out-fan-in]
+    G6 --> G6B[human-in-the-loop]
+    G6 --> G6C[chatbot-chain]
 
     %% API
     API --> AP1[openapi.yaml]
@@ -72,10 +82,12 @@ graph TD
     Dev --> DV2[code-style]
     Dev --> DV3[testing]
     Dev --> DV4[debugging]
+    Dev --> DV5[custom-nodes]
 
     %% ADR
     ADR --> AD1[0001-hybrid-arch]
     ADR --> AD2[0002-event-sourcing]
+    ADR --> AD3[0003-grpc]
 ```
 
 ## Directory Reference
