@@ -106,6 +106,9 @@ func DefaultRegistryInit() *Registry {
 	registry.MustRegister(NewDiscordExecutor())
 	registry.MustRegister(NewTwilioExecutor())
 	registry.MustRegister(NewStorageExecutor())
+	registry.MustRegister(NewScriptExecutor())
+	registry.MustRegister(NewOutputExecutor())
+	registry.MustRegister(NewLogicConditionExecutor())
 
 	return registry
 }

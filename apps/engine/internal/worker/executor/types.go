@@ -29,6 +29,23 @@ type Node struct {
 	Data     json.RawMessage `json:"data"`
 }
 
+// GetName extracts the node name from the Data field, or returns the ID as fallback
+func (n *Node) GetName() string {
+	var data struct {
+		Label string `json:"label"`
+		Name  string `json:"name"`
+	}
+	if err := json.Unmarshal(n.Data, &data); err == nil {
+		if data.Label != "" {
+			return data.Label
+		}
+		if data.Name != "" {
+			return data.Name
+		}
+	}
+	return n.ID
+}
+
 type Position struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`

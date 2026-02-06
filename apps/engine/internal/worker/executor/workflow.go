@@ -17,9 +17,10 @@ import (
 )
 
 type WorkflowExecutor struct {
-	historyClient *adapter.HistoryClient
-	httpClient    *http.Client
-	logger        *slog.Logger
+	historyClient    *adapter.HistoryClient
+	httpClient       *http.Client
+	logger           *slog.Logger
+	executorRegistry *Registry
 }
 
 func NewWorkflowExecutor(client *adapter.HistoryClient, logger *slog.Logger) *WorkflowExecutor {
@@ -28,8 +29,14 @@ func NewWorkflowExecutor(client *adapter.HistoryClient, logger *slog.Logger) *Wo
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		logger: logger,
+		logger:           logger,
+		executorRegistry: nil, // Will be set via SetRegistry
 	}
+}
+
+// SetRegistry sets the executor registry for executing individual nodes
+func (e *WorkflowExecutor) SetRegistry(registry *Registry) {
+	e.executorRegistry = registry
 }
 
 func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {
@@ -230,132 +237,258 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 		}
 	}
 
-	// 4. Schedule Nodes
+	// 4. Execute nodes in order (simple linear execution for now)
 	logs := []LogEntry{}
 	nextEventID := lastEventID + 1
+	executedNodes := make([]map[string]interface{}, 0)
+	startTime := time.Now()
 
-	for _, node := range nodesToSchedule {
-		inputData := inputs[node.ID]
-		if inputData == nil {
-			inputData = []byte("{}")
-		}
+	// Execute all nodes in the workflow following the graph
+	pendingNodes := nodesToSchedule
+	maxIterations := len(graph.Nodes) * 2 // Safety limit
 
-		event := &historyv1.HistoryEvent{
-			EventId:   nextEventID,
-			EventType: commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED,
-			Attributes: &historyv1.HistoryEvent_NodeScheduledAttributes{
-				NodeScheduledAttributes: &historyv1.NodeScheduledEventAttributes{
-					NodeId:   node.ID,
-					NodeType: node.Type,
-					Input: &commonv1.Payloads{
-						Payloads: []*commonv1.Payload{
-							{Data: inputData},
+	for iteration := 0; iteration < maxIterations && len(pendingNodes) > 0; iteration++ {
+		for _, node := range pendingNodes {
+			inputData := inputs[node.ID]
+			if inputData == nil {
+				inputData = []byte("{}")
+			}
+
+			e.logger.Info("executing node",
+				slog.String("node_id", node.ID),
+				slog.String("node_type", node.Type),
+			)
+
+			// Record node scheduled event
+			scheduledEvent := &historyv1.HistoryEvent{
+				EventId:   nextEventID,
+				EventType: commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED,
+				Attributes: &historyv1.HistoryEvent_NodeScheduledAttributes{
+					NodeScheduledAttributes: &historyv1.NodeScheduledEventAttributes{
+						NodeId:   node.ID,
+						NodeType: node.Type,
+						Input: &commonv1.Payloads{
+							Payloads: []*commonv1.Payload{
+								{Data: inputData},
+							},
+						},
+						TaskQueue: &apiv1.TaskQueue{Name: "default"},
+					},
+				},
+			}
+			_ = e.historyClient.RecordEvent(ctx, namespace, req.WorkflowID, req.RunID, scheduledEvent)
+			scheduledEventID := nextEventID
+			nextEventID++
+
+			// Actually execute the node using the appropriate executor
+			nodeStartTime := time.Now()
+			var nodeOutput []byte
+			var nodeError *ExecutionError
+			var nodeLogs []LogEntry
+
+			if e.executorRegistry != nil {
+				executor, exists := e.executorRegistry.Get(node.Type)
+				if exists {
+					// Build config from node data
+					configBytes, _ := json.Marshal(node.Data)
+
+					nodeReq := &ExecuteRequest{
+						NodeType:   node.Type,
+						NodeID:     node.ID,
+						WorkflowID: req.WorkflowID,
+						RunID:      req.RunID,
+						Namespace:  namespace,
+						Config:     configBytes,
+						Input:      inputData,
+						Attempt:    1,
+						Timeout:    30 * time.Second,
+					}
+
+					resp, err := executor.Execute(ctx, nodeReq)
+					if err != nil {
+						nodeError = &ExecutionError{
+							Message: err.Error(),
+							Type:    ErrorTypeRetryable,
+						}
+					} else if resp != nil {
+						nodeOutput = resp.Output
+						nodeError = resp.Error
+						nodeLogs = resp.Logs
+					}
+				} else {
+					e.logger.Warn("no executor found for node type, passing through",
+						slog.String("node_type", node.Type),
+					)
+					nodeOutput = inputData
+				}
+			} else {
+				// No registry, just pass through
+				nodeOutput = inputData
+			}
+
+			nodeDuration := time.Since(nodeStartTime)
+
+			// Determine node status
+			nodeStatus := "completed"
+			if nodeError != nil {
+				nodeStatus = "failed"
+			}
+
+			// Record node completion/failure event
+			if nodeError == nil {
+				completedEvent := &historyv1.HistoryEvent{
+					EventId:   nextEventID,
+					EventType: commonv1.EventType_EVENT_TYPE_NODE_COMPLETED,
+					Attributes: &historyv1.HistoryEvent_NodeCompletedAttributes{
+						NodeCompletedAttributes: &historyv1.NodeCompletedEventAttributes{
+							ScheduledEventId: scheduledEventID,
+							Result: &commonv1.Payloads{
+								Payloads: []*commonv1.Payload{
+									{Data: nodeOutput},
+								},
+							},
 						},
 					},
-					TaskQueue: &apiv1.TaskQueue{Name: "default"}, // TODO: Use specific queue?
-				},
-			},
-		}
+				}
+				_ = e.historyClient.RecordEvent(ctx, namespace, req.WorkflowID, req.RunID, completedEvent)
+				nodeStates[node.ID] = "Completed"
+				nodeOutputs[node.ID] = nodeOutput
+			} else {
+				failedEvent := &historyv1.HistoryEvent{
+					EventId:   nextEventID,
+					EventType: commonv1.EventType_EVENT_TYPE_NODE_FAILED,
+					Attributes: &historyv1.HistoryEvent_NodeFailedAttributes{
+						NodeFailedAttributes: &historyv1.NodeFailedEventAttributes{
+							ScheduledEventId: scheduledEventID,
+							Failure: &commonv1.Failure{
+								Message: nodeError.Message,
+							},
+						},
+					},
+				}
+				_ = e.historyClient.RecordEvent(ctx, namespace, req.WorkflowID, req.RunID, failedEvent)
+				nodeStates[node.ID] = "Failed"
+			}
+			nextEventID++
 
-		err := e.historyClient.RecordEvent(ctx, namespace, req.WorkflowID, req.RunID, event)
-		if err != nil {
-			e.logger.Error("failed to schedule node",
+			// Build node result for callback
+			nodeResult := map[string]interface{}{
+				"node_id":      node.ID,
+				"node_type":    node.Type,
+				"node_name":    node.GetName(),
+				"status":       nodeStatus,
+				"started_at":   nodeStartTime.Format(time.RFC3339),
+				"completed_at": time.Now().Format(time.RFC3339),
+				"sequence":     len(executedNodes),
+			}
+
+			if nodeOutput != nil {
+				var outputData interface{}
+				if err := json.Unmarshal(nodeOutput, &outputData); err == nil {
+					nodeResult["output"] = outputData
+				}
+			}
+
+			if nodeError != nil {
+				nodeResult["error"] = map[string]interface{}{
+					"message": nodeError.Message,
+					"type":    nodeError.Type,
+				}
+			}
+
+			executedNodes = append(executedNodes, nodeResult)
+
+			logs = append(logs, LogEntry{
+				Timestamp: time.Now(),
+				Level:     "INFO",
+				Message:   fmt.Sprintf("Executed node %s (%s) in %v - %s", node.ID, node.Type, nodeDuration, nodeStatus),
+			})
+			logs = append(logs, nodeLogs...)
+
+			e.logger.Info("node executed",
 				slog.String("node_id", node.ID),
-				slog.String("error", err.Error()),
+				slog.String("node_type", node.Type),
+				slog.String("status", nodeStatus),
+				slog.Duration("duration", nodeDuration),
 			)
-			continue
 		}
 
-		nextEventID++
+		// Find next nodes to execute (nodes whose dependencies are now met)
+		pendingNodes = nil
+		for _, edge := range graph.Edges {
+			sourceID := edge.Source
+			targetID := edge.Target
 
-		logs = append(logs, LogEntry{
-			Timestamp: time.Now(),
-			Level:     "INFO",
-			Message:   fmt.Sprintf("Scheduled node %s (%s)", node.ID, node.Type),
-		})
+			if nodeStates[sourceID] == "Completed" && nodeStates[targetID] == "" {
+				var targetNode *Node
+				for _, n := range graph.Nodes {
+					if n.ID == targetID {
+						targetNode = &n
+						break
+					}
+				}
+				if targetNode != nil {
+					alreadyAdded := false
+					for _, n := range pendingNodes {
+						if n.ID == targetID {
+							alreadyAdded = true
+							break
+						}
+					}
+					if !alreadyAdded {
+						pendingNodes = append(pendingNodes, *targetNode)
+						inputs[targetNode.ID] = nodeOutputs[sourceID]
+					}
+				}
+			}
+		}
 	}
 
-	// 5. Send completion callback after scheduling nodes
-	// For simple workflows, we mark as completed after nodes are scheduled
-	// The actual node execution happens asynchronously (or via external services)
-	if len(nodesToSchedule) > 0 && payload.CallbackURL != "" {
-		e.logger.Info("workflow nodes scheduled, sending completion callback",
+	totalDuration := time.Since(startTime)
+
+	// 5. Send completion callback with all node results
+	if payload.CallbackURL != "" {
+		e.logger.Info("workflow execution complete, sending callback",
 			slog.String("workflow_id", req.WorkflowID),
 			slog.String("run_id", req.RunID),
-			slog.Int("nodes_scheduled", len(nodesToSchedule)),
+			slog.Int("nodes_executed", len(executedNodes)),
 			slog.String("callback_url", payload.CallbackURL),
 		)
 
-		go e.sendCompletionCallback(payload, nodeStates, nodeOutputs)
+		go e.sendCompletionCallbackWithNodes(payload, executedNodes, totalDuration)
 
 		logs = append(logs, LogEntry{
 			Timestamp: time.Now(),
 			Level:     "INFO",
-			Message:   "Workflow execution completed",
+			Message:   fmt.Sprintf("Workflow execution completed with %d nodes in %v", len(executedNodes), totalDuration),
 		})
 	}
 
 	return &ExecuteResponse{
-		Output:   json.RawMessage(`{"status": "workflow_step_completed"}`),
-		Duration: time.Millisecond * 10,
+		Output:   json.RawMessage(`{"status": "workflow_completed"}`),
+		Duration: totalDuration,
 		Logs:     logs,
 	}, nil
 }
 
-// isWorkflowComplete checks if all terminal nodes have completed
-func (e *WorkflowExecutor) isWorkflowComplete(graph WorkflowDefinition, nodeStates map[string]string) bool {
-	// Find terminal nodes (nodes with no outgoing edges)
-	hasOutgoingEdge := make(map[string]bool)
-	for _, edge := range graph.Edges {
-		hasOutgoingEdge[edge.Source] = true
-	}
-
-	for _, node := range graph.Nodes {
-		// Skip trigger nodes
-		if node.Type == "trigger_manual" || node.Type == "trigger_webhook" || node.Type == "trigger_schedule" {
-			continue
+// sendCompletionCallbackWithNodes sends callback with detailed node execution results
+func (e *WorkflowExecutor) sendCompletionCallbackWithNodes(payload JobPayload, nodes []map[string]interface{}, duration time.Duration) {
+	// Determine overall status
+	status := "completed"
+	for _, node := range nodes {
+		if node["status"] == "failed" {
+			status = "failed"
+			break
 		}
-
-		// If this is a terminal node (no outgoing edges) and not completed, workflow is not complete
-		if !hasOutgoingEdge[node.ID] {
-			if nodeStates[node.ID] != "Completed" {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-// sendCompletionCallback sends the completion callback to Laravel
-func (e *WorkflowExecutor) sendCompletionCallback(payload JobPayload, nodeStates map[string]string, nodeOutputs map[string][]byte) {
-	// Build node results
-	nodes := make([]map[string]interface{}, 0)
-	for nodeID, status := range nodeStates {
-		nodeResult := map[string]interface{}{
-			"node_id":   nodeID,
-			"node_type": "unknown",
-			"node_name": nodeID,
-			"status":    mapStatus(status),
-		}
-
-		if output, ok := nodeOutputs[nodeID]; ok {
-			var outputData interface{}
-			if err := json.Unmarshal(output, &outputData); err == nil {
-				nodeResult["output"] = outputData
-			}
-		}
-
-		nodes = append(nodes, nodeResult)
 	}
 
 	callbackPayload := map[string]interface{}{
 		"job_id":         payload.JobID,
 		"callback_token": payload.CallbackToken,
 		"execution_id":   payload.ExecutionID,
-		"status":         "completed",
+		"status":         status,
 		"nodes":          nodes,
-		"duration_ms":    0,
+		"duration_ms":    duration.Milliseconds(),
 	}
 
 	body, err := json.Marshal(callbackPayload)
@@ -404,20 +537,8 @@ func (e *WorkflowExecutor) sendCompletionCallback(payload JobPayload, nodeStates
 		slog.String("job_id", payload.JobID),
 		slog.Int("execution_id", payload.ExecutionID),
 		slog.Int("status", resp.StatusCode),
+		slog.Int("nodes_count", len(nodes)),
 	)
-}
-
-func mapStatus(status string) string {
-	switch status {
-	case "Completed":
-		return "completed"
-	case "Failed":
-		return "failed"
-	case "Scheduled":
-		return "pending"
-	default:
-		return "running"
-	}
 }
 
 func (e *WorkflowExecutor) NodeType() string {

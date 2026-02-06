@@ -63,46 +63,79 @@ func run() error {
 		return fmt.Errorf("failed to create worker service: %w", err)
 	}
 
-	// Register Workflow Executor
+	// Create executor registry for node execution
+	nodeRegistry := executor.NewRegistry()
+
+	// Register Workflow Executor (will get registry set after all executors are registered)
 	workflowExecutor := executor.NewWorkflowExecutor(historyClient, logger)
 	svc.RegisterExecutor(workflowExecutor)
 
 	httpExecutor := executor.NewHTTPExecutor()
 	svc.RegisterExecutor(httpExecutor)
+	nodeRegistry.MustRegister(httpExecutor)
 
 	// Register additional executors
 	transformExecutor := executor.NewTransformExecutor()
 	svc.RegisterExecutor(transformExecutor)
+	nodeRegistry.MustRegister(transformExecutor)
 
 	loopExecutor := executor.NewLoopExecutor()
 	svc.RegisterExecutor(loopExecutor)
+	nodeRegistry.MustRegister(loopExecutor)
 
 	conditionExecutor := executor.NewConditionExecutor()
 	svc.RegisterExecutor(conditionExecutor)
+	nodeRegistry.MustRegister(conditionExecutor)
 
 	emailExecutor := executor.NewEmailExecutor()
 	svc.RegisterExecutor(emailExecutor)
+	nodeRegistry.MustRegister(emailExecutor)
 
 	delayExecutor := executor.NewDelayExecutor()
 	svc.RegisterExecutor(delayExecutor)
+	nodeRegistry.MustRegister(delayExecutor)
 
 	aiExecutor := executor.NewAIExecutor()
 	svc.RegisterExecutor(aiExecutor)
+	nodeRegistry.MustRegister(aiExecutor)
 
 	webhookExecutor := executor.NewWebhookExecutor()
 	svc.RegisterExecutor(webhookExecutor)
+	nodeRegistry.MustRegister(webhookExecutor)
 
 	manualExecutor := executor.NewManualExecutor()
 	svc.RegisterExecutor(manualExecutor)
+	nodeRegistry.MustRegister(manualExecutor)
 
 	slackExecutor := executor.NewSlackExecutor()
 	svc.RegisterExecutor(slackExecutor)
+	nodeRegistry.MustRegister(slackExecutor)
 
 	discordExecutor := executor.NewDiscordExecutor()
 	svc.RegisterExecutor(discordExecutor)
+	nodeRegistry.MustRegister(discordExecutor)
 
 	twilioExecutor := executor.NewTwilioExecutor()
 	svc.RegisterExecutor(twilioExecutor)
+	nodeRegistry.MustRegister(twilioExecutor)
+
+	// Script executor for action_script nodes
+	scriptExecutor := executor.NewScriptExecutor()
+	svc.RegisterExecutor(scriptExecutor)
+	nodeRegistry.MustRegister(scriptExecutor)
+
+	// Output executor for output_log nodes
+	outputExecutor := executor.NewOutputExecutor()
+	svc.RegisterExecutor(outputExecutor)
+	nodeRegistry.MustRegister(outputExecutor)
+
+	// Logic condition alias (handles logic_condition node type)
+	logicConditionExecutor := executor.NewLogicConditionExecutor()
+	svc.RegisterExecutor(logicConditionExecutor)
+	nodeRegistry.MustRegister(logicConditionExecutor)
+
+	// Set the registry on workflow executor so it can execute individual nodes
+	workflowExecutor.SetRegistry(nodeRegistry)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
