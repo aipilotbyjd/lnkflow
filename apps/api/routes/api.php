@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BillingController;
 use App\Http\Controllers\Api\V1\CredentialController;
 use App\Http\Controllers\Api\V1\CredentialTypeController;
 use App\Http\Controllers\Api\V1\ExecutionController;
@@ -15,6 +17,9 @@ use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VariableController;
 use App\Http\Controllers\Api\V1\WebhookController;
 use App\Http\Controllers\Api\V1\WorkflowController;
+use App\Http\Controllers\Api\V1\WorkflowImportExportController;
+use App\Http\Controllers\Api\V1\WorkflowTemplateController;
+use App\Http\Controllers\Api\V1\WorkflowVersionController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceMemberController;
 use App\Http\Controllers\Api\WebhookReceiverController;
@@ -155,6 +160,31 @@ Route::prefix('v1')->as('v1.')->group(function () {
 
             // Activity Logs
             Route::get('activity', [ActivityLogController::class, 'index'])->name('activity.index');
+
+            // Billing
+            Route::prefix('billing')->as('billing.')->group(function () {
+                Route::get('/', [BillingController::class, 'show'])->name('show');
+                Route::post('checkout', [BillingController::class, 'createCheckoutSession'])->name('checkout');
+                Route::post('portal', [BillingController::class, 'createPortalSession'])->name('portal');
+                Route::post('cancel', [BillingController::class, 'cancel'])->name('cancel');
+                Route::post('resume', [BillingController::class, 'resume'])->name('resume');
+                Route::post('change-plan', [BillingController::class, 'changePlan'])->name('change-plan');
+            });
+
+            // Workflow Versions
+            Route::prefix('workflows/{workflow}/versions')->as('workflows.versions.')->group(function () {
+                Route::get('/', [WorkflowVersionController::class, 'index'])->name('index');
+                Route::post('/', [WorkflowVersionController::class, 'store'])->name('store');
+                Route::get('compare', [WorkflowVersionController::class, 'compare'])->name('compare');
+                Route::get('{version}', [WorkflowVersionController::class, 'show'])->name('show');
+                Route::post('{version}/publish', [WorkflowVersionController::class, 'publish'])->name('publish');
+                Route::post('{version}/restore', [WorkflowVersionController::class, 'restore'])->name('restore');
+            });
+
+            // Workflow Import/Export
+            Route::get('workflows/{workflow}/export', [WorkflowImportExportController::class, 'export'])->name('workflows.export');
+            Route::post('workflows/export-bulk', [WorkflowImportExportController::class, 'exportBulk'])->name('workflows.export-bulk');
+            Route::post('workflows/import', [WorkflowImportExportController::class, 'import'])->name('workflows.import');
         });
 
         // Nodes (Global - not workspace-scoped)
@@ -169,6 +199,14 @@ Route::prefix('v1')->as('v1.')->group(function () {
         Route::prefix('credential-types')->as('credential-types.')->group(function () {
             Route::get('/', [CredentialTypeController::class, 'index'])->name('index');
             Route::get('{type}', [CredentialTypeController::class, 'show'])->name('show');
+        });
+
+        // Workflow Templates (Global)
+        Route::prefix('templates')->as('templates.')->group(function () {
+            Route::get('/', [WorkflowTemplateController::class, 'index'])->name('index');
+            Route::get('categories', [WorkflowTemplateController::class, 'categories'])->name('categories');
+            Route::get('{slug}', [WorkflowTemplateController::class, 'show'])->name('show');
+            Route::post('{slug}/use', [WorkflowTemplateController::class, 'use'])->name('use');
         });
     });
 });
@@ -198,3 +236,11 @@ Route::prefix('v1/jobs')->as('v1.jobs.')->group(function () {
     Route::post('callback', [JobCallbackController::class, 'handle'])->name('callback');
     Route::post('progress', [JobCallbackController::class, 'progress'])->name('progress');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Webhook Routes
+|--------------------------------------------------------------------------
+*/
+
+Route::post('stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');

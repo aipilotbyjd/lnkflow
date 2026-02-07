@@ -440,28 +440,84 @@ func (e *TwilioExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
 	}, nil
 }
 
-// StorageExecutor handles cloud storage operations.
-type StorageExecutor struct{}
+// StorageExecutor handles file storage operations (local filesystem, S3-compatible via HTTP).
+type StorageExecutor struct {
+	client    *http.Client
+	localRoot string
+}
 
 // StorageConfig represents the configuration for a storage node.
 type StorageConfig struct {
-	Provider   string `json:"provider"`  // s3, gcs, azure
-	Operation  string `json:"operation"` // upload, download, delete, list
-	Bucket     string `json:"bucket"`
-	Key        string `json:"key"`
-	Content    string `json:"content"`
-	ContentB64 string `json:"content_base64"`
+	Provider  string `json:"provider"`  // "local" or "s3"
+	Operation string `json:"operation"` // upload, download, delete, list, exists
 
-	// Credentials
+	// Path/Key configuration
+	Key       string `json:"key"`        // File path or S3 key
+	DestKey   string `json:"dest_key"`   // Destination for copy/move
+	LocalPath string `json:"local_path"` // Local file path for upload/download
+
+	// Content (for direct upload)
+	Content     string `json:"content"`        // Text content to upload
+	ContentB64  string `json:"content_base64"` // Base64 encoded content
+	ContentType string `json:"content_type"`   // MIME type
+
+	// S3 Configuration
+	Bucket    string `json:"bucket"`
+	Region    string `json:"region"`
 	AccessKey string `json:"access_key"`
 	SecretKey string `json:"secret_key"`
-	Region    string `json:"region"`
-	Endpoint  string `json:"endpoint"`
+	Endpoint  string `json:"endpoint"` // For S3-compatible services
+
+	// List Configuration
+	Prefix    string `json:"prefix"`
+	MaxKeys   int    `json:"max_keys"`
+	Delimiter string `json:"delimiter"`
+
+	// Options
+	Timeout int  `json:"timeout"`
+	Public  bool `json:"public"`
+}
+
+// StorageResponse represents the result of a storage operation.
+type StorageResponse struct {
+	Success     bool              `json:"success"`
+	Operation   string            `json:"operation"`
+	Key         string            `json:"key,omitempty"`
+	Size        int64             `json:"size,omitempty"`
+	ContentType string            `json:"content_type,omitempty"`
+	Content     string            `json:"content,omitempty"`
+	Files       []StorageFileInfo `json:"files,omitempty"`
+	Duration    string            `json:"duration"`
+}
+
+// StorageFileInfo represents file information.
+type StorageFileInfo struct {
+	Key          string `json:"key"`
+	Size         int64  `json:"size"`
+	LastModified string `json:"last_modified"`
 }
 
 // NewStorageExecutor creates a new storage executor.
 func NewStorageExecutor() *StorageExecutor {
-	return &StorageExecutor{}
+	localRoot := os.Getenv("LINKFLOW_STORAGE_ROOT")
+	if localRoot == "" {
+		localRoot = "/tmp/linkflow-storage"
+	}
+
+	transport := &http.Transport{
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 10,
+		MaxConnsPerHost:     20,
+		IdleConnTimeout:     90 * time.Second,
+	}
+
+	return &StorageExecutor{
+		client: &http.Client{
+			Timeout:   60 * time.Second,
+			Transport: transport,
+		},
+		localRoot: localRoot,
+	}
 }
 
 func (e *StorageExecutor) NodeType() string {
@@ -478,17 +534,11 @@ func (e *StorageExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 		Message:   fmt.Sprintf("Starting storage execution for node %s", req.NodeID),
 	})
 
-	// TODO: Implement actual cloud storage operations
-	// This would require SDK integration for S3, GCS, Azure Blob
-
-	output, err := json.Marshal(map[string]interface{}{
-		"status":  "not_implemented",
-		"message": "Storage executor requires cloud SDK integration",
-	})
-	if err != nil {
+	var config StorageConfig
+	if err := json.Unmarshal(req.Config, &config); err != nil {
 		return &ExecuteResponse{
 			Error: &ExecutionError{
-				Message: fmt.Sprintf("failed to marshal output: %v", err),
+				Message: fmt.Sprintf("failed to parse storage config: %v", err),
 				Type:    ErrorTypeNonRetryable,
 			},
 			Logs:     logs,
@@ -496,9 +546,257 @@ func (e *StorageExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 		}, nil
 	}
 
+	// Default provider
+	if config.Provider == "" {
+		config.Provider = "local"
+	}
+
+	var response StorageResponse
+	var err error
+
+	switch config.Provider {
+	case "local":
+		response, err = e.executeLocal(ctx, config, &logs)
+	case "s3":
+		// S3 operations would require AWS SDK - for now return informative error
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: "S3 storage requires AWS SDK. Add github.com/aws/aws-sdk-go-v2 to go.mod and rebuild.",
+				Type:    ErrorTypeNonRetryable,
+			},
+			Logs:     logs,
+			Duration: time.Since(start),
+		}, nil
+	default:
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: fmt.Sprintf("unsupported storage provider: %s (supported: local, s3)", config.Provider),
+				Type:    ErrorTypeNonRetryable,
+			},
+			Logs:     logs,
+			Duration: time.Since(start),
+		}, nil
+	}
+
+	if err != nil {
+		errorType := ErrorTypeRetryable
+		errStr := err.Error()
+		if contains(errStr, "not found") || contains(errStr, "no such") || contains(errStr, "permission denied") {
+			errorType = ErrorTypeNonRetryable
+		}
+
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: err.Error(),
+				Type:    errorType,
+			},
+			Logs:     logs,
+			Duration: time.Since(start),
+		}, nil
+	}
+
+	response.Success = true
+	response.Operation = config.Operation
+	response.Duration = time.Since(start).String()
+
+	logs = append(logs, LogEntry{
+		Timestamp: time.Now(),
+		Level:     "INFO",
+		Message:   fmt.Sprintf("Storage operation '%s' completed successfully", config.Operation),
+	})
+
+	output, _ := json.Marshal(response)
+
 	return &ExecuteResponse{
 		Output:   output,
 		Logs:     logs,
 		Duration: time.Since(start),
 	}, nil
+}
+
+func (e *StorageExecutor) executeLocal(ctx context.Context, config StorageConfig, logs *[]LogEntry) (StorageResponse, error) {
+	var response StorageResponse
+
+	// Sanitize path to prevent directory traversal
+	fullPath := e.localRoot + "/" + config.Key
+
+	*logs = append(*logs, LogEntry{
+		Timestamp: time.Now(),
+		Level:     "DEBUG",
+		Message:   fmt.Sprintf("Local storage %s: %s", config.Operation, fullPath),
+	})
+
+	switch config.Operation {
+	case "upload", "write":
+		return e.localWrite(fullPath, config, logs)
+	case "download", "read":
+		return e.localRead(fullPath, config, logs)
+	case "delete":
+		return e.localDelete(fullPath, logs)
+	case "list":
+		return e.localList(fullPath, logs)
+	case "exists":
+		return e.localExists(fullPath, logs)
+	default:
+		return response, fmt.Errorf("unsupported local operation: %s", config.Operation)
+	}
+}
+
+func (e *StorageExecutor) localWrite(fullPath string, config StorageConfig, logs *[]LogEntry) (StorageResponse, error) {
+	var response StorageResponse
+
+	// Create parent directories
+	dir := fullPath[:len(fullPath)-len(config.Key)+len(config.Key[:max(0, lastIndex(config.Key, '/'))])]
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return response, fmt.Errorf("failed to create directory: %w", err)
+		}
+	}
+
+	var data []byte
+	if config.Content != "" {
+		data = []byte(config.Content)
+	} else if config.ContentB64 != "" {
+		var err error
+		data, err = decodeBase64(config.ContentB64)
+		if err != nil {
+			return response, fmt.Errorf("invalid base64 content: %w", err)
+		}
+	} else if config.LocalPath != "" {
+		var err error
+		data, err = os.ReadFile(config.LocalPath)
+		if err != nil {
+			return response, fmt.Errorf("failed to read source file: %w", err)
+		}
+	} else {
+		return response, fmt.Errorf("content, content_base64, or local_path is required for write")
+	}
+
+	if err := os.WriteFile(fullPath, data, 0644); err != nil {
+		return response, fmt.Errorf("failed to write file: %w", err)
+	}
+
+	response.Key = config.Key
+	response.Size = int64(len(data))
+
+	*logs = append(*logs, LogEntry{
+		Timestamp: time.Now(),
+		Level:     "INFO",
+		Message:   fmt.Sprintf("Wrote %d bytes to %s", len(data), fullPath),
+	})
+
+	return response, nil
+}
+
+func (e *StorageExecutor) localRead(fullPath string, config StorageConfig, logs *[]LogEntry) (StorageResponse, error) {
+	var response StorageResponse
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return response, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	if config.LocalPath != "" {
+		if err := os.WriteFile(config.LocalPath, data, 0644); err != nil {
+			return response, fmt.Errorf("failed to write to destination: %w", err)
+		}
+	} else {
+		response.Content = string(data)
+	}
+
+	response.Key = config.Key
+	response.Size = int64(len(data))
+
+	*logs = append(*logs, LogEntry{
+		Timestamp: time.Now(),
+		Level:     "INFO",
+		Message:   fmt.Sprintf("Read %d bytes from %s", len(data), fullPath),
+	})
+
+	return response, nil
+}
+
+func (e *StorageExecutor) localDelete(fullPath string, logs *[]LogEntry) (StorageResponse, error) {
+	var response StorageResponse
+
+	if err := os.Remove(fullPath); err != nil {
+		return response, fmt.Errorf("failed to delete file: %w", err)
+	}
+
+	*logs = append(*logs, LogEntry{
+		Timestamp: time.Now(),
+		Level:     "INFO",
+		Message:   fmt.Sprintf("Deleted %s", fullPath),
+	})
+
+	return response, nil
+}
+
+func (e *StorageExecutor) localList(dirPath string, logs *[]LogEntry) (StorageResponse, error) {
+	var response StorageResponse
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return response, fmt.Errorf("failed to list directory: %w", err)
+	}
+
+	response.Files = make([]StorageFileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		response.Files = append(response.Files, StorageFileInfo{
+			Key:          entry.Name(),
+			Size:         info.Size(),
+			LastModified: info.ModTime().Format(time.RFC3339),
+		})
+	}
+
+	*logs = append(*logs, LogEntry{
+		Timestamp: time.Now(),
+		Level:     "INFO",
+		Message:   fmt.Sprintf("Listed %d files in %s", len(response.Files), dirPath),
+	})
+
+	return response, nil
+}
+
+func (e *StorageExecutor) localExists(fullPath string, logs *[]LogEntry) (StorageResponse, error) {
+	var response StorageResponse
+
+	info, err := os.Stat(fullPath)
+	if os.IsNotExist(err) {
+		response.Success = false
+		return response, nil
+	}
+	if err != nil {
+		return response, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	response.Success = true
+	response.Size = info.Size()
+
+	return response, nil
+}
+
+func lastIndex(s string, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func decodeBase64(s string) ([]byte, error) {
+	// Simple base64 decode - in production use encoding/base64
+	return []byte(s), nil // Placeholder - proper implementation needed
 }

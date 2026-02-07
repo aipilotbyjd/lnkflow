@@ -94,6 +94,22 @@ class Workflow extends Model
         return $this->hasOne(Webhook::class);
     }
 
+    /**
+     * @return HasMany<WorkflowVersion, $this>
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(WorkflowVersion::class)->orderByDesc('version');
+    }
+
+    /**
+     * @return BelongsToMany<Tag, $this>
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class, 'workflow_tags')->withTimestamps();
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

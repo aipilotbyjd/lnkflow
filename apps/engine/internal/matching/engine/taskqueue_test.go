@@ -9,7 +9,7 @@ import (
 )
 
 func TestTaskQueue_AddTask(t *testing.T) {
-	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100)
+	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100, nil)
 
 	task := &Task{
 		ID:            "task-1",
@@ -33,7 +33,7 @@ func TestTaskQueue_AddTask(t *testing.T) {
 }
 
 func TestTaskQueue_PollTask(t *testing.T) {
-	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100)
+	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100, nil)
 
 	task := &Task{
 		ID:            "task-1",
@@ -62,7 +62,7 @@ func TestTaskQueue_PollTask(t *testing.T) {
 }
 
 func TestTaskQueue_PollTaskContextCancellation(t *testing.T) {
-	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100)
+	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -90,7 +90,7 @@ func TestTaskQueue_PollTaskContextCancellation(t *testing.T) {
 }
 
 func TestTaskQueue_ConcurrentAddPoll(t *testing.T) {
-	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 10000, 1000)
+	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 10000, 1000, nil)
 
 	const numTasks = 100
 	var wg sync.WaitGroup
@@ -136,7 +136,7 @@ func TestTaskQueue_ConcurrentAddPoll(t *testing.T) {
 }
 
 func TestTaskQueue_CompleteTask(t *testing.T) {
-	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100)
+	tq := NewTaskQueue("test-queue", TaskQueueKindNormal, 1000, 100, nil)
 
 	task := &Task{
 		ID:            "task-1",

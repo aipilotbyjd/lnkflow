@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'workspace.permission' => \App\Http\Middleware\CheckWorkspacePermission::class,
+            'api.rate' => \App\Http\Middleware\ApiRateLimiting::class,
+            'usage.limits' => \App\Http\Middleware\EnforceUsageLimits::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
