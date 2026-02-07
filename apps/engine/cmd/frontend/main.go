@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -86,7 +87,14 @@ func main() {
 	svc := frontend.NewService(historyClient, matchingClient, logger, frontend.DefaultServiceConfig())
 
 	// Start Redis Consumer
-	consumer := frontend.NewRedisConsumer(rdb, svc, logger)
+	consumer := frontend.NewRedisConsumerWithConfig(rdb, svc, logger, frontend.ConsumerConfig{
+		Retry:          frontend.DefaultConsumerConfig().Retry,
+		DLQStreamKey:   getEnv("JOB_DLQ_STREAM", frontend.DefaultConsumerConfig().DLQStreamKey),
+		GroupName:      getEnv("JOB_CONSUMER_GROUP", frontend.DefaultConsumerConfig().GroupName),
+		PartitionCount: getEnvInt("ENGINE_PARTITION_COUNT", frontend.DefaultConsumerConfig().PartitionCount),
+		ClaimMinIdle:   getEnvDuration("JOB_CLAIM_MIN_IDLE", frontend.DefaultConsumerConfig().ClaimMinIdle),
+		ClaimBatch:     int64(getEnvInt("JOB_CLAIM_BATCH", int(frontend.DefaultConsumerConfig().ClaimBatch))),
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -174,4 +182,32 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	value, exists := os.LookupEnv(key)
+	if !exists || value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	value, exists := os.LookupEnv(key)
+	if !exists || value == "" {
+		return fallback
+	}
+
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
 }

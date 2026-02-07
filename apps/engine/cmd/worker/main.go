@@ -43,21 +43,29 @@ func run() error {
 
 	printBanner("Worker", logger)
 
+	if getEnv("CALLBACK_SECRET", "") == "" {
+		logger.Warn("CALLBACK_SECRET is not set; API callbacks will fail when signature verification is enabled")
+	}
+
 	// Connect to History Service
 	historyConn, err := grpc.NewClient(*historyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Error("failed to connect to history service", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	defer historyConn.Close()
 	historyClient := adapter.NewHistoryClient(historyConn)
 
 	svc, err := worker.NewService(worker.Config{
-		TaskQueues:    strings.Split(*taskQueue, ","),
-		Identity:      fmt.Sprintf("worker-%d", os.Getpid()),
-		MatchingAddr:  *matchingAddr,
-		PollInterval:  time.Second,
-		Logger:        logger,
-		HistoryClient: historyClient,
+		TaskQueues:      strings.Split(*taskQueue, ","),
+		NumPollers:      *numWorkers,
+		Identity:        fmt.Sprintf("worker-%d", os.Getpid()),
+		MatchingAddr:    *matchingAddr,
+		PollInterval:    time.Second,
+		Logger:          logger,
+		CallbackKey:     getEnv("CALLBACK_SECRET", ""),
+		CallbackTimeout: 10 * time.Second,
+		HistoryClient:   historyClient,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create worker service: %w", err)

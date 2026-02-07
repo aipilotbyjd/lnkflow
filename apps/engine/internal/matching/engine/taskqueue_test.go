@@ -18,8 +18,8 @@ func TestTaskQueue_AddTask(t *testing.T) {
 		ScheduledTime: time.Now(),
 	}
 
-	if !tq.AddTask(task) {
-		t.Error("AddTask should return true for new task")
+	if err := tq.AddTask(task); err != nil {
+		t.Fatalf("AddTask error = %v", err)
 	}
 
 	if tq.PendingTaskCount() != 1 {
@@ -27,8 +27,8 @@ func TestTaskQueue_AddTask(t *testing.T) {
 	}
 
 	// Adding same task again should return false
-	if tq.AddTask(task) {
-		t.Error("AddTask should return false for duplicate task")
+	if err := tq.AddTask(task); err != ErrTaskExists {
+		t.Errorf("duplicate AddTask error = %v, want %v", err, ErrTaskExists)
 	}
 }
 
@@ -42,7 +42,9 @@ func TestTaskQueue_PollTask(t *testing.T) {
 		ScheduledTime: time.Now(),
 	}
 
-	tq.AddTask(task)
+	if err := tq.AddTask(task); err != nil {
+		t.Fatalf("AddTask error = %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -105,7 +107,9 @@ func TestTaskQueue_ConcurrentAddPoll(t *testing.T) {
 				WorkflowID:    "workflow",
 				ScheduledTime: time.Now(),
 			}
-			tq.AddTask(task)
+			if err := tq.AddTask(task); err != nil {
+				t.Errorf("AddTask error = %v", err)
+			}
 		}(i)
 	}
 
@@ -144,7 +148,9 @@ func TestTaskQueue_CompleteTask(t *testing.T) {
 		ScheduledTime: time.Now(),
 	}
 
-	tq.AddTask(task)
+	if err := tq.AddTask(task); err != nil {
+		t.Fatalf("AddTask error = %v", err)
+	}
 
 	if !tq.CompleteTask("task-1") {
 		t.Error("CompleteTask should return true for existing task")
@@ -165,10 +171,12 @@ func TestTaskQueue_RateLimiting(t *testing.T) {
 
 	// Add some tasks
 	for i := 0; i < 5; i++ {
-		tq.AddTask(&Task{
+		if err := tq.AddTask(&Task{
 			ID:            taskID(i),
 			ScheduledTime: time.Now(),
-		})
+		}); err != nil {
+			t.Fatalf("AddTask error = %v", err)
+		}
 	}
 
 	ctx := context.Background()

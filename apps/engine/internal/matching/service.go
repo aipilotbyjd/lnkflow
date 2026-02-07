@@ -2,6 +2,7 @@ package matching
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -54,12 +55,56 @@ func NewService(cfg Config) *Service {
 
 func (s *Service) AddTask(ctx context.Context, taskQueueName string, task *engine.Task) error {
 	tq := s.GetOrCreateTaskQueue(taskQueueName, engine.TaskQueueKindNormal)
-	if !tq.AddTask(task) {
-		s.logger.Warn("task already exists",
+	if err := tq.AddTask(task); err != nil {
+		if errors.Is(err, engine.ErrTaskExists) {
+			s.logger.Warn("task already exists",
+				slog.String("task_id", task.ID),
+				slog.String("task_queue", taskQueueName),
+			)
+			return nil
+		}
+
+		s.logger.Error("failed to add task",
 			slog.String("task_id", task.ID),
 			slog.String("task_queue", taskQueueName),
+			slog.String("error", err.Error()),
 		)
+		return err
 	}
+
+	return nil
+}
+
+func (s *Service) CompleteTaskByID(ctx context.Context, taskID string) error {
+	s.mu.RLock()
+	queues := make([]*engine.TaskQueue, 0, len(s.taskQueues))
+	for _, tq := range s.taskQueues {
+		queues = append(queues, tq)
+	}
+	s.mu.RUnlock()
+
+	for _, tq := range queues {
+		if tq.CompleteTask(taskID) {
+			return nil
+		}
+	}
+
+	return ErrTaskNotFound
+}
+
+func (s *Service) CompleteTask(ctx context.Context, taskQueueName string, taskID string) error {
+	s.mu.RLock()
+	tq, exists := s.taskQueues[taskQueueName]
+	s.mu.RUnlock()
+
+	if !exists {
+		return ErrTaskQueueNotFound
+	}
+
+	if !tq.CompleteTask(taskID) {
+		return ErrTaskNotFound
+	}
+
 	return nil
 }
 
@@ -81,22 +126,6 @@ func (s *Service) PollTask(ctx context.Context, taskQueueName string, identity s
 	}
 
 	return task, nil
-}
-
-func (s *Service) CompleteTask(ctx context.Context, taskQueueName string, taskID string) error {
-	s.mu.RLock()
-	tq, exists := s.taskQueues[taskQueueName]
-	s.mu.RUnlock()
-
-	if !exists {
-		return ErrTaskQueueNotFound
-	}
-
-	if !tq.CompleteTask(taskID) {
-		return ErrTaskNotFound
-	}
-
-	return nil
 }
 
 func (s *Service) GetOrCreateTaskQueue(name string, kind engine.TaskQueueKind) *engine.TaskQueue {

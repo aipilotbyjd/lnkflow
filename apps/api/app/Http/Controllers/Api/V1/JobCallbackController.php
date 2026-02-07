@@ -10,6 +10,7 @@ use App\Models\ExecutionNode;
 use App\Models\JobStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class JobCallbackController extends Controller
 {
@@ -49,6 +50,16 @@ class JobCallbackController extends Controller
             return response()->json(['error' => 'Invalid callback token'], 401);
         }
 
+        // Idempotent handling for repeated callbacks from retries.
+        if (in_array($jobStatus->status, ['completed', 'failed'], true)) {
+            return response()->json([
+                'success' => true,
+                'execution_id' => $jobStatus->execution_id,
+                'status' => $jobStatus->status,
+                'idempotent' => true,
+            ]);
+        }
+
         // Find execution
         $execution = Execution::find($validated['execution_id']);
 
@@ -56,56 +67,59 @@ class JobCallbackController extends Controller
             return response()->json(['error' => 'Execution not found'], 404);
         }
 
-        // Update execution nodes and create execution logs
-        if (! empty($validated['nodes'])) {
-            foreach ($validated['nodes'] as $nodeData) {
-                $executionNode = ExecutionNode::updateOrCreate(
-                    [
-                        'execution_id' => $execution->id,
-                        'node_id' => $nodeData['node_id'],
-                    ],
-                    [
-                        'node_type' => $nodeData['node_type'],
-                        'node_name' => $nodeData['node_name'] ?? null,
-                        'status' => $nodeData['status'],
-                        'output_data' => $nodeData['output'] ?? null,
-                        'error' => $nodeData['error'] ?? null,
-                        'started_at' => $nodeData['started_at'] ?? null,
-                        'finished_at' => $nodeData['completed_at'] ?? null,
-                        'sequence' => $nodeData['sequence'] ?? 0,
-                    ]
-                );
+        if ((int) $jobStatus->execution_id !== (int) $execution->id) {
+            return response()->json(['error' => 'Execution does not match job'], 403);
+        }
 
-                $nodeName = $nodeData['node_name'] ?? $nodeData['node_id'];
-                $nodeStatus = $nodeData['status'];
+        DB::transaction(function () use ($execution, $jobStatus, $validated): void {
+            // Update execution nodes and create execution logs
+            if (! empty($validated['nodes'])) {
+                foreach ($validated['nodes'] as $nodeData) {
+                    $executionNode = ExecutionNode::updateOrCreate(
+                        [
+                            'execution_id' => $execution->id,
+                            'node_id' => $nodeData['node_id'],
+                        ],
+                        [
+                            'node_type' => $nodeData['node_type'],
+                            'node_name' => $nodeData['node_name'] ?? null,
+                            'status' => $nodeData['status'],
+                            'output_data' => $nodeData['output'] ?? null,
+                            'error' => $nodeData['error'] ?? null,
+                            'started_at' => $nodeData['started_at'] ?? null,
+                            'finished_at' => $nodeData['completed_at'] ?? null,
+                            'sequence' => $nodeData['sequence'] ?? 0,
+                        ]
+                    );
 
-                if ($nodeStatus === 'failed') {
-                    $errorMessage = $nodeData['error']['message'] ?? 'Unknown error';
-                    ExecutionLog::create([
-                        'execution_id' => $execution->id,
-                        'execution_node_id' => $executionNode->id,
-                        'level' => LogLevel::Error,
-                        'message' => "Node '{$nodeName}' failed: {$errorMessage}",
-                        'context' => $nodeData['error'] ?? null,
-                        'logged_at' => $nodeData['completed_at'] ?? now(),
-                    ]);
-                } else {
-                    ExecutionLog::create([
-                        'execution_id' => $execution->id,
-                        'execution_node_id' => $executionNode->id,
-                        'level' => LogLevel::Info,
-                        'message' => "Node '{$nodeName}' ({$nodeData['node_type']}) {$nodeStatus}",
-                        'context' => null,
-                        'logged_at' => $nodeData['completed_at'] ?? $nodeData['started_at'] ?? now(),
-                    ]);
+                    $nodeName = $nodeData['node_name'] ?? $nodeData['node_id'];
+                    $nodeStatus = $nodeData['status'];
+
+                    if ($nodeStatus === 'failed') {
+                        $errorMessage = $nodeData['error']['message'] ?? 'Unknown error';
+                        ExecutionLog::create([
+                            'execution_id' => $execution->id,
+                            'execution_node_id' => $executionNode->id,
+                            'level' => LogLevel::Error,
+                            'message' => "Node '{$nodeName}' failed: {$errorMessage}",
+                            'context' => $nodeData['error'] ?? null,
+                            'logged_at' => $nodeData['completed_at'] ?? now(),
+                        ]);
+                    } else {
+                        ExecutionLog::create([
+                            'execution_id' => $execution->id,
+                            'execution_node_id' => $executionNode->id,
+                            'level' => LogLevel::Info,
+                            'message' => "Node '{$nodeName}' ({$nodeData['node_type']}) {$nodeStatus}",
+                            'context' => null,
+                            'logged_at' => $nodeData['completed_at'] ?? $nodeData['started_at'] ?? now(),
+                        ]);
+                    }
                 }
             }
-        }
 
-        $startedAt = $execution->started_at ?? (! empty($validated['nodes']) ? $validated['nodes'][0]['started_at'] ?? now() : now());
+            $startedAt = $execution->started_at ?? (! empty($validated['nodes']) ? $validated['nodes'][0]['started_at'] ?? now() : now());
 
-        // Update execution status
-        if ($validated['status'] === 'completed') {
             $execution->update([
                 'status' => $validated['status'],
                 'started_at' => $startedAt,
@@ -113,25 +127,16 @@ class JobCallbackController extends Controller
                 'duration_ms' => $validated['duration_ms'] ?? null,
                 'error' => $validated['error'] ?? null,
             ]);
-        } else {
-            $execution->update([
-                'status' => $validated['status'],
-                'started_at' => $startedAt,
-                'finished_at' => now(),
-                'duration_ms' => $validated['duration_ms'] ?? null,
-                'error' => $validated['error'] ?? null,
-            ]);
-        }
 
-        // Update job status
-        if ($validated['status'] === 'completed') {
-            $jobStatus->markCompleted([
-                'duration_ms' => $validated['duration_ms'] ?? null,
-                'nodes_count' => count($validated['nodes'] ?? []),
-            ]);
-        } else {
-            $jobStatus->markFailed($validated['error'] ?? ['message' => 'Unknown error']);
-        }
+            if ($validated['status'] === 'completed') {
+                $jobStatus->markCompleted([
+                    'duration_ms' => $validated['duration_ms'] ?? null,
+                    'nodes_count' => count($validated['nodes'] ?? []),
+                ]);
+            } else {
+                $jobStatus->markFailed($validated['error'] ?? ['message' => 'Unknown error']);
+            }
+        });
 
         return response()->json([
             'success' => true,
@@ -161,6 +166,10 @@ class JobCallbackController extends Controller
         // Validate callback token
         if (! hash_equals($jobStatus->callback_token, $validated['callback_token'])) {
             return response()->json(['error' => 'Invalid callback token'], 401);
+        }
+
+        if (in_array($jobStatus->status, ['completed', 'failed'], true)) {
+            return response()->json(['success' => true, 'idempotent' => true]);
         }
 
         $jobStatus->updateProgress($validated['progress']);

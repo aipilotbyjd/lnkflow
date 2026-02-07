@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,6 +17,10 @@ const (
 	DefaultBaseDelay    = time.Second
 	DefaultMaxDelay     = 30 * time.Second
 	DefaultDLQStreamKey = "linkflow:jobs:dlq"
+	DefaultGroupName    = "engine-group"
+	DefaultPartitions   = 16
+	DefaultClaimMinIdle = 30 * time.Second
+	DefaultClaimBatch   = 50
 )
 
 type RetryConfig struct {
@@ -25,8 +30,12 @@ type RetryConfig struct {
 }
 
 type ConsumerConfig struct {
-	Retry        RetryConfig
-	DLQStreamKey string
+	Retry          RetryConfig
+	DLQStreamKey   string
+	GroupName      string
+	PartitionCount int
+	ClaimMinIdle   time.Duration
+	ClaimBatch     int64
 }
 
 func DefaultConsumerConfig() ConsumerConfig {
@@ -36,7 +45,11 @@ func DefaultConsumerConfig() ConsumerConfig {
 			BaseDelay:  DefaultBaseDelay,
 			MaxDelay:   DefaultMaxDelay,
 		},
-		DLQStreamKey: DefaultDLQStreamKey,
+		DLQStreamKey:   DefaultDLQStreamKey,
+		GroupName:      DefaultGroupName,
+		PartitionCount: DefaultPartitions,
+		ClaimMinIdle:   DefaultClaimMinIdle,
+		ClaimBatch:     DefaultClaimBatch,
 	}
 }
 
@@ -68,6 +81,19 @@ func NewRedisConsumer(client *redis.Client, service *Service, logger *slog.Logge
 }
 
 func NewRedisConsumerWithConfig(client *redis.Client, service *Service, logger *slog.Logger, config ConsumerConfig) *RedisConsumer {
+	if config.PartitionCount <= 0 {
+		config.PartitionCount = DefaultPartitions
+	}
+	if config.GroupName == "" {
+		config.GroupName = DefaultGroupName
+	}
+	if config.ClaimMinIdle <= 0 {
+		config.ClaimMinIdle = DefaultClaimMinIdle
+	}
+	if config.ClaimBatch <= 0 {
+		config.ClaimBatch = DefaultClaimBatch
+	}
+
 	return &RedisConsumer{
 		client:  client,
 		service: service,
@@ -77,20 +103,19 @@ func NewRedisConsumerWithConfig(client *redis.Client, service *Service, logger *
 }
 
 func (c *RedisConsumer) Start(ctx context.Context) {
-	// Listen to all partitions (0-15)
-	for i := 0; i < 16; i++ {
+	for i := 0; i < c.config.PartitionCount; i++ {
 		go c.consumePartition(ctx, i)
 	}
 }
 
 func (c *RedisConsumer) consumePartition(ctx context.Context, partition int) {
 	streamKey := fmt.Sprintf("linkflow:jobs:partition:%d", partition)
-	groupName := "engine-group"
-	consumerName := fmt.Sprintf("engine-consumer-%d", partition)
+	groupName := c.config.GroupName
+	consumerName := c.consumerName(partition)
 
 	// Create consumer group
 	for {
-		err := c.client.XGroupCreateMkStream(ctx, streamKey, groupName, "$").Err()
+		err := c.client.XGroupCreateMkStream(ctx, streamKey, groupName, "0").Err()
 		if err == nil {
 			break
 		}
@@ -112,6 +137,8 @@ func (c *RedisConsumer) consumePartition(ctx context.Context, partition int) {
 		case <-ctx.Done():
 			return
 		default:
+			c.reclaimPending(ctx, streamKey, groupName, consumerName)
+
 			streams, err := c.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    groupName,
 				Consumer: consumerName,
@@ -282,5 +309,51 @@ func (c *RedisConsumer) moveToDLQ(ctx context.Context, job *JobPayload, payloadS
 }
 
 func (c *RedisConsumer) ack(ctx context.Context, stream, group, id string) {
-	c.client.XAck(ctx, stream, group, id)
+	if _, err := c.client.XAck(ctx, stream, group, id).Result(); err != nil {
+		c.logger.Error("failed to ack stream message",
+			slog.String("stream", stream),
+			slog.String("group", group),
+			slog.String("id", id),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
+func (c *RedisConsumer) reclaimPending(ctx context.Context, stream, group, consumer string) {
+	start := "0-0"
+
+	for {
+		msgs, next, err := c.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+			Stream:   stream,
+			Group:    group,
+			Consumer: consumer,
+			MinIdle:  c.config.ClaimMinIdle,
+			Start:    start,
+			Count:    c.config.ClaimBatch,
+		}).Result()
+		if err != nil {
+			if !errors.Is(err, redis.Nil) {
+				c.logger.Warn("failed to reclaim pending messages", slog.String("error", err.Error()))
+			}
+			return
+		}
+
+		for _, msg := range msgs {
+			c.processMessage(ctx, msg, stream, group)
+		}
+
+		if len(msgs) == 0 || next == "0-0" {
+			return
+		}
+		start = next
+	}
+}
+
+func (c *RedisConsumer) consumerName(partition int) string {
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
+		hostname = "unknown"
+	}
+
+	return fmt.Sprintf("engine-%s-%d-p%d", hostname, os.Getpid(), partition)
 }

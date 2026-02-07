@@ -57,6 +57,11 @@ services:
       # Rate limiting
       RATE_LIMIT_REQUESTS: 1000
       RATE_LIMIT_WINDOW: 60s
+      # Redis job consumer
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
+      JOB_CONSUMER_GROUP: engine-group
+      JOB_CLAIM_MIN_IDLE: 30s
+      JOB_CLAIM_BATCH: 50
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/health" ]
       interval: 10s

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\ExecutionLogResource;
 use App\Http\Resources\Api\V1\ExecutionNodeResource;
 use App\Http\Resources\Api\V1\ExecutionResource;
+use App\Jobs\ExecuteWorkflowJob;
 use App\Models\Execution;
 use App\Models\Workflow;
 use App\Models\Workspace;
@@ -151,6 +152,13 @@ class ExecutionController extends Controller
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
+
+        ExecuteWorkflowJob::dispatch(
+            $execution->workflow,
+            $newExecution,
+            'default',
+            $execution->trigger_data ?? []
+        );
 
         $newExecution->load(['workflow', 'triggeredBy']);
 

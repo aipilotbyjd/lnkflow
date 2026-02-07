@@ -12,6 +12,9 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             PlanSeeder::class,
             AdminSeeder::class,
+            NodeCategorySeeder::class,
+            NodeSeeder::class,
+            CredentialTypeSeeder::class,
         ]);
     }
 }

@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\V1\WorkflowVersionController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\Api\V1\WorkspaceMemberController;
 use App\Http\Controllers\Api\WebhookReceiverController;
+use App\Http\Middleware\VerifyEngineCallbackSignature;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->as('v1.')->group(function () {
@@ -232,10 +233,13 @@ Route::prefix('webhooks')->as('webhooks.')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('v1/jobs')->as('v1.jobs.')->group(function () {
-    Route::post('callback', [JobCallbackController::class, 'handle'])->name('callback');
-    Route::post('progress', [JobCallbackController::class, 'progress'])->name('progress');
-});
+Route::prefix('v1/jobs')
+    ->as('v1.jobs.')
+    ->middleware(VerifyEngineCallbackSignature::class)
+    ->group(function () {
+        Route::post('callback', [JobCallbackController::class, 'handle'])->name('callback');
+        Route::post('progress', [JobCallbackController::class, 'progress'])->name('progress');
+    });
 
 /*
 |--------------------------------------------------------------------------

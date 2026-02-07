@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
+	"time"
 
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
@@ -53,13 +55,25 @@ func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest
 		req.ScheduledEventId,
 	)
 
-	// Generate secure random token for task authentication
-	// The worker client expects format: "namespace|token"
+	// Generate secure random token for task authentication.
 	rawToken, err := generateSecureToken()
 	if err != nil {
 		return nil, err
 	}
-	token := []byte(fmt.Sprintf("%s|%s", req.Namespace, string(rawToken)))
+
+	queueName := req.TaskQueue.GetName()
+	if queueName == "" {
+		queueName = "default"
+	}
+
+	scheduledAt := time.Now().UTC()
+	if req.ScheduleTime != nil {
+		scheduledAt = req.ScheduleTime.AsTime()
+	}
+
+	// Token format: namespace|queue|taskID|random.
+	// This lets workers complete tasks safely without additional lookups.
+	token := []byte(fmt.Sprintf("%s|%s|%s|%s", req.Namespace, queueName, taskID, string(rawToken)))
 
 	task := &engine.Task{
 		ID:               taskID,
@@ -67,15 +81,10 @@ func (s *GRPCServer) AddTask(ctx context.Context, req *matchingv1.AddTaskRequest
 		WorkflowID:       req.WorkflowExecution.GetWorkflowId(),
 		RunID:            req.WorkflowExecution.GetRunId(),
 		Namespace:        req.Namespace,
-		ScheduledTime:    req.ScheduleTime.AsTime(),
+		ScheduledTime:    scheduledAt,
 		TaskType:         int32(req.TaskType),
 		ScheduledEventID: req.ScheduledEventId,
 		ActivityID:       fmt.Sprintf("%d", req.ScheduledEventId),
-	}
-
-	queueName := req.TaskQueue.GetName()
-	if queueName == "" {
-		queueName = "default"
 	}
 
 	if err = s.service.AddTask(ctx, queueName, task); err != nil {
@@ -97,6 +106,9 @@ func (s *GRPCServer) PollTask(ctx context.Context, req *matchingv1.PollTaskReque
 	task, err := s.service.PollTask(ctx, queueName, req.Identity)
 	if err != nil {
 		return nil, err
+	}
+	if task == nil {
+		return &matchingv1.PollTaskResponse{}, nil
 	}
 
 	// Map internal engine.Task to proto PollTaskResponse
@@ -128,4 +140,37 @@ func (s *GRPCServer) PollTask(ctx context.Context, req *matchingv1.PollTaskReque
 	}
 
 	return resp, nil
+}
+
+func (s *GRPCServer) CompleteTask(ctx context.Context, req *matchingv1.CompleteTaskRequest) (*matchingv1.CompleteTaskResponse, error) {
+	_, queueName, taskID, err := parseTaskToken(req.GetTaskToken())
+	if err != nil {
+		return nil, err
+	}
+	if queueName == "" || taskID == "" {
+		return nil, fmt.Errorf("invalid task token")
+	}
+
+	if err := s.service.CompleteTask(ctx, queueName, taskID); err != nil && err != ErrTaskNotFound {
+		return nil, err
+	}
+
+	// Completion is idempotent; already-completed/not-found tasks are treated as success.
+	return &matchingv1.CompleteTaskResponse{}, nil
+}
+
+func (s *GRPCServer) QueryWorkflow(ctx context.Context, req *matchingv1.MatchingServiceQueryWorkflowRequest) (*matchingv1.MatchingServiceQueryWorkflowResponse, error) {
+	return &matchingv1.MatchingServiceQueryWorkflowResponse{}, nil
+}
+
+func (s *GRPCServer) HeartbeatTask(ctx context.Context, req *matchingv1.HeartbeatTaskRequest) (*matchingv1.HeartbeatTaskResponse, error) {
+	return &matchingv1.HeartbeatTaskResponse{CancelRequested: false}, nil
+}
+
+func parseTaskToken(token []byte) (namespace string, queueName string, taskID string, err error) {
+	parts := strings.SplitN(string(token), "|", 4)
+	if len(parts) < 4 {
+		return "", "", "", fmt.Errorf("malformed task token")
+	}
+	return parts[0], parts[1], parts[2], nil
 }

@@ -8,6 +8,7 @@ import (
 )
 
 type Task struct {
+	TaskToken        []byte `json:"task_token"`
 	TaskID           string `json:"task_id"`
 	WorkflowID       string `json:"workflow_id"`
 	RunID            string `json:"run_id"`
@@ -33,6 +34,7 @@ type TaskHandler func(ctx context.Context, task *Task) (*TaskResult, error)
 
 type MatchingClient interface {
 	PollTask(ctx context.Context, taskQueue string, identity string) (*Task, error)
+	CompleteTask(ctx context.Context, task *Task, identity string) error
 }
 
 type Poller struct {
@@ -150,6 +152,13 @@ func (p *Poller) pollLoop(ctx context.Context) {
 						slog.String("error", err.Error()),
 					)
 				} else {
+					if err := p.client.CompleteTask(ctx, task, p.identity); err != nil {
+						p.logger.Error("failed to complete task",
+							slog.String("task_id", task.TaskID),
+							slog.String("error", err.Error()),
+						)
+					}
+
 					p.logger.Debug("task completed",
 						slog.String("task_id", task.TaskID),
 						slog.String("error_type", result.ErrorType),

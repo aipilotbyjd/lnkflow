@@ -52,6 +52,7 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 
 	if resp.ActivityTaskInfo != nil {
 		task = &poller.Task{
+			TaskToken:        resp.TaskToken,
 			TaskID:           resp.ActivityTaskInfo.ActivityId,
 			WorkflowID:       resp.WorkflowExecution.GetWorkflowId(),
 			RunID:            resp.WorkflowExecution.GetRunId(),
@@ -67,6 +68,7 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 		}
 	} else if resp.WorkflowTaskInfo != nil {
 		task = &poller.Task{
+			TaskToken:        resp.TaskToken,
 			TaskID:           fmt.Sprintf("%d", resp.WorkflowTaskInfo.ScheduledEventId),
 			WorkflowID:       resp.WorkflowExecution.GetWorkflowId(),
 			RunID:            resp.WorkflowExecution.GetRunId(),
@@ -81,4 +83,19 @@ func (c *MatchingClient) PollTask(ctx context.Context, taskQueue string, identit
 	}
 
 	return task, nil
+}
+
+func (c *MatchingClient) CompleteTask(ctx context.Context, task *poller.Task, identity string) error {
+	if task == nil || len(task.TaskToken) == 0 {
+		return fmt.Errorf("task token is required")
+	}
+
+	req := &matchingv1.CompleteTaskRequest{
+		TaskToken: task.TaskToken,
+		Namespace: task.Namespace,
+		Identity:  identity,
+	}
+
+	_, err := c.client.CompleteTask(ctx, req)
+	return err
 }

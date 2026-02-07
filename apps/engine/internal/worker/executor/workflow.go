@@ -178,6 +178,24 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 		if err := json.Unmarshal(node.Data, &nodeData); err == nil && len(nodeData.Config) > 0 {
 			configBytes = nodeData.Config
 		}
+		if len(configBytes) == 0 {
+			configBytes = []byte("{}")
+		}
+
+		envelopeBytes, err := json.Marshal(struct {
+			Input  json.RawMessage `json:"input"`
+			Config json.RawMessage `json:"config"`
+			NodeID string          `json:"node_id"`
+			Type   string          `json:"node_type"`
+		}{
+			Input:  json.RawMessage(inputData),
+			Config: json.RawMessage(configBytes),
+			NodeID: node.ID,
+			Type:   node.Type,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal activity envelope: %w", err)
+		}
 
 		cmd := &historyv1.Command{
 			CommandType: historyv1.CommandType_COMMAND_TYPE_SCHEDULE_ACTIVITY_TASK,
@@ -187,7 +205,7 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 					NodeType: node.Type,
 					Name:     node.GetName(),
 					Input: &commonv1.Payloads{
-						Payloads: []*commonv1.Payload{{Data: inputData}},
+						Payloads: []*commonv1.Payload{{Data: envelopeBytes}},
 					},
 					TaskQueue: "default",
 					Config:    configBytes, // We added this field to Command

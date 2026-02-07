@@ -51,6 +51,19 @@ func main() {
 		RedisClient:   redisClient,
 	})
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := svc.Start(ctx); err != nil {
+		logger.Error("failed to start matching service", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		if err := svc.Stop(); err != nil {
+			logger.Error("failed to stop matching service", slog.String("error", err.Error()))
+		}
+	}()
+
 	server := grpc.NewServer()
 	matchingv1.RegisterMatchingServiceServer(server, matching.NewGRPCServer(svc))
 	reflection.Register(server)
@@ -60,9 +73,6 @@ func main() {
 		logger.Error("failed to listen", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Setup HTTP Server for Health Checks
 	mux := http.NewServeMux()

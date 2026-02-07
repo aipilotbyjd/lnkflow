@@ -3,6 +3,7 @@
 use App\Enums\ExecutionMode;
 use App\Enums\ExecutionStatus;
 use App\Enums\LogLevel;
+use App\Jobs\ExecuteWorkflowJob;
 use App\Models\Execution;
 use App\Models\ExecutionLog;
 use App\Models\ExecutionNode;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Models\Workflow;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Passport\Passport;
 
 uses(RefreshDatabase::class);
@@ -223,6 +225,8 @@ describe('logs', function () {
 
 describe('retry', function () {
     it('creates a retry execution for failed execution', function () {
+        Queue::fake();
+
         $execution = Execution::factory()->failed()->create([
             'workflow_id' => $this->workflow->id,
             'workspace_id' => $this->workspace->id,
@@ -241,6 +245,8 @@ describe('retry', function () {
             'parent_execution_id' => $execution->id,
             'attempt' => 2,
         ]);
+
+        Queue::assertPushed(ExecuteWorkflowJob::class);
     });
 
     it('returns error for completed execution', function () {

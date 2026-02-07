@@ -13,6 +13,17 @@ use Laravel\Passport\Passport;
 
 uses(RefreshDatabase::class);
 
+function engineHeaders(array $payload, ?string $secret = 'test-engine-secret'): array
+{
+    $body = json_encode($payload, JSON_THROW_ON_ERROR);
+    $timestamp = now()->toRfc3339String();
+
+    return [
+        'X-LinkFlow-Timestamp' => $timestamp,
+        'X-LinkFlow-Signature' => hash_hmac('sha256', $body, $secret ?? ''),
+    ];
+}
+
 beforeEach(function () {
     $this->user = User::factory()->create();
     $this->workspace = Workspace::factory()->create(['owner_id' => $this->user->id]);
@@ -20,6 +31,12 @@ beforeEach(function () {
         'role' => 'owner',
         'joined_at' => now(),
     ]);
+
+    config([
+        'services.engine.secret' => 'test-engine-secret',
+        'services.engine.callback_ttl' => 300,
+    ]);
+
     Passport::actingAs($this->user);
 });
 
@@ -129,7 +146,7 @@ describe('JobCallbackController', function () {
             'execution_id' => $execution->id,
         ]);
 
-        $response = $this->postJson('/api/v1/jobs/callback', [
+        $payload = [
             'job_id' => $jobStatus->job_id,
             'callback_token' => $jobStatus->callback_token, // Required token
             'execution_id' => $execution->id,
@@ -138,7 +155,10 @@ describe('JobCallbackController', function () {
                 ['node_id' => 'n1', 'node_type' => 'http_request', 'status' => 'completed', 'output' => ['data' => 'test'], 'sequence' => 1],
             ],
             'duration_ms' => 500,
-        ]);
+        ];
+
+        $response = $this->withHeaders(engineHeaders($payload))
+            ->postJson('/api/v1/jobs/callback', $payload);
 
         $response->assertSuccessful();
         expect($execution->fresh()->status->value)->toBe('completed');
@@ -155,12 +175,15 @@ describe('JobCallbackController', function () {
             'execution_id' => $execution->id,
         ]);
 
-        $response = $this->postJson('/api/v1/jobs/callback', [
+        $payload = [
             'job_id' => $jobStatus->job_id,
             'callback_token' => str_repeat('x', 64), // Invalid token
             'execution_id' => $execution->id,
             'status' => 'completed',
-        ]);
+        ];
+
+        $response = $this->withHeaders(engineHeaders($payload))
+            ->postJson('/api/v1/jobs/callback', $payload);
 
         $response->assertStatus(401);
         expect($response->json('error'))->toBe('Invalid callback token');
@@ -176,13 +199,16 @@ describe('JobCallbackController', function () {
             'execution_id' => $execution->id,
         ]);
 
-        $response = $this->postJson('/api/v1/jobs/callback', [
+        $payload = [
             'job_id' => $jobStatus->job_id,
             'callback_token' => $jobStatus->callback_token,
             'execution_id' => $execution->id,
             'status' => 'failed',
             'error' => ['message' => 'Node execution failed'],
-        ]);
+        ];
+
+        $response = $this->withHeaders(engineHeaders($payload))
+            ->postJson('/api/v1/jobs/callback', $payload);
 
         $response->assertSuccessful();
         expect($execution->fresh()->status->value)->toBe('failed');
@@ -192,11 +218,14 @@ describe('JobCallbackController', function () {
     it('updates progress', function () {
         $jobStatus = JobStatus::factory()->processing()->create();
 
-        $response = $this->postJson('/api/v1/jobs/progress', [
+        $payload = [
             'job_id' => $jobStatus->job_id,
             'callback_token' => $jobStatus->callback_token,
             'progress' => 75,
-        ]);
+        ];
+
+        $response = $this->withHeaders(engineHeaders($payload))
+            ->postJson('/api/v1/jobs/progress', $payload);
 
         $response->assertSuccessful();
         expect($jobStatus->fresh()->progress)->toBe(75);
@@ -205,11 +234,14 @@ describe('JobCallbackController', function () {
     it('rejects progress update with invalid token', function () {
         $jobStatus = JobStatus::factory()->processing()->create();
 
-        $response = $this->postJson('/api/v1/jobs/progress', [
+        $payload = [
             'job_id' => $jobStatus->job_id,
             'callback_token' => str_repeat('y', 64),
             'progress' => 50,
-        ]);
+        ];
+
+        $response = $this->withHeaders(engineHeaders($payload))
+            ->postJson('/api/v1/jobs/progress', $payload);
 
         $response->assertStatus(401);
     });

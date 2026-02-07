@@ -78,8 +78,7 @@ func (s *Service) Logger() *slog.Logger {
 func (s *Service) StartWorkflowExecution(ctx context.Context, req *StartWorkflowExecutionRequest) (*StartWorkflowExecutionResponse, error) {
 	runID := req.RequestID
 	if runID == "" {
-		// Fallback to nil UUID if not provided (should be provided by consumer)
-		runID = "00000000-0000-0000-0000-000000000000"
+		runID = generateRunID()
 	}
 
 	eventReq := &RecordEventRequest{

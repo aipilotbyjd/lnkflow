@@ -1,10 +1,16 @@
 package worker
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -26,6 +32,8 @@ type Service struct {
 	executors     map[string]executor.Executor
 	taskPollers   []*poller.Poller
 	retryPolicy   *retry.Policy
+	callbackHTTP  *http.Client
+	callbackKey   string
 	logger        *slog.Logger
 	wg            sync.WaitGroup
 	stopCh        chan struct{}
@@ -35,13 +43,16 @@ type Service struct {
 }
 
 type Config struct {
-	TaskQueues    []string
-	Identity      string
-	MatchingAddr  string
-	PollInterval  time.Duration
-	RetryPolicy   *retry.Policy
-	Logger        *slog.Logger
-	HistoryClient *adapter.HistoryClient
+	TaskQueues      []string
+	NumPollers      int
+	Identity        string
+	MatchingAddr    string
+	PollInterval    time.Duration
+	RetryPolicy     *retry.Policy
+	CallbackKey     string
+	CallbackTimeout time.Duration
+	Logger          *slog.Logger
+	HistoryClient   *adapter.HistoryClient
 }
 
 // NewService creates a new worker service.
@@ -54,6 +65,12 @@ func NewService(cfg Config) (*Service, error) {
 	}
 	if cfg.PollInterval == 0 {
 		cfg.PollInterval = time.Second
+	}
+	if cfg.NumPollers <= 0 {
+		cfg.NumPollers = 1
+	}
+	if cfg.CallbackTimeout <= 0 {
+		cfg.CallbackTimeout = 10 * time.Second
 	}
 	if cfg.MatchingAddr == "" {
 		return nil, fmt.Errorf("matching service address is required")
@@ -73,14 +90,21 @@ func NewService(cfg Config) (*Service, error) {
 
 	var pollers []*poller.Poller
 	for _, queue := range cfg.TaskQueues {
-		p := poller.New(poller.Config{
-			Client:       client,
-			TaskQueue:    queue,
-			Identity:     cfg.Identity,
-			PollInterval: cfg.PollInterval,
-			Logger:       cfg.Logger,
-		})
-		pollers = append(pollers, p)
+		for i := 0; i < cfg.NumPollers; i++ {
+			identity := cfg.Identity
+			if cfg.NumPollers > 1 {
+				identity = fmt.Sprintf("%s-%d", cfg.Identity, i+1)
+			}
+
+			p := poller.New(poller.Config{
+				Client:       client,
+				TaskQueue:    queue,
+				Identity:     identity,
+				PollInterval: cfg.PollInterval,
+				Logger:       cfg.Logger,
+			})
+			pollers = append(pollers, p)
+		}
 	}
 
 	svc := &Service{
@@ -89,8 +113,12 @@ func NewService(cfg Config) (*Service, error) {
 		executors:     make(map[string]executor.Executor),
 		taskPollers:   pollers,
 		retryPolicy:   cfg.RetryPolicy,
-		logger:        cfg.Logger,
-		stopCh:        make(chan struct{}),
+		callbackHTTP: &http.Client{
+			Timeout: cfg.CallbackTimeout,
+		},
+		callbackKey: cfg.CallbackKey,
+		logger:      cfg.Logger,
+		stopCh:      make(chan struct{}),
 	}
 
 	for _, p := range pollers {
@@ -173,6 +201,15 @@ func (s *Service) handleTask(ctx context.Context, task *poller.Task) (*poller.Ta
 
 func (s *Service) processWorkflowTask(ctx context.Context, task *poller.Task) (*poller.TaskResult, error) {
 	s.logger.Info("processing workflow task", slog.String("workflow_id", task.WorkflowID))
+	startedAt := time.Now()
+	jobPayload, payloadErr := s.loadJobPayload(ctx, task)
+	if payloadErr != nil {
+		s.logger.Warn("failed to load callback payload",
+			slog.String("workflow_id", task.WorkflowID),
+			slog.String("run_id", task.RunID),
+			slog.String("error", payloadErr.Error()),
+		)
+	}
 
 	// Get Workflow Executor
 	exec, ok := s.executors["workflow"]
@@ -205,6 +242,9 @@ func (s *Service) processWorkflowTask(ctx context.Context, task *poller.Task) (*
 				Message: err.Error(),
 			},
 		})
+		s.sendLegacyCallback(jobPayload, "failed", time.Since(startedAt), map[string]interface{}{
+			"message": err.Error(),
+		})
 		return nil, err
 	}
 
@@ -226,7 +266,15 @@ func (s *Service) processWorkflowTask(ctx context.Context, task *poller.Task) (*
 	})
 	if err != nil {
 		s.logger.Error("failed to respond workflow task completed", slog.String("error", err.Error()))
+		s.sendLegacyCallback(jobPayload, "failed", time.Since(startedAt), map[string]interface{}{
+			"message": err.Error(),
+		})
 		return nil, err
+	}
+
+	status, callbackErr := callbackStatusFromCommands(commands)
+	if status != "" {
+		s.sendLegacyCallback(jobPayload, status, time.Since(startedAt), callbackErr)
 	}
 
 	return &poller.TaskResult{TaskID: task.TaskID}, nil
@@ -234,6 +282,12 @@ func (s *Service) processWorkflowTask(ctx context.Context, task *poller.Task) (*
 
 func (s *Service) processActivityTask(ctx context.Context, task *poller.Task) (*poller.TaskResult, error) {
 	s.logger.Info("processing activity task", slog.String("node_type", task.NodeType), slog.String("node_id", task.NodeID))
+
+	if task.NodeType == "" || task.NodeID == "" || len(task.Input) == 0 {
+		if err := s.hydrateActivityTaskFromHistory(ctx, task); err != nil {
+			return nil, fmt.Errorf("failed to hydrate activity task: %w", err)
+		}
+	}
 
 	s.mu.RLock()
 	exec, ok := s.executors[task.NodeType]
@@ -306,4 +360,197 @@ func (s *Service) processActivityTask(ctx context.Context, task *poller.Task) (*
 	})
 
 	return &poller.TaskResult{Output: resp.Output}, err
+}
+
+func (s *Service) hydrateActivityTaskFromHistory(ctx context.Context, task *poller.Task) error {
+	historyResp, err := s.historyClient.GetHistory(ctx, task.Namespace, task.WorkflowID, task.RunID)
+	if err != nil {
+		return err
+	}
+
+	events := historyResp.GetHistory().GetEvents()
+	for _, event := range events {
+		if event.GetEventId() != task.ScheduledEventID {
+			continue
+		}
+		if event.GetEventType() != commonv1.EventType_EVENT_TYPE_NODE_SCHEDULED {
+			continue
+		}
+
+		attr := event.GetNodeScheduledAttributes()
+		if attr == nil {
+			continue
+		}
+
+		task.NodeID = attr.GetNodeId()
+		task.NodeType = attr.GetNodeType()
+
+		if input := attr.GetInput(); input != nil && len(input.GetPayloads()) > 0 {
+			raw := input.GetPayloads()[0].GetData()
+			task.Input = raw
+
+			var envelope struct {
+				Input  json.RawMessage `json:"input"`
+				Config json.RawMessage `json:"config"`
+				NodeID string          `json:"node_id"`
+				Type   string          `json:"node_type"`
+			}
+
+			if err := json.Unmarshal(raw, &envelope); err == nil && (len(envelope.Input) > 0 || len(envelope.Config) > 0) {
+				if len(envelope.Input) > 0 {
+					task.Input = envelope.Input
+				}
+				if len(envelope.Config) > 0 {
+					task.Config = envelope.Config
+				}
+				if envelope.NodeID != "" {
+					task.NodeID = envelope.NodeID
+				}
+				if envelope.Type != "" {
+					task.NodeType = envelope.Type
+				}
+			}
+		}
+
+		if task.NodeType == "" {
+			return fmt.Errorf("missing node_type for scheduled_event_id=%d", task.ScheduledEventID)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("scheduled event %d not found", task.ScheduledEventID)
+}
+
+func (s *Service) loadJobPayload(ctx context.Context, task *poller.Task) (*executor.JobPayload, error) {
+	historyResp, err := s.historyClient.GetHistory(ctx, task.Namespace, task.WorkflowID, task.RunID)
+	if err != nil {
+		return nil, err
+	}
+
+	events := historyResp.GetHistory().GetEvents()
+	for _, event := range events {
+		if event.GetEventType() != commonv1.EventType_EVENT_TYPE_EXECUTION_STARTED {
+			continue
+		}
+
+		attr := event.GetExecutionStartedAttributes()
+		if attr == nil || attr.GetInput() == nil || len(attr.GetInput().GetPayloads()) == 0 {
+			continue
+		}
+
+		payloadBytes := attr.GetInput().GetPayloads()[0].GetData()
+
+		var payload executor.JobPayload
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return nil, err
+		}
+
+		return &payload, nil
+	}
+
+	return nil, fmt.Errorf("execution started payload not found")
+}
+
+func callbackStatusFromCommands(commands []*historyv1.Command) (string, map[string]interface{}) {
+	status := ""
+	var callbackErr map[string]interface{}
+
+	for _, cmd := range commands {
+		switch cmd.GetCommandType() {
+		case historyv1.CommandType_COMMAND_TYPE_COMPLETE_WORKFLOW_EXECUTION:
+			if status == "" {
+				status = "completed"
+			}
+		case historyv1.CommandType_COMMAND_TYPE_FAIL_WORKFLOW_EXECUTION:
+			status = "failed"
+			callbackErr = map[string]interface{}{
+				"message": "workflow execution failed",
+			}
+			if attr := cmd.GetFailWorkflowExecutionAttributes(); attr != nil && attr.GetFailure() != nil && attr.GetFailure().GetMessage() != "" {
+				callbackErr["message"] = attr.GetFailure().GetMessage()
+			}
+		}
+	}
+
+	return status, callbackErr
+}
+
+func (s *Service) sendLegacyCallback(payload *executor.JobPayload, status string, duration time.Duration, callbackErr map[string]interface{}) {
+	if payload == nil || payload.CallbackURL == "" || payload.JobID == "" || payload.CallbackToken == "" || payload.ExecutionID == 0 {
+		return
+	}
+	if status != "completed" && status != "failed" {
+		return
+	}
+
+	body := map[string]interface{}{
+		"job_id":         payload.JobID,
+		"callback_token": payload.CallbackToken,
+		"execution_id":   payload.ExecutionID,
+		"status":         status,
+		"duration_ms":    duration.Milliseconds(),
+	}
+	if callbackErr != nil {
+		body["error"] = callbackErr
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		s.logger.Error("failed to marshal callback payload", slog.String("error", err.Error()))
+		return
+	}
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		reqCtx, cancel := context.WithTimeout(context.Background(), s.callbackHTTP.Timeout)
+		err = s.postLegacyCallback(reqCtx, payload.CallbackURL, bodyBytes)
+		cancel()
+
+		if err == nil {
+			return
+		}
+
+		s.logger.Warn("failed to send workflow callback",
+			slog.String("job_id", payload.JobID),
+			slog.String("status", status),
+			slog.Int("attempt", attempt),
+			slog.String("error", err.Error()),
+		)
+
+		if attempt < 3 {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+	}
+}
+
+func (s *Service) postLegacyCallback(ctx context.Context, callbackURL string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, callbackURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-LinkFlow-Timestamp", time.Now().UTC().Format(time.RFC3339))
+	if s.callbackKey != "" {
+		req.Header.Set("X-LinkFlow-Signature", signPayload(body, s.callbackKey))
+	}
+
+	resp, err := s.callbackHTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("callback returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+func signPayload(body []byte, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
 }

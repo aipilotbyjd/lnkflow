@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'engine' => [
+        'api_url' => env('ENGINE_API_URL', 'http://linkflow-api:8000'),
+        'secret' => env('LINKFLOW_ENGINE_SECRET', env('LINKFLOW_SECRET')),
+        'callback_ttl' => (int) env('ENGINE_CALLBACK_TTL', 300),
+        'partition_count' => (int) env('ENGINE_PARTITION_COUNT', 16),
+        'stream_maxlen' => (int) env('ENGINE_STREAM_MAXLEN', 100000),
+        'send_sensitive_context' => (bool) env('ENGINE_SEND_SENSITIVE_CONTEXT', false),
+    ],
+
 ];

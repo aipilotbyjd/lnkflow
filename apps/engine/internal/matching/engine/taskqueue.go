@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -14,11 +15,13 @@ import (
 
 const DefaultLeaseTimeout = 60 * time.Second
 
+var ErrTaskExists = errors.New("task already exists")
+
 // TaskStore defines the interface for task persistence.
 type TaskStore interface {
 	AddTask(ctx context.Context, task *Task) error
 	PollTask(ctx context.Context, timeout time.Duration) (*Task, error)
-	AckTask(ctx context.Context, taskID string) error
+	AckTask(ctx context.Context, taskID string) (bool, error)
 	Len(ctx context.Context) (int64, error)
 }
 
@@ -41,7 +44,7 @@ func (s *MemoryTaskStore) AddTask(ctx context.Context, task *Task) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.tasksMap[task.ID]; exists {
-		return fmt.Errorf("task already exists")
+		return ErrTaskExists
 	}
 
 	elem := s.tasks.PushBack(task)
@@ -50,6 +53,10 @@ func (s *MemoryTaskStore) AddTask(ctx context.Context, task *Task) error {
 }
 
 func (s *MemoryTaskStore) PollTask(ctx context.Context, timeout time.Duration) (*Task, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -64,9 +71,22 @@ func (s *MemoryTaskStore) PollTask(ctx context.Context, timeout time.Duration) (
 	return task, nil
 }
 
-func (s *MemoryTaskStore) AckTask(ctx context.Context, taskID string) error {
-	// Memory store removes on Poll, so Ack is no-op or used for 2-phase commit logic if needed
-	return nil
+func (s *MemoryTaskStore) AckTask(ctx context.Context, taskID string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Support removing pending tasks by ID for idempotent completion paths.
+	if elem, exists := s.tasksMap[taskID]; exists {
+		s.tasks.Remove(elem)
+		delete(s.tasksMap, taskID)
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (s *MemoryTaskStore) Len(ctx context.Context) (int64, error) {
@@ -97,6 +117,10 @@ func (s *RedisTaskStore) AddTask(ctx context.Context, task *Task) error {
 }
 
 func (s *RedisTaskStore) PollTask(ctx context.Context, timeout time.Duration) (*Task, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// BLPOP returns [key, value]
 	results, err := s.client.BLPop(ctx, timeout, s.queueKey).Result()
 	if err != nil {
@@ -117,10 +141,10 @@ func (s *RedisTaskStore) PollTask(ctx context.Context, timeout time.Duration) (*
 	return &task, nil
 }
 
-func (s *RedisTaskStore) AckTask(ctx context.Context, taskID string) error {
+func (s *RedisTaskStore) AckTask(ctx context.Context, taskID string) (bool, error) {
 	// In Redis List model, pop removes it.
 	// For reliability, we should use RPOPLPUSH to a processing queue, but keeping it simple for now.
-	return nil
+	return false, nil
 }
 
 func (s *RedisTaskStore) Len(ctx context.Context) (int64, error) {
@@ -173,7 +197,7 @@ func (tq *TaskQueue) Metrics() *Metrics {
 	return tq.metrics
 }
 
-func (tq *TaskQueue) AddTask(task *Task) bool {
+func (tq *TaskQueue) AddTask(task *Task) error {
 	tq.mu.Lock()
 	defer tq.mu.Unlock()
 
@@ -185,18 +209,21 @@ func (tq *TaskQueue) AddTask(task *Task) bool {
 
 	// Try dispatch directly to waiting poller first (optimization)
 	if tq.tryDispatchLocked(task) {
-		return true
+		return nil
 	}
 
 	// Persist to Store
 	if err := tq.store.AddTask(context.Background(), task); err != nil {
-		// Log error?
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 func (tq *TaskQueue) Poll(ctx context.Context, identity string) (*Task, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// First check rate limit
 	tq.mu.Lock()
 	if !tq.rateLimiter.Allow() {
@@ -219,25 +246,27 @@ func (tq *TaskQueue) Poll(ctx context.Context, identity string) (*Task, error) {
 	// Simplification: Always use Store.PollTask
 	// But we need to handle context cancellation.
 
-	task, err := tq.store.PollTask(ctx, 1*time.Second) // Short timeout loop to check context?
-	// Actually BLPOP takes context.
-	if err != nil {
-		return nil, err
+	for {
+		task, err := tq.store.PollTask(ctx, time.Second)
+		if err != nil {
+			return nil, err
+		}
+
+		if task != nil {
+			tq.mu.Lock()
+			tq.inFlight[task.ID] = task
+			tq.inFlightExpiry[task.ID] = time.Now().Add(tq.leaseTimeout)
+			tq.mu.Unlock()
+
+			tq.metrics.TaskDispatched()
+			tq.metrics.RecordLatency(time.Since(task.ScheduledTime))
+			return task, nil
+		}
+
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
-
-	if task != nil {
-		tq.mu.Lock()
-		tq.inFlight[task.ID] = task
-		tq.inFlightExpiry[task.ID] = time.Now().Add(tq.leaseTimeout)
-		tq.mu.Unlock()
-
-		tq.metrics.TaskDispatched()
-		tq.metrics.RecordLatency(time.Since(task.ScheduledTime))
-		return task, nil
-	}
-
-	// If task is nil (timeout), return nil
-	return nil, nil
 }
 
 func (tq *TaskQueue) CompleteTask(taskID string) bool {
@@ -251,8 +280,11 @@ func (tq *TaskQueue) CompleteTask(taskID string) bool {
 	}
 	// Task might be in store but not in flight?
 	// AckTask logic might be needed for Redis if we used RPOPLPUSH
-	tq.store.AckTask(context.Background(), taskID)
-	return false
+	acked, err := tq.store.AckTask(context.Background(), taskID)
+	if err != nil {
+		return false
+	}
+	return acked
 }
 
 func (tq *TaskQueue) tryDispatchLocked(task *Task) bool {

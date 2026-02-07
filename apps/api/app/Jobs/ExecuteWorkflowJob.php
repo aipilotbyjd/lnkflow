@@ -46,7 +46,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
         public array $triggerData = [],
     ) {
         $this->jobId = (string) Str::uuid();
-        $this->partition = $workflow->workspace_id % 16;
+        $this->partition = $workflow->workspace_id % $this->getPartitionCount();
         $this->onQueue("workflows-{$priority}");
     }
 
@@ -82,6 +82,15 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
             'payload' => json_encode($message),
         ]);
 
+        $streamMaxLen = (int) config('services.engine.stream_maxlen', 100000);
+        if ($streamMaxLen > 0) {
+            try {
+                Redis::xtrim($streamKey, 'MAXLEN', '~', $streamMaxLen);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         // Update job status
         $jobStatus->markProcessing();
 
@@ -96,6 +105,8 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
      */
     protected function buildMessage(string $callbackToken): array
     {
+        $sensitiveContext = $this->buildSensitiveContext();
+
         return [
             'job_id' => $this->jobId,
             'callback_token' => $callbackToken, // Go must include this in callbacks
@@ -110,11 +121,31 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
                 'settings' => (object) ($this->workflow->settings ?? []),
             ],
             'trigger_data' => (object) $this->triggerData,
-            'credentials' => (object) $this->getDecryptedCredentials(),
-            'variables' => (object) $this->getVariables(),
+            'credentials' => (object) ($sensitiveContext['credentials'] ?? []),
+            'variables' => (object) ($sensitiveContext['variables'] ?? []),
             'callback_url' => $this->getInternalApiUrl().'/api/v1/jobs/callback',
             'progress_url' => $this->getInternalApiUrl().'/api/v1/jobs/progress',
             'created_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Build optional sensitive context sent to the engine.
+     *
+     * @return array{credentials: array<string, mixed>, variables: array<string, mixed>}
+     */
+    protected function buildSensitiveContext(): array
+    {
+        if (! config('services.engine.send_sensitive_context', false)) {
+            return [
+                'credentials' => [],
+                'variables' => [],
+            ];
+        }
+
+        return [
+            'credentials' => $this->getDecryptedCredentials(),
+            'variables' => $this->getVariables(),
         ];
     }
 
@@ -175,6 +206,13 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
     {
         // In Docker, use internal service name; otherwise use APP_URL
         return config('services.engine.api_url', 'http://linkflow-api:8000');
+    }
+
+    protected function getPartitionCount(): int
+    {
+        $count = (int) config('services.engine.partition_count', 16);
+
+        return max(1, $count);
     }
 
     /**

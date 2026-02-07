@@ -31,6 +31,7 @@ services:
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
       REDIS_QUEUE: workflows-default
     volumes:
       - .:/var/www/html
@@ -64,6 +65,7 @@ services:
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
     volumes:
       - .:/var/www/html
     command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --verbose
@@ -97,6 +99,7 @@ services:
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
     volumes:
       - .:/var/www/html
     command: >
