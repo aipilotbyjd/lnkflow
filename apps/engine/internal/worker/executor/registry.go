@@ -109,6 +109,7 @@ func DefaultRegistryInit() *Registry {
 	registry.MustRegister(NewScriptExecutor())
 	registry.MustRegister(NewOutputExecutor())
 	registry.MustRegister(NewLogicConditionExecutor())
+	registry.MustRegister(NewAliasExecutor("trigger_schedule", NewManualExecutor()))
 
 	return registry
 }

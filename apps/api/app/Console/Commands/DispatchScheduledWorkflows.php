@@ -139,6 +139,6 @@ class DispatchScheduledWorkflows extends Command
             'max_attempts' => $config['max_retries'] ?? 3,
         ]);
 
-        ExecuteWorkflowJob::dispatch($execution);
+        ExecuteWorkflowJob::dispatch($workflow, $execution, 'default', $triggerData);
     }
 }

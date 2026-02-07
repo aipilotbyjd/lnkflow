@@ -114,7 +114,7 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	// Check for Start Node
 	var startNode *Node
 	for _, node := range graph.Nodes {
-		if nodeStates[node.ID] == "" && (node.Type == "trigger_manual" || node.Type == "trigger_webhook") {
+		if nodeStates[node.ID] == "" && (node.Type == "trigger_manual" || node.Type == "trigger_webhook" || node.Type == "trigger_schedule") {
 			startNode = &node
 			break
 		}
