@@ -8,7 +8,9 @@ use App\Http\Requests\Api\V1\Workflow\UpdateWorkflowRequest;
 use App\Http\Resources\Api\V1\WorkflowResource;
 use App\Models\Workflow;
 use App\Models\Workspace;
+use App\Services\ContractCompilerService;
 use App\Services\WorkspacePermissionService;
+use App\Services\WorkspacePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -16,7 +18,9 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class WorkflowController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService
+        private WorkspacePermissionService $permissionService,
+        private ContractCompilerService $contractCompilerService,
+        private WorkspacePolicyService $workspacePolicyService
     ) {}
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
@@ -35,10 +39,38 @@ class WorkflowController extends Controller
     {
         $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
 
+        $validated = $request->validated();
+        $policyViolations = $this->workspacePolicyService->violations($workspace, $validated['nodes'] ?? []);
+        if ($policyViolations !== []) {
+            return response()->json([
+                'message' => 'Workflow violates workspace policy.',
+                'violations' => $policyViolations,
+            ], 422);
+        }
+
         $workflow = $workspace->workflows()->create([
-            ...$request->validated(),
+            ...$validated,
             'created_by' => $request->user()->id,
         ]);
+
+        $contractValidation = $this->contractCompilerService->validateAndSnapshot(
+            workflow: $workflow,
+            nodes: $validated['nodes'] ?? null,
+            edges: $validated['edges'] ?? null
+        );
+
+        if ($contractValidation['status'] === 'invalid') {
+            $workflow->delete();
+
+            return response()->json([
+                'message' => 'Workflow has invalid data contracts.',
+                'issues' => $contractValidation['issues'],
+            ], 422);
+        }
+
+        $settings = $workflow->settings ?? [];
+        $settings['contract_snapshot_id'] = $contractValidation['snapshot']->id;
+        $workflow->update(['settings' => $settings]);
 
         $workflow->load('creator');
 
@@ -71,7 +103,36 @@ class WorkflowController extends Controller
             ], 423);
         }
 
-        $workflow->update($request->validated());
+        $validated = $request->validated();
+        $candidateNodes = $validated['nodes'] ?? $workflow->nodes ?? [];
+        $candidateEdges = $validated['edges'] ?? $workflow->edges ?? [];
+
+        $policyViolations = $this->workspacePolicyService->violations($workspace, $candidateNodes);
+        if ($policyViolations !== []) {
+            return response()->json([
+                'message' => 'Workflow violates workspace policy.',
+                'violations' => $policyViolations,
+            ], 422);
+        }
+
+        $contractValidation = $this->contractCompilerService->validateAndSnapshot(
+            workflow: $workflow,
+            nodes: $candidateNodes,
+            edges: $candidateEdges
+        );
+
+        if ($contractValidation['status'] === 'invalid') {
+            return response()->json([
+                'message' => 'Workflow has invalid data contracts.',
+                'issues' => $contractValidation['issues'],
+            ], 422);
+        }
+
+        $settings = $validated['settings'] ?? $workflow->settings ?? [];
+        $settings['contract_snapshot_id'] = $contractValidation['snapshot']->id;
+        $validated['settings'] = $settings;
+
+        $workflow->update($validated);
         $workflow->load('creator');
 
         return response()->json([

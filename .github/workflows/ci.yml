@@ -170,6 +170,17 @@ jobs:
           REDIS_PORT: 6379
         run: ./vendor/bin/pest --coverage --coverage-clover=coverage.xml
 
+      - name: Run workflow contract tests
+        working-directory: apps/api
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_DATABASE: linkflow_test
+          DB_USERNAME: linkflow
+          DB_PASSWORD: testing
+        run: php artisan workflows:contract-test
+
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:

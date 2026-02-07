@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\RateLimiter;
 
 class WorkflowDispatchService
 {
+    public function __construct(
+        private WorkspacePolicyService $workspacePolicyService,
+        private ContractCompilerService $contractCompilerService,
+        private DeterministicReplayService $deterministicReplayService
+    ) {}
+
     /**
      * Dispatch a workflow for execution.
      *
@@ -24,6 +30,8 @@ class WorkflowDispatchService
     ): array {
         // Validate workflow can be executed
         $this->validateWorkflow($workflow);
+        $this->validateContracts($workflow);
+        $this->validatePolicy($workflow);
 
         // Check rate limit for workspace
         $this->checkRateLimit($workflow);
@@ -39,6 +47,12 @@ class WorkflowDispatchService
             'attempt' => 1,
             'max_attempts' => $workflow->settings['retry']['max_attempts'] ?? 1,
         ]);
+
+        $this->deterministicReplayService->capture(
+            execution: $execution,
+            mode: 'capture',
+            triggerData: $triggerData
+        );
 
         // Create and dispatch job
         $job = new ExecuteWorkflowJob(
@@ -91,6 +105,22 @@ class WorkflowDispatchService
 
         if (empty($workflow->nodes)) {
             throw new \RuntimeException('Workflow has no nodes.');
+        }
+    }
+
+    protected function validateContracts(Workflow $workflow): void
+    {
+        $result = $this->contractCompilerService->validateAndSnapshot($workflow);
+        if ($result['status'] === 'invalid') {
+            throw new \RuntimeException('Workflow contract validation failed. Fix data-contract issues first.');
+        }
+    }
+
+    protected function validatePolicy(Workflow $workflow): void
+    {
+        $violations = $this->workspacePolicyService->violations($workflow->workspace, $workflow->nodes ?? []);
+        if ($violations !== []) {
+            throw new \RuntimeException('Workflow violates workspace policy: '.json_encode($violations));
         }
     }
 

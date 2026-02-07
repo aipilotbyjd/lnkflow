@@ -183,15 +183,17 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 		}
 
 		envelopeBytes, err := json.Marshal(struct {
-			Input  json.RawMessage `json:"input"`
-			Config json.RawMessage `json:"config"`
-			NodeID string          `json:"node_id"`
-			Type   string          `json:"node_type"`
+			Input         json.RawMessage      `json:"input"`
+			Config        json.RawMessage      `json:"config"`
+			NodeID        string               `json:"node_id"`
+			Type          string               `json:"node_type"`
+			Deterministic DeterministicContext `json:"deterministic"`
 		}{
-			Input:  json.RawMessage(inputData),
-			Config: json.RawMessage(configBytes),
-			NodeID: node.ID,
-			Type:   node.Type,
+			Input:         json.RawMessage(inputData),
+			Config:        json.RawMessage(configBytes),
+			NodeID:        node.ID,
+			Type:          node.Type,
+			Deterministic: payload.Deterministic,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal activity envelope: %w", err)

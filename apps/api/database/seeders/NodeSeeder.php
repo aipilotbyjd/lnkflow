@@ -244,6 +244,31 @@ class NodeSeeder extends Seeder
             ],
             [
                 'category' => 'logic',
+                'type' => 'action_approval',
+                'name' => 'Approval',
+                'description' => 'Pause for human approval before continuing',
+                'icon' => 'hand-thumb-up',
+                'color' => '#0ea5e9',
+                'node_kind' => NodeKind::Logic,
+                'config_schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'title' => ['type' => 'string', 'title' => 'Approval Title'],
+                        'description' => ['type' => 'string', 'title' => 'Approval Description'],
+                        'payload' => ['type' => 'object', 'title' => 'Approval Payload'],
+                    ],
+                ],
+                'output_schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'approval_id' => ['type' => 'integer'],
+                        'decision' => ['type' => 'string', 'enum' => ['approved', 'rejected']],
+                        'decision_payload' => ['type' => 'object'],
+                    ],
+                ],
+            ],
+            [
+                'category' => 'logic',
                 'type' => 'logic_delay',
                 'name' => 'Delay',
                 'description' => 'Wait before continuing',

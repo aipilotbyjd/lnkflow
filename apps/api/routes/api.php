@@ -4,24 +4,32 @@ use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BillingController;
+use App\Http\Controllers\Api\V1\ConnectorReliabilityController;
 use App\Http\Controllers\Api\V1\CredentialController;
 use App\Http\Controllers\Api\V1\CredentialTypeController;
 use App\Http\Controllers\Api\V1\ExecutionController;
+use App\Http\Controllers\Api\V1\ExecutionDebuggerController;
+use App\Http\Controllers\Api\V1\ExecutionRunbookController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\JobCallbackController;
 use App\Http\Controllers\Api\V1\NodeController;
+use App\Http\Controllers\Api\V1\OptimizationController;
 use App\Http\Controllers\Api\V1\PlanController;
 use App\Http\Controllers\Api\V1\SubscriptionController;
 use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VariableController;
 use App\Http\Controllers\Api\V1\WebhookController;
+use App\Http\Controllers\Api\V1\WorkflowApprovalController;
+use App\Http\Controllers\Api\V1\WorkflowContractController;
 use App\Http\Controllers\Api\V1\WorkflowController;
 use App\Http\Controllers\Api\V1\WorkflowImportExportController;
 use App\Http\Controllers\Api\V1\WorkflowTemplateController;
 use App\Http\Controllers\Api\V1\WorkflowVersionController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
+use App\Http\Controllers\Api\V1\WorkspaceEnvironmentController;
 use App\Http\Controllers\Api\V1\WorkspaceMemberController;
+use App\Http\Controllers\Api\V1\WorkspacePolicyController;
 use App\Http\Controllers\Api\WebhookReceiverController;
 use App\Http\Middleware\VerifyEngineCallbackSignature;
 use Illuminate\Support\Facades\Route;
@@ -141,10 +149,15 @@ Route::prefix('v1')->as('v1.')->group(function () {
             Route::apiResource('executions', ExecutionController::class)->only(['index', 'show', 'destroy']);
             Route::get('executions/{execution}/nodes', [ExecutionController::class, 'nodes'])->name('executions.nodes');
             Route::get('executions/{execution}/logs', [ExecutionController::class, 'logs'])->name('executions.logs');
+            Route::get('executions/{execution}/replay-pack', [ExecutionController::class, 'replayPack'])->name('executions.replay-pack');
             Route::post('executions/{execution}/retry', [ExecutionController::class, 'retry'])->name('executions.retry');
+            Route::post('executions/{execution}/rerun-deterministic', [ExecutionController::class, 'rerunDeterministic'])->name('executions.rerun-deterministic');
             Route::post('executions/{execution}/cancel', [ExecutionController::class, 'cancel'])->name('executions.cancel');
             Route::post('workflows/{workflow}/execute', [ExecutionController::class, 'store'])->name('workflows.execute');
             Route::get('workflows/{workflow}/executions', [ExecutionController::class, 'workflowExecutions'])->name('workflows.executions');
+            Route::get('executions/{execution}/debug/timeline', [ExecutionDebuggerController::class, 'timeline'])->name('executions.debug.timeline');
+            Route::get('executions/{execution}/debug/snapshot', [ExecutionDebuggerController::class, 'snapshot'])->name('executions.debug.snapshot');
+            Route::get('executions/{execution}/debug/diff', [ExecutionDebuggerController::class, 'diff'])->name('executions.debug.diff');
 
             // Webhooks
             Route::apiResource('webhooks', WebhookController::class);
@@ -181,6 +194,41 @@ Route::prefix('v1')->as('v1.')->group(function () {
                 Route::post('{version}/publish', [WorkflowVersionController::class, 'publish'])->name('publish');
                 Route::post('{version}/restore', [WorkflowVersionController::class, 'restore'])->name('restore');
             });
+
+            // Workflow Contracts
+            Route::post('workflows/{workflow}/contracts/validate', [WorkflowContractController::class, 'validate'])->name('workflows.contracts.validate');
+            Route::get('workflows/{workflow}/contracts/latest', [WorkflowContractController::class, 'latest'])->name('workflows.contracts.latest');
+            Route::post('contracts/tests/run', [WorkflowContractController::class, 'runTests'])->name('contracts.tests.run');
+
+            // Human Approval Inbox
+            Route::get('approvals', [WorkflowApprovalController::class, 'index'])->name('approvals.index');
+            Route::get('approvals/{approval}', [WorkflowApprovalController::class, 'show'])->name('approvals.show');
+            Route::post('approvals/{approval}/decision', [WorkflowApprovalController::class, 'decide'])->name('approvals.decision');
+
+            // Workspace Policy Engine
+            Route::get('policy', [WorkspacePolicyController::class, 'show'])->name('policy.show');
+            Route::put('policy', [WorkspacePolicyController::class, 'upsert'])->name('policy.upsert');
+
+            // Connector Reliability
+            Route::get('connectors/reliability', [ConnectorReliabilityController::class, 'index'])->name('connectors.reliability');
+            Route::get('connectors/reliability/{connectorKey}/attempts', [ConnectorReliabilityController::class, 'attempts'])->name('connectors.reliability.attempts');
+
+            // Optimizer
+            Route::get('optimizations', [OptimizationController::class, 'index'])->name('optimizations.index');
+            Route::post('optimizations/executions/{execution}/estimate', [OptimizationController::class, 'estimateExecution'])->name('optimizations.executions.estimate');
+
+            // Git-native Environments
+            Route::get('environments', [WorkspaceEnvironmentController::class, 'index'])->name('environments.index');
+            Route::post('environments', [WorkspaceEnvironmentController::class, 'store'])->name('environments.store');
+            Route::post('workflows/{workflow}/environments/promote', [WorkspaceEnvironmentController::class, 'promote'])->name('workflows.environments.promote');
+            Route::post('workflows/{workflow}/environments/rollback', [WorkspaceEnvironmentController::class, 'rollback'])->name('workflows.environments.rollback');
+            Route::get('workflows/{workflow}/environments/releases', [WorkspaceEnvironmentController::class, 'releases'])->name('workflows.environments.releases');
+
+            // Failure Runbooks
+            Route::get('runbooks', [ExecutionRunbookController::class, 'index'])->name('runbooks.index');
+            Route::get('runbooks/{runbook}', [ExecutionRunbookController::class, 'show'])->name('runbooks.show');
+            Route::post('runbooks/{runbook}/acknowledge', [ExecutionRunbookController::class, 'acknowledge'])->name('runbooks.acknowledge');
+            Route::post('runbooks/{runbook}/resolve', [ExecutionRunbookController::class, 'resolve'])->name('runbooks.resolve');
 
             // Workflow Import/Export
             Route::get('workflows/{workflow}/export', [WorkflowImportExportController::class, 'export'])->name('workflows.export');

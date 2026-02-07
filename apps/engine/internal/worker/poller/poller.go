@@ -8,18 +8,19 @@ import (
 )
 
 type Task struct {
-	TaskToken        []byte `json:"task_token"`
-	TaskID           string `json:"task_id"`
-	WorkflowID       string `json:"workflow_id"`
-	RunID            string `json:"run_id"`
-	Namespace        string `json:"namespace"`
-	NodeType         string `json:"node_type"`
-	NodeID           string `json:"node_id"`
-	Config           []byte `json:"config"`
-	Input            []byte `json:"input"`
-	Attempt          int32  `json:"attempt"`
-	TimeoutSec       int32  `json:"timeout_sec"`
-	ScheduledEventID int64  `json:"scheduled_event_id"`
+	TaskToken        []byte                 `json:"task_token"`
+	TaskID           string                 `json:"task_id"`
+	WorkflowID       string                 `json:"workflow_id"`
+	RunID            string                 `json:"run_id"`
+	Namespace        string                 `json:"namespace"`
+	NodeType         string                 `json:"node_type"`
+	NodeID           string                 `json:"node_id"`
+	Config           []byte                 `json:"config"`
+	Input            []byte                 `json:"input"`
+	Deterministic    map[string]interface{} `json:"deterministic"`
+	Attempt          int32                  `json:"attempt"`
+	TimeoutSec       int32                  `json:"timeout_sec"`
+	ScheduledEventID int64                  `json:"scheduled_event_id"`
 }
 
 type TaskResult struct {

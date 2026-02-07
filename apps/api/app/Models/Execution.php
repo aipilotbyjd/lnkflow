@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Execution extends Model
 {
@@ -29,6 +30,9 @@ class Execution extends Model
         'attempt',
         'max_attempts',
         'parent_execution_id',
+        'replay_of_execution_id',
+        'is_deterministic_replay',
+        'estimated_cost_usd',
         'ip_address',
         'user_agent',
     ];
@@ -46,6 +50,8 @@ class Execution extends Model
             'trigger_data' => 'array',
             'result_data' => 'array',
             'error' => 'array',
+            'is_deterministic_replay' => 'boolean',
+            'estimated_cost_usd' => 'decimal:4',
         ];
     }
 
@@ -90,6 +96,22 @@ class Execution extends Model
     }
 
     /**
+     * @return BelongsTo<Execution, $this>
+     */
+    public function replayOfExecution(): BelongsTo
+    {
+        return $this->belongsTo(Execution::class, 'replay_of_execution_id');
+    }
+
+    /**
+     * @return HasMany<Execution, $this>
+     */
+    public function replayExecutions(): HasMany
+    {
+        return $this->hasMany(Execution::class, 'replay_of_execution_id');
+    }
+
+    /**
      * @return HasMany<ExecutionNode, $this>
      */
     public function nodes(): HasMany
@@ -103,6 +125,38 @@ class Execution extends Model
     public function logs(): HasMany
     {
         return $this->hasMany(ExecutionLog::class)->orderBy('logged_at');
+    }
+
+    /**
+     * @return HasMany<ConnectorCallAttempt, $this>
+     */
+    public function connectorAttempts(): HasMany
+    {
+        return $this->hasMany(ConnectorCallAttempt::class);
+    }
+
+    /**
+     * @return HasMany<WorkflowApproval, $this>
+     */
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(WorkflowApproval::class);
+    }
+
+    /**
+     * @return HasOne<ExecutionReplayPack, $this>
+     */
+    public function replayPack(): HasOne
+    {
+        return $this->hasOne(ExecutionReplayPack::class);
+    }
+
+    /**
+     * @return HasOne<ExecutionRunbook, $this>
+     */
+    public function runbook(): HasOne
+    {
+        return $this->hasOne(ExecutionRunbook::class);
     }
 
     public function scopeByStatus($query, ExecutionStatus $status)

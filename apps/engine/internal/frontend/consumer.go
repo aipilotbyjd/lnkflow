@@ -74,6 +74,7 @@ type JobPayload struct {
 	Variables     map[string]interface{} `json:"variables"`
 	CallbackURL   string                 `json:"callback_url"`
 	ProgressURL   string                 `json:"progress_url"`
+	Deterministic map[string]interface{} `json:"deterministic"`
 }
 
 func NewRedisConsumer(client *redis.Client, service *Service, logger *slog.Logger) *RedisConsumer {

@@ -133,6 +133,54 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasOne<WorkspacePolicy, $this>
+     */
+    public function policy(): HasOne
+    {
+        return $this->hasOne(WorkspacePolicy::class);
+    }
+
+    /**
+     * @return HasMany<WorkspaceEnvironment, $this>
+     */
+    public function environments(): HasMany
+    {
+        return $this->hasMany(WorkspaceEnvironment::class);
+    }
+
+    /**
+     * @return HasMany<ConnectorCallAttempt, $this>
+     */
+    public function connectorAttempts(): HasMany
+    {
+        return $this->hasMany(ConnectorCallAttempt::class);
+    }
+
+    /**
+     * @return HasMany<ConnectorMetricDaily, $this>
+     */
+    public function connectorMetrics(): HasMany
+    {
+        return $this->hasMany(ConnectorMetricDaily::class);
+    }
+
+    /**
+     * @return HasMany<WorkflowApproval, $this>
+     */
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(WorkflowApproval::class);
+    }
+
+    /**
+     * @return HasMany<ExecutionRunbook, $this>
+     */
+    public function runbooks(): HasMany
+    {
+        return $this->hasMany(ExecutionRunbook::class);
+    }
+
+    /**
      * @return HasOneThrough<Plan, Subscription, $this>
      */
     public function plan(): HasOneThrough

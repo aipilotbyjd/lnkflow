@@ -3,10 +3,12 @@ package executor
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -55,6 +57,8 @@ func (e *HTTPExecutor) NodeType() string {
 func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResponse, error) {
 	start := time.Now()
 	logs := make([]LogEntry, 0)
+	connectorAttempts := make([]ConnectorAttempt, 0, 1)
+	fixtures := make([]DeterministicFixture, 0, 1)
 
 	logs = append(logs, LogEntry{
 		Timestamp: time.Now(),
@@ -69,8 +73,10 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 				Message: fmt.Sprintf("failed to parse HTTP config: %v", err),
 				Type:    ErrorTypeNonRetryable,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
 
@@ -84,6 +90,76 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 		defer cancel()
 	}
 
+	requestBytes, _ := json.Marshal(map[string]interface{}{
+		"method":  config.Method,
+		"url":     config.URL,
+		"headers": canonicalHeaders(config.Headers),
+		"body":    json.RawMessage(config.Body),
+	})
+	requestFingerprint := fmt.Sprintf("%x", sha256.Sum256(requestBytes))
+
+	if req.Deterministic != nil && req.Deterministic.Mode == "replay" {
+		for _, fixture := range req.Deterministic.Fixtures {
+			if fixture.RequestFingerprint != requestFingerprint {
+				continue
+			}
+
+			connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+				NodeID:             req.NodeID,
+				ConnectorKey:       "action_http_request",
+				ConnectorOperation: "request",
+				Provider:           "http",
+				AttemptNo:          req.Attempt,
+				IsRetry:            req.Attempt > 1,
+				Status:             "success",
+				DurationMS:         0,
+				RequestFingerprint: requestFingerprint,
+				HappenedAt:         time.Now().UTC(),
+				Meta: map[string]interface{}{
+					"replay_mode": true,
+					"fixture_hit": true,
+				},
+			})
+
+			return &ExecuteResponse{
+				Output:                fixture.Response,
+				ConnectorAttempts:     connectorAttempts,
+				DeterministicFixtures: fixtures,
+				Logs:                  logs,
+				Duration:              time.Since(start),
+			}, nil
+		}
+
+		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+			NodeID:             req.NodeID,
+			ConnectorKey:       "action_http_request",
+			ConnectorOperation: "request",
+			Provider:           "http",
+			AttemptNo:          req.Attempt,
+			IsRetry:            req.Attempt > 1,
+			Status:             "client_error",
+			ErrorCode:          "MISSING_REPLAY_FIXTURE",
+			ErrorMessage:       "no deterministic fixture found for HTTP request fingerprint",
+			RequestFingerprint: requestFingerprint,
+			HappenedAt:         time.Now().UTC(),
+			Meta: map[string]interface{}{
+				"replay_mode": true,
+				"fixture_hit": false,
+			},
+		})
+
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: "missing deterministic replay fixture for HTTP request",
+				Type:    ErrorTypeNonRetryable,
+			},
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
+		}, nil
+	}
+
 	var bodyReader io.Reader
 	if len(config.Body) > 0 {
 		bodyReader = bytes.NewReader(config.Body)
@@ -91,13 +167,28 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 
 	httpReq, err := http.NewRequestWithContext(ctx, config.Method, config.URL, bodyReader)
 	if err != nil {
+		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+			NodeID:             req.NodeID,
+			ConnectorKey:       "action_http_request",
+			ConnectorOperation: "request",
+			Provider:           "http",
+			AttemptNo:          req.Attempt,
+			IsRetry:            req.Attempt > 1,
+			Status:             "client_error",
+			ErrorCode:          "HTTP_REQUEST_BUILD_FAILED",
+			ErrorMessage:       err.Error(),
+			RequestFingerprint: requestFingerprint,
+			HappenedAt:         time.Now().UTC(),
+		})
 		return &ExecuteResponse{
 			Error: &ExecutionError{
 				Message: fmt.Sprintf("failed to create HTTP request: %v", err),
 				Type:    ErrorTypeNonRetryable,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
 
@@ -114,29 +205,66 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 	resp, err := e.client.Do(httpReq)
 	if err != nil {
 		errorType := ErrorTypeRetryable
+		attemptStatus := "network_error"
+		errorCode := "HTTP_REQUEST_FAILED"
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = ErrorTypeTimeout
+			attemptStatus = "timeout"
+			errorCode = "HTTP_TIMEOUT"
 		}
+
+		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+			NodeID:             req.NodeID,
+			ConnectorKey:       "action_http_request",
+			ConnectorOperation: "request",
+			Provider:           "http",
+			AttemptNo:          req.Attempt,
+			IsRetry:            req.Attempt > 1,
+			Status:             attemptStatus,
+			ErrorCode:          errorCode,
+			ErrorMessage:       err.Error(),
+			RequestFingerprint: requestFingerprint,
+			HappenedAt:         time.Now().UTC(),
+		})
+
 		return &ExecuteResponse{
 			Error: &ExecutionError{
 				Message: fmt.Sprintf("HTTP request failed: %v", err),
 				Type:    errorType,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+			NodeID:             req.NodeID,
+			ConnectorKey:       "action_http_request",
+			ConnectorOperation: "request",
+			Provider:           "http",
+			AttemptNo:          req.Attempt,
+			IsRetry:            req.Attempt > 1,
+			Status:             "network_error",
+			StatusCode:         int32(resp.StatusCode),
+			ErrorCode:          "HTTP_READ_BODY_FAILED",
+			ErrorMessage:       err.Error(),
+			RequestFingerprint: requestFingerprint,
+			HappenedAt:         time.Now().UTC(),
+		})
 		return &ExecuteResponse{
 			Error: &ExecutionError{
 				Message: fmt.Sprintf("failed to read response body: %v", err),
 				Type:    ErrorTypeRetryable,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
 
@@ -173,15 +301,59 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 
 	output, err := json.Marshal(httpResp)
 	if err != nil {
+		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+			NodeID:             req.NodeID,
+			ConnectorKey:       "action_http_request",
+			ConnectorOperation: "request",
+			Provider:           "http",
+			AttemptNo:          req.Attempt,
+			IsRetry:            req.Attempt > 1,
+			Status:             "client_error",
+			StatusCode:         int32(resp.StatusCode),
+			ErrorCode:          "HTTP_RESPONSE_MARSHAL_FAILED",
+			ErrorMessage:       err.Error(),
+			RequestFingerprint: requestFingerprint,
+			HappenedAt:         time.Now().UTC(),
+		})
 		return &ExecuteResponse{
 			Error: &ExecutionError{
 				Message: fmt.Sprintf("failed to marshal response: %v", err),
 				Type:    ErrorTypeNonRetryable,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
+
+	fixtures = append(fixtures, DeterministicFixture{
+		RequestFingerprint: requestFingerprint,
+		NodeID:             req.NodeID,
+		NodeType:           req.NodeType,
+		Request:            requestBytes,
+		Response:           output,
+	})
+
+	attemptStatus := "success"
+	if resp.StatusCode >= 500 {
+		attemptStatus = "server_error"
+	} else if resp.StatusCode >= 400 {
+		attemptStatus = "client_error"
+	}
+	connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+		NodeID:             req.NodeID,
+		ConnectorKey:       "action_http_request",
+		ConnectorOperation: "request",
+		Provider:           "http",
+		AttemptNo:          req.Attempt,
+		IsRetry:            req.Attempt > 1,
+		Status:             attemptStatus,
+		StatusCode:         int32(resp.StatusCode),
+		DurationMS:         time.Since(start).Milliseconds(),
+		RequestFingerprint: requestFingerprint,
+		HappenedAt:         time.Now().UTC(),
+	})
 
 	if resp.StatusCode >= 500 {
 		return &ExecuteResponse{
@@ -190,8 +362,10 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 				Message: fmt.Sprintf("server error: status %d", resp.StatusCode),
 				Type:    ErrorTypeRetryable,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
 
@@ -202,14 +376,37 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 				Message: fmt.Sprintf("client error: status %d", resp.StatusCode),
 				Type:    ErrorTypeNonRetryable,
 			},
-			Logs:     logs,
-			Duration: time.Since(start),
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
 		}, nil
 	}
 
 	return &ExecuteResponse{
-		Output:   output,
-		Logs:     logs,
-		Duration: time.Since(start),
+		Output:                output,
+		ConnectorAttempts:     connectorAttempts,
+		DeterministicFixtures: fixtures,
+		Logs:                  logs,
+		Duration:              time.Since(start),
 	}, nil
+}
+
+func canonicalHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return map[string]string{}
+	}
+
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	canonical := make(map[string]string, len(headers))
+	for _, key := range keys {
+		canonical[key] = headers[key]
+	}
+
+	return canonical
 }

@@ -29,3 +29,8 @@ Schedule::command('executions:cleanup --days=30')
 Schedule::command('notifications:send-digest')
     ->hourly()
     ->withoutOverlapping();
+
+// Roll up connector reliability metrics daily
+Schedule::command('connectors:rollup-metrics')
+    ->dailyAt('01:30')
+    ->withoutOverlapping();

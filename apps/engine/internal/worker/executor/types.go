@@ -14,6 +14,7 @@ type JobPayload struct {
 	Variables     map[string]interface{} `json:"variables"`
 	CallbackURL   string                 `json:"callback_url"`
 	ProgressURL   string                 `json:"progress_url"`
+	Deterministic DeterministicContext   `json:"deterministic"`
 }
 
 type WorkflowDefinition struct {

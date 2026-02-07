@@ -62,6 +62,14 @@ class ExecutionNode extends Model
         return $this->hasMany(ExecutionLog::class)->orderBy('logged_at');
     }
 
+    /**
+     * @return HasMany<ConnectorCallAttempt, $this>
+     */
+    public function connectorAttempts(): HasMany
+    {
+        return $this->hasMany(ConnectorCallAttempt::class);
+    }
+
     public function start(): void
     {
         $this->update([

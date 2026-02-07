@@ -21,8 +21,11 @@ class Node extends Model
         'color',
         'node_kind',
         'config_schema',
+        'input_schema',
         'output_schema',
         'credential_type',
+        'cost_hint_usd',
+        'latency_hint_ms',
         'is_active',
         'is_premium',
         'docs_url',
@@ -36,9 +39,11 @@ class Node extends Model
         return [
             'node_kind' => NodeKind::class,
             'config_schema' => 'array',
+            'input_schema' => 'array',
             'output_schema' => 'array',
             'is_active' => 'boolean',
             'is_premium' => 'boolean',
+            'cost_hint_usd' => 'decimal:4',
         ];
     }
 

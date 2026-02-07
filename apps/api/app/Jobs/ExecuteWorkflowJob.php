@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Execution;
 use App\Models\JobStatus;
 use App\Models\Workflow;
+use App\Services\DeterministicReplayService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -44,6 +45,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
         public Execution $execution,
         public string $priority = 'default',
         public array $triggerData = [],
+        public array $deterministicContext = [],
     ) {
         $this->jobId = (string) Str::uuid();
         $this->partition = $workflow->workspace_id % $this->getPartitionCount();
@@ -62,6 +64,20 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
     {
         // Generate unique callback token (64-char hex)
         $callbackToken = bin2hex(random_bytes(32));
+
+        /** @var DeterministicReplayService $replayService */
+        $replayService = app(DeterministicReplayService::class);
+        if (! $this->execution->replayPack) {
+            $replayService->capture(
+                execution: $this->execution,
+                mode: ($this->deterministicContext['mode'] ?? 'capture'),
+                sourceExecution: isset($this->deterministicContext['source_execution_id'])
+                    ? Execution::find($this->deterministicContext['source_execution_id'])
+                    : null,
+                triggerData: $this->triggerData,
+                fixtures: $this->deterministicContext['fixtures'] ?? []
+            );
+        }
 
         // Create job status record with token
         $jobStatus = JobStatus::create([
@@ -106,6 +122,15 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
     protected function buildMessage(string $callbackToken): array
     {
         $sensitiveContext = $this->buildSensitiveContext();
+        $replayPack = $this->execution->replayPack;
+        $deterministicMode = $this->deterministicContext['mode']
+            ?? ($this->execution->is_deterministic_replay ? 'replay' : 'capture');
+        $deterministicSeed = $this->deterministicContext['seed']
+            ?? $replayPack?->deterministic_seed
+            ?? (string) Str::uuid();
+        $deterministicFixtures = $this->deterministicContext['fixtures']
+            ?? $replayPack?->fixtures
+            ?? [];
 
         return [
             'job_id' => $this->jobId,
@@ -125,6 +150,12 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
             'variables' => (object) ($sensitiveContext['variables'] ?? []),
             'callback_url' => $this->getInternalApiUrl().'/api/v1/jobs/callback',
             'progress_url' => $this->getInternalApiUrl().'/api/v1/jobs/progress',
+            'deterministic' => [
+                'mode' => $deterministicMode,
+                'seed' => $deterministicSeed,
+                'fixtures' => $deterministicFixtures,
+                'source_execution_id' => $this->execution->replay_of_execution_id,
+            ],
             'created_at' => now()->toIso8601String(),
         ];
     }
@@ -226,7 +257,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
                 'message' => $exception->getMessage(),
                 'trace' => $exception->getTraceAsString(),
             ],
-            'completed_at' => now(),
+            'finished_at' => now(),
         ]);
 
         JobStatus::where('job_id', $this->jobId)->first()?->markFailed([

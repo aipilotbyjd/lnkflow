@@ -99,7 +99,7 @@ class Workflow extends Model
      */
     public function versions(): HasMany
     {
-        return $this->hasMany(WorkflowVersion::class)->orderByDesc('version');
+        return $this->hasMany(WorkflowVersion::class)->orderByDesc('version_number');
     }
 
     /**
@@ -108,6 +108,54 @@ class Workflow extends Model
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class, 'workflow_tags')->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<WorkflowContractSnapshot, $this>
+     */
+    public function contractSnapshots(): HasMany
+    {
+        return $this->hasMany(WorkflowContractSnapshot::class)->latest('generated_at');
+    }
+
+    /**
+     * @return HasMany<ExecutionReplayPack, $this>
+     */
+    public function replayPacks(): HasMany
+    {
+        return $this->hasMany(ExecutionReplayPack::class)->latest('captured_at');
+    }
+
+    /**
+     * @return HasMany<WorkflowApproval, $this>
+     */
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(WorkflowApproval::class);
+    }
+
+    /**
+     * @return HasMany<ExecutionRunbook, $this>
+     */
+    public function runbooks(): HasMany
+    {
+        return $this->hasMany(ExecutionRunbook::class);
+    }
+
+    /**
+     * @return HasMany<WorkflowEnvironmentRelease, $this>
+     */
+    public function environmentReleases(): HasMany
+    {
+        return $this->hasMany(WorkflowEnvironmentRelease::class);
+    }
+
+    /**
+     * @return HasMany<WorkflowContractTestRun, $this>
+     */
+    public function contractTestRuns(): HasMany
+    {
+        return $this->hasMany(WorkflowContractTestRun::class)->latest('executed_at');
     }
 
     public function scopeActive($query)
