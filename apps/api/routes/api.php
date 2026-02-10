@@ -61,6 +61,7 @@ Route::prefix('v1')->as('v1.')->group(function () {
     Route::prefix('auth')->as('auth.')->group(function () {
         Route::post('register', [AuthController::class, 'register'])->name('register');
         Route::post('login', [AuthController::class, 'login'])->name('login');
+        Route::post('refresh', [AuthController::class, 'refreshToken'])->name('refresh');
         Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
         Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('reset-password');
     });

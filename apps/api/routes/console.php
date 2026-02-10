@@ -34,3 +34,8 @@ Schedule::command('notifications:send-digest')
 Schedule::command('connectors:rollup-metrics')
     ->dailyAt('01:30')
     ->withoutOverlapping();
+
+// Purge expired and revoked OAuth tokens
+Schedule::command('passport:purge --revoked --expired')
+    ->everySixHours()
+    ->withoutOverlapping();

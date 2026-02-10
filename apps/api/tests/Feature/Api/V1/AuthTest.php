@@ -2,8 +2,20 @@
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Passport\ClientRepository;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    $client = app(ClientRepository::class)->createPasswordGrantClient(
+        'Test Password Grant Client',
+        'users',
+        true
+    );
+
+    config()->set('passport.password_client_id', $client->getKey());
+    config()->set('passport.password_client_secret', $client->plainSecret);
+});
 
 describe('Authentication', function () {
     describe('Registration', function () {
@@ -20,6 +32,10 @@ describe('Authentication', function () {
                 ->assertJsonStructure([
                     'message',
                     'user' => ['id', 'first_name', 'last_name', 'email'],
+                    'access_token',
+                    'refresh_token',
+                    'token_type',
+                    'expires_in',
                 ]);
 
             $this->assertDatabaseHas('users', [
@@ -83,6 +99,7 @@ describe('Authentication', function () {
             $response->assertStatus(200)
                 ->assertJsonStructure([
                     'access_token',
+                    'refresh_token',
                     'token_type',
                     'expires_in',
                     'user',
@@ -112,15 +129,74 @@ describe('Authentication', function () {
         });
     });
 
+    describe('Token Refresh', function () {
+        it('can refresh token with valid refresh token', function () {
+            $user = User::factory()->create([
+                'password' => bcrypt('password123'),
+            ]);
+
+            $loginResponse = $this->postJson('/api/v1/auth/login', [
+                'email' => $user->email,
+                'password' => 'password123',
+            ]);
+
+            $refreshToken = $loginResponse->json('refresh_token');
+
+            $response = $this->postJson('/api/v1/auth/refresh', [
+                'refresh_token' => $refreshToken,
+            ]);
+
+            $response->assertStatus(200)
+                ->assertJsonStructure([
+                    'message',
+                    'access_token',
+                    'refresh_token',
+                    'token_type',
+                    'expires_in',
+                ]);
+
+            expect($response->json('access_token'))->not->toBe($loginResponse->json('access_token'));
+        });
+
+        it('fails with invalid refresh token', function () {
+            $response = $this->postJson('/api/v1/auth/refresh', [
+                'refresh_token' => 'invalid-refresh-token',
+            ]);
+
+            $response->assertStatus(401);
+        });
+
+        it('fails validation when refresh token is missing', function () {
+            $response = $this->postJson('/api/v1/auth/refresh', []);
+
+            $response->assertStatus(422)
+                ->assertJsonValidationErrors(['refresh_token']);
+        });
+    });
+
     describe('Logout', function () {
         it('can logout authenticated user', function () {
             $user = User::factory()->create();
 
-            $response = $this->actingAs($user, 'api')
+            $loginResponse = $this->postJson('/api/v1/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ]);
+
+            $response = $this->withHeader('Authorization', 'Bearer '.$loginResponse->json('access_token'))
                 ->postJson('/api/v1/auth/logout');
 
             $response->assertStatus(200)
-                ->assertJson(['message' => 'Successfully logged out']);
+                ->assertJson(['message' => 'Logged out successfully.']);
+
+            $this->assertDatabaseHas('oauth_access_tokens', [
+                'user_id' => $user->id,
+                'revoked' => true,
+            ]);
+
+            $this->assertDatabaseHas('oauth_refresh_tokens', [
+                'revoked' => true,
+            ]);
         });
 
         it('requires authentication to logout', function () {
@@ -142,13 +218,13 @@ describe('Authentication', function () {
                 ->assertJsonStructure(['message']);
         });
 
-        it('does not reveal non-existent emails', function () {
+        it('fails for non-existent emails', function () {
             $response = $this->postJson('/api/v1/auth/forgot-password', [
                 'email' => 'nonexistent@example.com',
             ]);
 
-            // Should still return 200 to prevent email enumeration
-            $response->assertStatus(200);
+            $response->assertStatus(422)
+                ->assertJsonValidationErrors(['email']);
         });
     });
 });

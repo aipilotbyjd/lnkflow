@@ -32,6 +32,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Password Grant Client
+    |--------------------------------------------------------------------------
+    |
+    | These values are used by first-party authentication endpoints that
+    | proxy token issuance through Passport's /oauth/token endpoint.
+    |
+    */
+
+    'password_client_id' => env('PASSPORT_PASSWORD_CLIENT_ID'),
+
+    'password_client_secret' => env('PASSPORT_PASSWORD_CLIENT_SECRET'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Token Lifetimes
+    |--------------------------------------------------------------------------
+    |
+    | Lifetimes are applied in AppServiceProvider via Passport::tokensExpireIn
+    | and Passport::refreshTokensExpireIn.
+    |
+    */
+
+    'access_token_ttl_minutes' => (int) env('PASSPORT_ACCESS_TOKEN_TTL_MINUTES', 15),
+
+    'refresh_token_ttl_days' => (int) env('PASSPORT_REFRESH_TOKEN_TTL_DAYS', 30),
+
+    'personal_access_token_ttl_days' => (int) env('PASSPORT_PERSONAL_ACCESS_TOKEN_TTL_DAYS', 365),
+
+    /*
+    |--------------------------------------------------------------------------
     | Passport Database Connection
     |--------------------------------------------------------------------------
     |

@@ -2,7 +2,7 @@
     "info": {
         "_postman_id": "linkflow-api-collection",
         "name": "🔗 LinkFlow API",
-        "description": "Complete API collection for **LinkFlow** — Workflow Automation Platform\n\n## 🚀 Getting Started\n1. Import this collection and the environment file\n2. Run **Register** or **Login** to get an access token\n3. The token is saved automatically to `{{access_token}}`\n4. Run **List Workspaces** to populate `{{workspace_id}}`\n5. All authenticated requests inherit the Bearer token\n\n## 🔐 Authentication\nBearer Token via Laravel Passport. Public routes override with `noauth`.\n\n## 📂 Structure\n- **🔐 Auth** — Register, Login, Password Reset\n- **👤 User Profile** — Profile CRUD, Avatar\n- **🏢 Workspaces** — Workspace management with nested resources\n- **🧩 Nodes** — Node registry (global)\n- **🔓 Credential Types** — Available credential types (global)\n- **📝 Workflow Templates** — Pre-built templates (global)\n- **📋 Plans** — Subscription plans (public)\n- **📡 Public Webhooks** — Incoming webhook receiver\n- **⚙️ Internal** — Engine callbacks & Stripe webhooks\n- **🛡️ Admin** — Super admin panel",
+        "description": "Complete API collection for **LinkFlow** — Workflow Automation Platform\n\n## 🚀 Getting Started\n1. Import this collection and the environment file\n2. Run **Register** or **Login** to get auth tokens\n3. Tokens are saved automatically to `{{access_token}}` and `{{refresh_token}}`\n4. Run **List Workspaces** to populate `{{workspace_id}}`\n5. All authenticated requests inherit the Bearer token\n\n## 🔐 Authentication\nBearer Token via Laravel Passport. Public routes override with `noauth`.\n\n## 📂 Structure\n- **🔐 Auth** — Register, Login, Refresh Token, Password Reset\n- **👤 User Profile** — Profile CRUD, Avatar\n- **🏢 Workspaces** — Workspace management with nested resources\n- **🧩 Nodes** — Node registry (global)\n- **🔓 Credential Types** — Available credential types (global)\n- **📝 Workflow Templates** — Pre-built templates (global)\n- **📋 Plans** — Subscription plans (public)\n- **📡 Public Webhooks** — Incoming webhook receiver\n- **⚙️ Internal** — Engine callbacks & Stripe webhooks\n- **🛡️ Admin** — Super admin panel",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "auth": {
@@ -56,6 +56,11 @@
         },
         {
             "key": "access_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "refresh_token",
             "value": "",
             "type": "string"
         },
@@ -219,7 +224,7 @@
         },
         {
             "name": "🔐 Auth",
-            "description": "Authentication endpoints — registration, login, password management, and email verification.",
+            "description": "Authentication endpoints — registration, login, token refresh, password management, and email verification.",
             "item": [
                 {
                     "name": "Register",
@@ -236,9 +241,10 @@
                                     "if (pm.response.code === 201) {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.collectionVariables.set('access_token', jsonData.access_token);",
+                                    "    pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
                                     "    pm.collectionVariables.set('user_id', jsonData.user.id);",
                                     "    pm.collectionVariables.set('user_email', jsonData.user.email);",
-                                    "    console.log('✅ Token saved: ' + jsonData.access_token.substring(0, 30) + '...');",
+                                    "    console.log('✅ Tokens saved (access + refresh)');",
                                     "}"
                                 ]
                             }
@@ -288,9 +294,10 @@
                                     "if (pm.response.code === 200) {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.collectionVariables.set('access_token', jsonData.access_token);",
+                                    "    pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
                                     "    pm.collectionVariables.set('user_id', jsonData.user.id);",
                                     "    pm.collectionVariables.set('user_email', jsonData.user.email);",
-                                    "    console.log('✅ Token saved: ' + jsonData.access_token.substring(0, 30) + '...');",
+                                    "    console.log('✅ Tokens saved (access + refresh)');",
                                     "}"
                                 ]
                             }
@@ -321,7 +328,58 @@
                                 "login"
                             ]
                         },
-                        "description": "Authenticate and receive an access token."
+                        "description": "Authenticate and receive access and refresh tokens."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Refresh Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Status code is 200', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "if (pm.response.code === 200) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('access_token', jsonData.access_token);",
+                                    "    pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
+                                    "    console.log('🔄 Tokens refreshed');",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/refresh",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "refresh"
+                            ]
+                        },
+                        "description": "Exchange a valid refresh token for a new access token pair."
                     },
                     "response": []
                 },
@@ -339,7 +397,8 @@
                                     "",
                                     "if (pm.response.code === 200) {",
                                     "    pm.collectionVariables.unset('access_token');",
-                                    "    console.log('🔒 Token cleared');",
+                                    "    pm.collectionVariables.unset('refresh_token');",
+                                    "    console.log('🔒 Tokens cleared');",
                                     "}"
                                 ]
                             }
@@ -358,7 +417,7 @@
                                 "logout"
                             ]
                         },
-                        "description": "Revoke the current access token."
+                        "description": "Revoke the current access token and related refresh tokens."
                     },
                     "response": []
                 },
@@ -696,6 +755,7 @@
                                     "",
                                     "if (pm.response.code === 200) {",
                                     "    pm.collectionVariables.unset('access_token');",
+                                    "    pm.collectionVariables.unset('refresh_token');",
                                     "    pm.collectionVariables.unset('user_id');",
                                     "    pm.collectionVariables.unset('user_email');",
                                     "    console.log('🗑️ Account deleted, tokens cleared');",

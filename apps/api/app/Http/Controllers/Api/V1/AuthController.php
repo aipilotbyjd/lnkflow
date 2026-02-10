@@ -6,22 +6,25 @@ use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
+use App\Http\Requests\Api\V1\Auth\RefreshTokenRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Resources\Api\V1\UserResource;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Auth\PassportTokenException;
+use App\Services\Auth\PassportTokenService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Laravel\Passport\Passport;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request): JsonResponse
+    public function register(RegisterRequest $request, PassportTokenService $passportTokenService): JsonResponse
     {
         $user = User::query()->create([
             'first_name' => $request->validated('first_name'),
@@ -52,41 +55,103 @@ class AuthController extends Controller
 
         $user->sendEmailVerificationNotification();
 
-        $token = $user->createToken('auth_token')->accessToken;
+        try {
+            $token = $passportTokenService->issueToken(
+                $user->email,
+                (string) $request->validated('password')
+            );
+        } catch (PassportTokenException $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'User registered successfully, but token issuance failed.',
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'User registered successfully. Please check your email to verify your account.',
             'user' => new UserResource($user),
-            'access_token' => $token,
-            'token_type' => 'Bearer',
+            ...$token,
         ], 201);
     }
 
-    public function login(LoginRequest $request): JsonResponse
+    public function login(LoginRequest $request, PassportTokenService $passportTokenService): JsonResponse
     {
-        if (! Auth::attempt($request->validated())) {
+        $validated = $request->validated();
+
+        try {
+            $token = $passportTokenService->issueToken(
+                $validated['email'],
+                $validated['password']
+            );
+        } catch (PassportTokenException $e) {
+            if ($e->oauthError === 'invalid_grant') {
+                return response()->json([
+                    'message' => 'Invalid credentials.',
+                ], 401);
+            }
+
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to complete login.',
+            ], 500);
+        }
+
+        $user = User::query()->where('email', $validated['email'])->first();
+        if (! $user instanceof User) {
             return response()->json([
                 'message' => 'Invalid credentials.',
             ], 401);
         }
 
-        /** @var User $user */
-        $user = Auth::user();
-        $token = $user->createToken('auth_token')->accessToken;
-
         return response()->json([
             'message' => 'Login successful.',
             'user' => new UserResource($user),
-            'access_token' => $token,
-            'token_type' => 'Bearer',
+            ...$token,
+        ]);
+    }
+
+    public function refreshToken(RefreshTokenRequest $request, PassportTokenService $passportTokenService): JsonResponse
+    {
+        try {
+            $token = $passportTokenService->refreshToken(
+                (string) $request->validated('refresh_token')
+            );
+        } catch (PassportTokenException $e) {
+            if ($e->oauthError === 'invalid_grant') {
+                return response()->json([
+                    'message' => 'Invalid or expired refresh token.',
+                ], 401);
+            }
+
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to refresh access token.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Token refreshed successfully.',
+            ...$token,
         ]);
     }
 
     public function logout(Request $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-        $user->token()->revoke();
+        $accessToken = $request->user()?->token();
+
+        if ($accessToken !== null) {
+            $accessToken->revoke();
+
+            $accessTokenId = $accessToken->oauth_access_token_id ?? $accessToken->id ?? null;
+            if (is_string($accessTokenId) && $accessTokenId !== '') {
+                Passport::refreshToken()->newQuery()
+                    ->where('access_token_id', $accessTokenId)
+                    ->update(['revoked' => true]);
+            }
+        }
 
         return response()->json([
             'message' => 'Logged out successfully.',
