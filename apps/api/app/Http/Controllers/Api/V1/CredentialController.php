@@ -111,7 +111,7 @@ class CredentialController extends Controller
 
     public function test(Request $request, Workspace $workspace, Credential $credential): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'credential.update');
         $this->ensureCredentialBelongsToWorkspace($credential, $workspace);
 
         $result = $this->credentialTestService->test($credential);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Services\WorkspacePermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,11 +16,10 @@ class CredentialResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $data = [
             'id' => $this->id,
             'name' => $this->name,
             'type' => $this->type,
-            'data' => $this->getMaskedData(),
             'is_expired' => $this->isExpired(),
             'last_used_at' => $this->last_used_at,
             'expires_at' => $this->expires_at,
@@ -28,5 +28,18 @@ class CredentialResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
+
+        $user = $request->user();
+        $workspace = $this->resource->workspace;
+
+        if ($user && $workspace) {
+            $permissionService = app(WorkspacePermissionService::class);
+
+            if ($permissionService->hasPermission($user, $workspace, 'credential.update')) {
+                $data['data'] = $this->getMaskedData();
+            }
+        }
+
+        return $data;
     }
 }

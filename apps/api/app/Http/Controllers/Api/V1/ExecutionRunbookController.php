@@ -42,7 +42,7 @@ class ExecutionRunbookController extends Controller
 
     public function acknowledge(Request $request, Workspace $workspace, ExecutionRunbook $runbook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'execution.delete');
         $this->ensureRunbookBelongsToWorkspace($workspace, $runbook);
 
         $runbook->update([
@@ -59,7 +59,7 @@ class ExecutionRunbookController extends Controller
 
     public function resolve(Request $request, Workspace $workspace, ExecutionRunbook $runbook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'execution.delete');
         $this->ensureRunbookBelongsToWorkspace($workspace, $runbook);
 
         $runbook->update([

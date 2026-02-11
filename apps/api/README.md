@@ -9,7 +9,7 @@ The **Control Plane** for LinkFlow - a Laravel-based REST API that handles user 
 | Framework | Laravel | 12.x |
 | Language | PHP | 8.4+ |
 | Authentication | Laravel Passport | 13.x |
-| Permissions | spatie/laravel-permission | 6.x |
+| Permissions | Custom WorkspacePermissionService | - |
 | Testing | Pest PHP | 4.x |
 | Static Analysis | PHPStan/Larastan | 3.x |
 | Formatter | Laravel Pint | 1.x |

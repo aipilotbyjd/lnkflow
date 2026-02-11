@@ -96,7 +96,7 @@ class WorkflowTemplateController extends Controller
      */
     public function use(Request $request, Workspace $workspace, string $slug): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.create');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
 
         $template = WorkflowTemplate::where('slug', $slug)->active()->firstOrFail();
 

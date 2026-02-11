@@ -35,8 +35,13 @@ class WorkspaceMemberController extends Controller
             abort(403, 'Cannot change the role of the workspace owner.');
         }
 
+        $newRole = $request->validated('role');
+        if ($newRole === 'admin' && $workspace->owner_id !== $request->user()->id) {
+            abort(403, 'Only the workspace owner can assign the admin role.');
+        }
+
         $workspace->members()->updateExistingPivot($user->id, [
-            'role' => $request->validated('role'),
+            'role' => $newRole,
         ]);
 
         return response()->json([
@@ -50,6 +55,10 @@ class WorkspaceMemberController extends Controller
 
         if ($workspace->owner_id === $user->id) {
             abort(403, 'Cannot remove the workspace owner.');
+        }
+
+        if ($request->user()->id === $user->id) {
+            abort(403, 'Cannot remove yourself. Use the leave endpoint instead.');
         }
 
         $workspace->members()->detach($user->id);

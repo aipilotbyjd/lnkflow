@@ -25,7 +25,7 @@ class WorkflowVersionController extends Controller
      */
     public function index(Request $request, Workspace $workspace, Workflow $workflow): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
 
         $versions = $workflow->versions()
             ->with('creator')
@@ -40,7 +40,7 @@ class WorkflowVersionController extends Controller
      */
     public function show(Request $request, Workspace $workspace, Workflow $workflow, WorkflowVersion $version): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
 
         return response()->json([
             'data' => new WorkflowVersionResource($version->load('creator')),
@@ -52,7 +52,7 @@ class WorkflowVersionController extends Controller
      */
     public function store(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.edit');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
 
         $validated = $request->validate([
             'change_summary' => 'nullable|string|max:500',
@@ -83,7 +83,7 @@ class WorkflowVersionController extends Controller
      */
     public function publish(Request $request, Workspace $workspace, Workflow $workflow, WorkflowVersion $version): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.edit');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
 
         $version->publish();
 
@@ -106,7 +106,7 @@ class WorkflowVersionController extends Controller
      */
     public function restore(Request $request, Workspace $workspace, Workflow $workflow, WorkflowVersion $version): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.edit');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
 
         // Create a new version to preserve current state before restoring
         $backupVersion = WorkflowVersion::createFromWorkflow(
@@ -137,7 +137,7 @@ class WorkflowVersionController extends Controller
      */
     public function compare(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflows.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
 
         $validated = $request->validate([
             'from_version' => 'required|integer',

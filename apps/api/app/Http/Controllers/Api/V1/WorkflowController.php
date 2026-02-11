@@ -14,6 +14,7 @@ use App\Services\WorkspacePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class WorkflowController extends Controller
 {
@@ -48,29 +49,35 @@ class WorkflowController extends Controller
             ], 422);
         }
 
-        $workflow = $workspace->workflows()->create([
-            ...$validated,
-            'created_by' => $request->user()->id,
-        ]);
+        try {
+            $workflow = DB::transaction(function () use ($request, $workspace, $validated) {
+                $workflow = $workspace->workflows()->create([
+                    ...$validated,
+                    'created_by' => $request->user()->id,
+                ]);
 
-        $contractValidation = $this->contractCompilerService->validateAndSnapshot(
-            workflow: $workflow,
-            nodes: $validated['nodes'] ?? null,
-            edges: $validated['edges'] ?? null
-        );
+                $contractValidation = $this->contractCompilerService->validateAndSnapshot(
+                    workflow: $workflow,
+                    nodes: $validated['nodes'] ?? null,
+                    edges: $validated['edges'] ?? null
+                );
 
-        if ($contractValidation['status'] === 'invalid') {
-            $workflow->delete();
+                if ($contractValidation['status'] === 'invalid') {
+                    throw new \App\Exceptions\ContractValidationException($contractValidation['issues']);
+                }
 
+                $settings = $workflow->settings ?? [];
+                $settings['contract_snapshot_id'] = $contractValidation['snapshot']->id;
+                $workflow->update(['settings' => $settings]);
+
+                return $workflow;
+            });
+        } catch (\App\Exceptions\ContractValidationException $e) {
             return response()->json([
                 'message' => 'Workflow has invalid data contracts.',
-                'issues' => $contractValidation['issues'],
+                'issues' => $e->getIssues(),
             ], 422);
         }
-
-        $settings = $workflow->settings ?? [];
-        $settings['contract_snapshot_id'] = $contractValidation['snapshot']->id;
-        $workflow->update(['settings' => $settings]);
 
         $workflow->load('creator');
 

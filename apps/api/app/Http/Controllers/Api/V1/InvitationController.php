@@ -7,7 +7,6 @@ use App\Http\Requests\Api\V1\Workspace\StoreInvitationRequest;
 use App\Http\Resources\Api\V1\InvitationResource;
 use App\Http\Resources\Api\V1\WorkspaceResource;
 use App\Models\Invitation;
-use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\WorkspaceInvitationNotification;
 use App\Services\WorkspacePermissionService;
@@ -38,6 +37,10 @@ class InvitationController extends Controller
     public function store(StoreInvitationRequest $request, Workspace $workspace): JsonResponse
     {
         $this->permissionService->authorize($request->user(), $workspace, 'member.invite');
+
+        if ($request->validated('role') === 'admin' && $workspace->owner_id !== $request->user()->id) {
+            abort(403, 'Only the workspace owner can invite users with the admin role.');
+        }
 
         $email = $request->validated('email');
 
@@ -85,7 +88,7 @@ class InvitationController extends Controller
         return response()->json(['message' => 'Invitation cancelled successfully.']);
     }
 
-    public function accept(string $token): JsonResponse
+    public function accept(Request $request, string $token): JsonResponse
     {
         $invitation = Invitation::query()->where('token', $token)->firstOrFail();
 
@@ -97,14 +100,26 @@ class InvitationController extends Controller
             abort(422, 'This invitation has expired.');
         }
 
-        $user = User::query()->where('email', $invitation->email)->first();
+        $user = $request->user();
 
         if (! $user) {
             return response()->json([
-                'message' => 'Please register an account to accept this invitation.',
-                'requires_registration' => true,
-                'email' => $invitation->email,
-            ], 422);
+                'message' => 'Please sign in to accept this invitation.',
+                'requires_authentication' => true,
+            ], 401);
+        }
+
+        if ($user->email !== $invitation->email) {
+            abort(403, 'This invitation was sent to a different email address.');
+        }
+
+        if ($invitation->workspace->members()->where('user_id', $user->id)->exists()) {
+            $invitation->update(['accepted_at' => now()]);
+
+            return response()->json([
+                'message' => 'You are already a member of this workspace.',
+                'workspace' => new WorkspaceResource($invitation->workspace),
+            ]);
         }
 
         $invitation->workspace->members()->attach($user->id, [
@@ -120,12 +135,18 @@ class InvitationController extends Controller
         ]);
     }
 
-    public function decline(string $token): JsonResponse
+    public function decline(Request $request, string $token): JsonResponse
     {
         $invitation = Invitation::query()->where('token', $token)->firstOrFail();
 
         if ($invitation->isAccepted()) {
             abort(422, 'This invitation has already been accepted.');
+        }
+
+        $user = $request->user();
+
+        if (! $user || $user->email !== $invitation->email) {
+            abort(403, 'You do not have permission to decline this invitation.');
         }
 
         $invitation->delete();

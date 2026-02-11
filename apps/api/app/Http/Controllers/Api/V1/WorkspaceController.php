@@ -73,6 +73,10 @@ class WorkspaceController extends Controller
     {
         $this->permissionService->authorize($request->user(), $workspace, 'workspace.delete');
 
+        if ($workspace->owner_id !== $request->user()->id) {
+            abort(403, 'Only the workspace owner can delete the workspace.');
+        }
+
         $workspace->delete();
 
         return response()->json([

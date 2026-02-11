@@ -59,12 +59,10 @@ class WorkspacePermissionService
             'workflow.view',
             'workflow.create',
             'workflow.update',
-            'workflow.delete',
             'workflow.execute',
             'credential.view',
             'credential.create',
             'credential.update',
-            'credential.delete',
             'execution.view',
         ],
         'viewer' => [
@@ -76,16 +74,26 @@ class WorkspacePermissionService
         ],
     ];
 
+    /** @var array<string, string|false> */
+    private array $roleCache = [];
+
     public function getUserRoleInWorkspace(User $user, Workspace $workspace): ?string
     {
-        $member = $workspace->members()->where('user_id', $user->id)->first();
+        $cacheKey = $user->id.':'.$workspace->id;
 
-        return $member?->pivot?->role;
+        if (! array_key_exists($cacheKey, $this->roleCache)) {
+            $member = $workspace->members()->where('user_id', $user->id)->first();
+            $this->roleCache[$cacheKey] = $member?->pivot?->role ?? false;
+        }
+
+        $role = $this->roleCache[$cacheKey];
+
+        return $role === false ? null : $role;
     }
 
     public function isMember(User $user, Workspace $workspace): bool
     {
-        return $workspace->members()->where('user_id', $user->id)->exists();
+        return $this->getUserRoleInWorkspace($user, $workspace) !== null;
     }
 
     public function isOwner(User $user, Workspace $workspace): bool
@@ -95,6 +103,12 @@ class WorkspacePermissionService
 
     public function hasPermission(User $user, Workspace $workspace, string $permission): bool
     {
+        if ($this->isOwner($user, $workspace)) {
+            $permissions = self::ROLE_PERMISSIONS['owner'] ?? [];
+
+            return in_array($permission, $permissions, true);
+        }
+
         $role = $this->getUserRoleInWorkspace($user, $workspace);
 
         if (! $role) {
@@ -106,10 +120,21 @@ class WorkspacePermissionService
         return in_array($permission, $permissions, true);
     }
 
+    /**
+     * @param  array<string>  $permissions
+     */
     public function hasAnyPermission(User $user, Workspace $workspace, array $permissions): bool
     {
+        $role = $this->resolveEffectiveRole($user, $workspace);
+
+        if (! $role) {
+            return false;
+        }
+
+        $rolePermissions = self::ROLE_PERMISSIONS[$role] ?? [];
+
         foreach ($permissions as $permission) {
-            if ($this->hasPermission($user, $workspace, $permission)) {
+            if (in_array($permission, $rolePermissions, true)) {
                 return true;
             }
         }
@@ -117,10 +142,21 @@ class WorkspacePermissionService
         return false;
     }
 
+    /**
+     * @param  array<string>  $permissions
+     */
     public function hasAllPermissions(User $user, Workspace $workspace, array $permissions): bool
     {
+        $role = $this->resolveEffectiveRole($user, $workspace);
+
+        if (! $role) {
+            return false;
+        }
+
+        $rolePermissions = self::ROLE_PERMISSIONS[$role] ?? [];
+
         foreach ($permissions as $permission) {
-            if (! $this->hasPermission($user, $workspace, $permission)) {
+            if (! in_array($permission, $rolePermissions, true)) {
                 return false;
             }
         }
@@ -148,5 +184,27 @@ class WorkspacePermissionService
     public function getPermissionsForRole(string $role): array
     {
         return self::ROLE_PERMISSIONS[$role] ?? [];
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function getValidRoles(): array
+    {
+        return array_keys(self::ROLE_PERMISSIONS);
+    }
+
+    public function clearCache(): void
+    {
+        $this->roleCache = [];
+    }
+
+    private function resolveEffectiveRole(User $user, Workspace $workspace): ?string
+    {
+        if ($this->isOwner($user, $workspace)) {
+            return 'owner';
+        }
+
+        return $this->getUserRoleInWorkspace($user, $workspace);
     }
 }

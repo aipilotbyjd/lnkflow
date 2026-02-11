@@ -66,7 +66,7 @@ class WorkflowContractController extends Controller
 
     public function runTests(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
 
         $summary = $this->workflowContractTestService->runForWorkspace($workspace, true);
 
