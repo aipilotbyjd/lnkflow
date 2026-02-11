@@ -13,13 +13,12 @@
 -   **Internal Engine**: Mutual TLS (mTLS) is recommended for production deployment between Go microservices.
 
 ## Authorization
--   **RBAC**: Role-Based Access Control via `spatie/laravel-permission`.
+-   **RBAC**: Role-Based Access Control via a custom `WorkspacePermissionService` backed by `workspace_members.role`.
 -   **Scopes**:
-    -   `User`: Can manage own profile.
-    -   `Admin`: Can manage system settings.
-    -   `Workspace Owner`: Can manage workspace billing/members.
-    -   `Workspace Member`: Can edit workflows.
-    -   `Workspace Viewer`: Read-only access.
+    -   `Workspace Owner`: Full workspace access, including billing and membership management.
+    -   `Workspace Admin`: Manage members, workflows, credentials, and executions.
+    -   `Workspace Member`: Create/update workflows and credentials, execute workflows.
+    -   `Workspace Viewer`: Read-only workspace access.
 
 ## Data Security
 

@@ -33,7 +33,7 @@ describe('Workspaces', function () {
                 ]);
 
             $response->assertStatus(201)
-                ->assertJsonPath('data.name', 'New Workspace');
+                ->assertJsonPath('workspace.name', 'New Workspace');
 
             $this->assertDatabaseHas('workspaces', [
                 'name' => 'New Workspace',
@@ -46,7 +46,7 @@ describe('Workspaces', function () {
                 ->getJson("/api/v1/workspaces/{$this->workspace->id}");
 
             $response->assertStatus(200)
-                ->assertJsonPath('data.id', $this->workspace->id);
+                ->assertJsonPath('workspace.id', $this->workspace->id);
         });
 
         it('can update a workspace', function () {
@@ -56,7 +56,7 @@ describe('Workspaces', function () {
                 ]);
 
             $response->assertStatus(200)
-                ->assertJsonPath('data.name', 'Updated Name');
+                ->assertJsonPath('workspace.name', 'Updated Name');
         });
 
         it('can delete a workspace as owner', function () {
@@ -156,7 +156,7 @@ describe('Workspaces', function () {
             $response = $this->actingAs($this->user, 'api')
                 ->postJson("/api/v1/workspaces/{$this->workspace->id}/leave");
 
-            $response->assertStatus(422);
+            $response->assertStatus(403);
         });
     });
 
@@ -235,7 +235,15 @@ describe('Role-Based Access Control', function () {
         $response = $this->actingAs($viewer, 'api')
             ->postJson("/api/v1/workspaces/{$this->workspace->id}/workflows", [
                 'name' => 'Test Workflow',
-                'nodes' => [],
+                'trigger_type' => 'manual',
+                'nodes' => [
+                    [
+                        'id' => 'trigger_1',
+                        'type' => 'trigger_manual',
+                        'position' => ['x' => 100, 'y' => 100],
+                        'data' => ['label' => 'Manual Trigger'],
+                    ],
+                ],
                 'edges' => [],
             ]);
 
@@ -249,7 +257,15 @@ describe('Role-Based Access Control', function () {
         $response = $this->actingAs($member, 'api')
             ->postJson("/api/v1/workspaces/{$this->workspace->id}/workflows", [
                 'name' => 'Test Workflow',
-                'nodes' => [],
+                'trigger_type' => 'manual',
+                'nodes' => [
+                    [
+                        'id' => 'trigger_1',
+                        'type' => 'trigger_manual',
+                        'position' => ['x' => 100, 'y' => 100],
+                        'data' => ['label' => 'Manual Trigger'],
+                    ],
+                ],
                 'edges' => [],
             ]);
 

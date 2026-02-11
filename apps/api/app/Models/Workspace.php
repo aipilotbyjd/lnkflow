@@ -69,6 +69,16 @@ class Workspace extends Model
     }
 
     /**
+     * Alias used by scoped route binding for `{user}` children.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->members();
+    }
+
+    /**
      * @return HasMany<Invitation, $this>
      */
     public function invitations(): HasMany
@@ -90,6 +100,14 @@ class Workspace extends Model
     public function workflows(): HasMany
     {
         return $this->hasMany(Workflow::class);
+    }
+
+    /**
+     * @return HasMany<Webhook, $this>
+     */
+    public function webhooks(): HasMany
+    {
+        return $this->hasMany(Webhook::class);
     }
 
     /**
