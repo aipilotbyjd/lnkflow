@@ -21,7 +21,7 @@ class VariableController extends Controller
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'variable.view');
 
         $query = $workspace->variables()->with(['creator']);
 
@@ -36,7 +36,7 @@ class VariableController extends Controller
 
     public function store(StoreVariableRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.create');
+        $this->permissionService->authorize($request->user(), $workspace, 'variable.create');
 
         $variable = new Variable([
             'workspace_id' => $workspace->id,
@@ -60,7 +60,7 @@ class VariableController extends Controller
 
     public function show(Request $request, Workspace $workspace, Variable $variable): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'variable.view');
         $this->ensureVariableBelongsToWorkspace($variable, $workspace);
 
         $variable->load(['creator']);
@@ -72,7 +72,7 @@ class VariableController extends Controller
 
     public function update(UpdateVariableRequest $request, Workspace $workspace, Variable $variable): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.update');
+        $this->permissionService->authorize($request->user(), $workspace, 'variable.update');
         $this->ensureVariableBelongsToWorkspace($variable, $workspace);
 
         if ($request->has('key')) {
@@ -102,7 +102,7 @@ class VariableController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Variable $variable): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.delete');
+        $this->permissionService->authorize($request->user(), $workspace, 'variable.delete');
         $this->ensureVariableBelongsToWorkspace($variable, $workspace);
 
         $variable->delete();

@@ -23,7 +23,7 @@ class WorkflowImportExportController extends Controller
      */
     public function export(Request $request, Workspace $workspace, Workflow $workflow): StreamedResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.export');
 
         $exportData = $this->buildExportData($workflow);
 
@@ -41,7 +41,7 @@ class WorkflowImportExportController extends Controller
      */
     public function exportBulk(Request $request, Workspace $workspace): StreamedResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.export');
 
         $validated = $request->validate([
             'workflow_ids' => 'required|array',
@@ -73,7 +73,7 @@ class WorkflowImportExportController extends Controller
      */
     public function import(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.import');
 
         $request->validate([
             'file' => 'required|file|mimes:json|max:5120', // 5MB max
@@ -112,7 +112,7 @@ class WorkflowImportExportController extends Controller
      */
     public function importFromJson(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.import');
 
         $data = $request->validate([
             'workflow' => 'required|array',

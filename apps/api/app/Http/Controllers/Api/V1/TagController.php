@@ -21,7 +21,7 @@ class TagController extends Controller
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
+        $this->permissionService->authorize($request->user(), $workspace, 'tag.view');
 
         $tags = $workspace->tags()
             ->withCount('workflows')
@@ -33,7 +33,7 @@ class TagController extends Controller
 
     public function store(StoreTagRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
+        $this->permissionService->authorize($request->user(), $workspace, 'tag.create');
 
         $tag = $workspace->tags()->create([
             'name' => $request->validated('name'),
@@ -48,7 +48,7 @@ class TagController extends Controller
 
     public function update(UpdateTagRequest $request, Workspace $workspace, Tag $tag): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
+        $this->permissionService->authorize($request->user(), $workspace, 'tag.update');
         $this->ensureTagBelongsToWorkspace($tag, $workspace);
 
         $updateData = [];
@@ -71,7 +71,7 @@ class TagController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Tag $tag): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.delete');
+        $this->permissionService->authorize($request->user(), $workspace, 'tag.delete');
         $this->ensureTagBelongsToWorkspace($tag, $workspace);
 
         $tag->delete();

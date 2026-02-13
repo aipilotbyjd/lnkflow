@@ -168,7 +168,7 @@ class WorkflowController extends Controller
 
     public function activate(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.activate');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $workflow->activate();
@@ -182,7 +182,7 @@ class WorkflowController extends Controller
 
     public function deactivate(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
+        $this->permissionService->authorize($request->user(), $workspace, 'workflow.activate');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $workflow->deactivate();
